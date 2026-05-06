@@ -788,6 +788,19 @@ class StartPhoneCallRequest(BaseModel):
     lead_source: str | None = None
 
 
+class BatchCallLead(BaseModel):
+    customer_name: str
+    to_number: str
+
+
+class BatchCallRequest(BaseModel):
+    client_id: str
+    project_id: str | None = None
+    leads: list[BatchCallLead]
+    lead_source: str | None = None
+    max_concurrent_calls: int | None = None
+
+
 class BatchLeadImportRequest(BaseModel):
     leads: list[dict[str, str]]
 
@@ -3902,6 +3915,88 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/telephony/call-batch")
+    async def start_phone_call_batch(request: BatchCallRequest, http_request: Request) -> dict[str, object]:
+        user = getattr(http_request.state, "auth_user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        workspace_client_id, _ = _ensure_user_workspace_client(user)
+        if request.client_id != workspace_client_id:
+            raise HTTPException(status_code=403, detail="Use your workspace client to place calls.")
+        if not request.leads:
+            raise HTTPException(status_code=400, detail="Provide at least one lead.")
+        if len(request.leads) > 300:
+            raise HTTPException(status_code=400, detail="Batch size too large. Keep it within 300 leads per request.")
+
+        bundle = load_client(request.client_id, project_id=request.project_id)
+        active_project = bundle.active_project
+        runtime_limit = active_project.runtime.max_concurrent_calls if active_project is not None else None
+        requested_limit = request.max_concurrent_calls if request.max_concurrent_calls is not None else runtime_limit
+        fallback_limit = settings.telephony_max_concurrent_sessions
+        concurrency_limit = max(1, min(100, int(requested_limit or fallback_limit or 1)))
+
+        semaphore = asyncio.Semaphore(concurrency_limit)
+        results: list[dict[str, object]] = []
+
+        async def _place_one(index: int, lead: BatchCallLead) -> None:
+            async with semaphore:
+                name = " ".join(str(lead.customer_name or "").split()).strip() or f"Lead {index + 1}"
+                number = "".join(ch for ch in str(lead.to_number or "").strip() if ch in "+0123456789")
+                if not number:
+                    results.append(
+                        {
+                            "index": index,
+                            "customer_name": name,
+                            "to_number": str(lead.to_number or ""),
+                            "status": "failed",
+                            "error": "Missing phone number.",
+                        }
+                    )
+                    return
+                try:
+                    outcome = await telephony.create_outbound_call(
+                        client_id=request.client_id,
+                        customer_name=name,
+                        to_number=number,
+                        project_id=request.project_id,
+                        lead_source=request.lead_source or "excel_batch",
+                        context_metadata={"workspace_session_key": _workspace_session_key_for_user(user)},
+                    )
+                    results.append(
+                        {
+                            "index": index,
+                            "customer_name": name,
+                            "to_number": number,
+                            "status": "queued",
+                            "provider": outcome.get("provider", ""),
+                            "call_sid": outcome.get("call_sid", ""),
+                            "pending_id": outcome.get("pending_id", ""),
+                        }
+                    )
+                except Exception as exc:
+                    results.append(
+                        {
+                            "index": index,
+                            "customer_name": name,
+                            "to_number": number,
+                            "status": "failed",
+                            "error": str(exc),
+                        }
+                    )
+
+        await asyncio.gather(*[_place_one(i, lead) for i, lead in enumerate(request.leads)])
+        results.sort(key=lambda item: int(item.get("index", 0)))
+        success_count = sum(1 for item in results if item.get("status") == "queued")
+        failed_count = len(results) - success_count
+        return {
+            "status": "completed",
+            "requested_count": len(request.leads),
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "concurrency_used": concurrency_limit,
+            "results": results,
+        }
 
     @app.post("/internal/telephony/call")
     async def internal_start_phone_call(request: StartPhoneCallRequest, http_request: Request) -> dict[str, str]:

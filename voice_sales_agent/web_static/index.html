@@ -4,18 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Voice Bot 4 U | Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
+    <link rel="stylesheet" href="/static/premium-theme.css" />
     <style>
       :root {
-        --bg: #f5f1e7;
-        --surface: rgba(255, 252, 247, 0.88);
-        --surface-strong: #fffdfa;
-        --ink: #172127;
-        --muted: #5d696f;
-        --accent: #b5531f;
-        --accent-2: #0b7869;
-        --line: rgba(23, 33, 39, 0.1);
-        --shadow: 0 22px 50px rgba(70, 55, 34, 0.09);
-        --radius: 20px;
+        --bg: #07111f;
+        --surface: rgba(10, 20, 36, 0.82);
+        --surface-strong: rgba(9, 18, 33, 0.95);
+        --ink: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #34d399;
+        --accent-2: #7dd3fc;
+        --line: rgba(148, 163, 184, 0.18);
+        --shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+        --radius: 24px;
       }
 
       * {
@@ -29,22 +40,22 @@
       body {
         margin: 0;
         color: var(--ink);
-        font-family: "IBM Plex Sans", "Avenir Next", sans-serif;
+        font-family: "Manrope", sans-serif;
         background:
-          radial-gradient(circle at top left, rgba(181, 83, 31, 0.16), transparent 26%),
-          radial-gradient(circle at bottom right, rgba(11, 120, 105, 0.16), transparent 22%),
-          linear-gradient(145deg, #fbf6ef 0%, #efe6d8 100%);
+          radial-gradient(circle at top left, rgba(52, 211, 153, 0.14), transparent 26%),
+          radial-gradient(circle at bottom right, rgba(125, 211, 252, 0.14), transparent 22%),
+          linear-gradient(145deg, #07111f 0%, #0f172a 100%);
       }
 
       main {
-        max-width: 1220px;
+        max-width: 1380px;
         margin: 0 auto;
         padding: 28px 18px 48px;
       }
 
       h1, h2, h3 {
         margin: 0;
-        font-family: "IBM Plex Serif", Georgia, serif;
+        font-family: "Space Grotesk", sans-serif;
       }
 
       p {
@@ -62,8 +73,8 @@
         padding: 24px;
         border-radius: 28px;
         background:
-          linear-gradient(135deg, rgba(255, 250, 244, 0.94), rgba(251, 244, 234, 0.78)),
-          linear-gradient(90deg, rgba(181, 83, 31, 0.1), rgba(11, 120, 105, 0.08));
+          linear-gradient(135deg, rgba(8, 18, 33, 0.94), rgba(10, 20, 36, 0.84)),
+          linear-gradient(90deg, rgba(52, 211, 153, 0.1), rgba(125, 211, 252, 0.08));
         border: 1px solid var(--line);
         box-shadow: var(--shadow);
       }
@@ -99,16 +110,18 @@
         gap: 8px;
         padding: 10px 14px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.7);
+        background: rgba(6, 14, 27, 0.9);
         border: 1px solid var(--line);
         font-size: 14px;
+        color: #e6eefb;
+        font-weight: 700;
       }
 
       .badge-action {
         border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(6, 14, 27, 0.92);
         font: inherit;
-        color: var(--ink);
+        color: #e6eefb;
         cursor: pointer;
       }
 
@@ -127,7 +140,7 @@
         padding: 6px;
         width: fit-content;
         border-radius: 16px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(8, 17, 31, 0.78);
         border: 1px solid var(--line);
       }
 
@@ -137,14 +150,14 @@
         padding: 10px 14px;
         font: inherit;
         font-weight: 700;
-        color: var(--muted);
+        color: #c2d0e3;
         background: transparent;
         cursor: pointer;
       }
 
       .page-tab.active {
-        color: white;
-        background: var(--ink);
+        color: #03221a;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
       }
 
       .page {
@@ -196,7 +209,7 @@
       .builder-preview-card {
         border-radius: 16px;
         padding: 14px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(8, 17, 31, 0.78);
         border: 1px solid var(--line);
       }
 
@@ -211,7 +224,7 @@
         gap: 8px;
         padding: 14px;
         border-radius: 16px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(8, 17, 31, 0.78);
         border: 1px solid var(--line);
       }
 
@@ -253,7 +266,7 @@
 
       .panel-head p,
       .helper {
-        color: var(--muted);
+        color: #b8c8de;
         line-height: 1.5;
         font-size: 14px;
       }
@@ -271,7 +284,7 @@
       }
 
       .section-title p {
-        color: var(--muted);
+        color: #b8c8de;
         font-size: 14px;
         line-height: 1.5;
       }
@@ -296,6 +309,7 @@
         font-size: 13px;
         font-weight: 700;
         letter-spacing: 0.02em;
+        color: #dce7f6;
       }
 
       select,
@@ -308,7 +322,7 @@
         padding: 12px 14px;
         font: inherit;
         color: var(--ink);
-        background: rgba(255, 255, 255, 0.84);
+        background: rgba(7, 15, 29, 0.92);
       }
 
       input,
@@ -321,9 +335,9 @@
       select:focus,
       textarea:focus {
         outline: none;
-        border-color: rgba(181, 83, 31, 0.45);
-        box-shadow: 0 0 0 4px rgba(181, 83, 31, 0.12);
-        background: white;
+        border-color: rgba(52, 211, 153, 0.72);
+        box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.14);
+        background: rgba(8, 17, 33, 0.95);
       }
 
       textarea {
@@ -339,17 +353,19 @@
       button.primary {
         color: white;
         border-color: transparent;
-        background: linear-gradient(135deg, #b5531f, #d36a2f);
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
       }
 
       button.secondary {
-        color: white;
+        color: #03221a;
         border-color: transparent;
-        background: linear-gradient(135deg, #0b7869, #16917f);
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
       }
 
       button.ghost {
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(6, 14, 27, 0.9);
+        color: #e6eefb;
+        border-color: rgba(125, 211, 252, 0.28);
       }
 
       .action-row {
@@ -370,19 +386,22 @@
         display: grid;
         gap: 4px;
         align-content: start;
-        background: rgba(255, 255, 255, 0.76);
+        background: rgba(7, 15, 29, 0.94);
+        color: #e6eefb;
+        border: 1px solid rgba(125, 211, 252, 0.22);
       }
 
       .source-button.active {
-        color: white;
+        color: #03221a;
         border-color: transparent;
-        background: linear-gradient(135deg, #172127, #314047);
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
       }
 
       .source-button small {
         font-size: 12px;
-        color: inherit;
-        opacity: 0.85;
+        color: #bfd0e8;
+        opacity: 1;
+        font-weight: 700;
       }
 
       .source-panel {
@@ -408,7 +427,7 @@
         align-items: center;
         padding: 10px 12px;
         border-radius: 14px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
       }
 
@@ -417,7 +436,7 @@
         gap: 12px;
         padding: 14px;
         border-radius: 18px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(6, 14, 27, 0.94);
         border: 1px solid var(--line);
       }
 
@@ -428,7 +447,18 @@
         width: fit-content;
         border-radius: 999px;
         padding: 9px 12px;
-        background: rgba(23, 33, 39, 0.06);
+        background: rgba(7, 18, 34, 0.95);
+        border: 1px solid rgba(125, 211, 252, 0.24);
+      }
+
+      #statusText {
+        color: #e8f3ff;
+        font-weight: 800;
+      }
+
+      #detailText {
+        color: #d6e5f8;
+        font-weight: 600;
       }
 
       .metrics {
@@ -441,14 +471,14 @@
       .info-card {
         border-radius: 16px;
         padding: 14px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
       }
 
       .metric .label,
       .label {
         margin-bottom: 6px;
-        color: var(--muted);
+        color: #bfd0e8;
         font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 0.08em;
@@ -489,7 +519,7 @@
       .turn {
         border-radius: 14px;
         padding: 12px 14px;
-        background: rgba(255, 255, 255, 0.7);
+        background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
       }
 
@@ -518,7 +548,7 @@
       .timing-card {
         border-radius: 16px;
         padding: 14px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(8, 17, 31, 0.86);
         border: 1px solid var(--line);
       }
 
@@ -541,9 +571,9 @@
       .timing-note {
         padding: 12px 14px;
         border-radius: 14px;
-        background: rgba(11, 120, 105, 0.08);
-        border: 1px dashed rgba(11, 120, 105, 0.28);
-        color: var(--muted);
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px dashed rgba(52, 211, 153, 0.38);
+        color: #c7f4df;
         font-size: 14px;
         line-height: 1.5;
       }
@@ -569,7 +599,7 @@
       }
 
       .muted-block {
-        color: var(--muted);
+        color: #b8c8de;
         font-size: 14px;
         line-height: 1.5;
       }
@@ -588,6 +618,7 @@
       .results-table {
         display: grid;
         gap: 10px;
+        overflow-x: auto;
       }
 
       .results-row {
@@ -597,7 +628,7 @@
         align-items: start;
         padding: 12px 14px;
         border-radius: 16px;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
       }
 
@@ -605,7 +636,7 @@
         font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: var(--muted);
+        color: #bfd0e8;
       }
 
       .badge-pill {
@@ -621,13 +652,13 @@
       }
 
       .badge-pill.success {
-        background: rgba(11, 120, 105, 0.14);
-        color: #0b7869;
+        background: rgba(16, 185, 129, 0.18);
+        color: #a7f3d0;
       }
 
       .badge-pill.fail {
-        background: rgba(181, 83, 31, 0.14);
-        color: #b5531f;
+        background: rgba(251, 113, 133, 0.18);
+        color: #fecdd3;
       }
 
       @media (max-width: 1080px) {
@@ -640,6 +671,14 @@
         .index-detail-grid,
         .index-detail-grid.four-up {
           grid-template-columns: 1fr 1fr;
+        }
+
+        .results-metrics {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .results-row {
+          grid-template-columns: repeat(2, minmax(180px, 1fr));
         }
       }
 
@@ -679,6 +718,10 @@
 
         .results-row {
           grid-template-columns: 1fr;
+        }
+
+        .results-row.header {
+          display: none;
         }
       }
 
@@ -976,6 +1019,7 @@
                   <div class="timing-actions">
                     <button id="parseExcelBtn" class="secondary" type="button">Parse Leads</button>
                     <button id="useFirstExcelLeadBtn" class="ghost" type="button">Use First Lead for Call</button>
+                    <button id="callExcelLeadsBtn" class="primary" type="button">Call Parsed Leads</button>
                   </div>
                   <p id="excelStatus" class="helper">Upload a sheet with columns like Name and Phone or Mobile.</p>
                   <div class="lead-preview" id="excelLeadPreview"></div>
@@ -1400,6 +1444,10 @@
                   <input id="projectTataCallerIdInput" type="text" placeholder="Optional project-specific caller id" />
                 </div>
                 <div>
+                  <label for="projectMaxConcurrentCallsInput">Project Max Concurrent Calls</label>
+                  <input id="projectMaxConcurrentCallsInput" type="number" min="1" step="1" placeholder="Use global max if empty" />
+                </div>
+                <div>
                   <label for="telephonyMaxConcurrentInput">Max Concurrent Sessions</label>
                   <input id="telephonyMaxConcurrentInput" type="number" min="1" step="1" placeholder="3" />
                 </div>
@@ -1645,6 +1693,7 @@
       const excelFileInput = document.getElementById("excelFileInput");
       const parseExcelBtn = document.getElementById("parseExcelBtn");
       const useFirstExcelLeadBtn = document.getElementById("useFirstExcelLeadBtn");
+      const callExcelLeadsBtn = document.getElementById("callExcelLeadsBtn");
       const excelStatus = document.getElementById("excelStatus");
       const excelLeadPreview = document.getElementById("excelLeadPreview");
       const callStatus = document.getElementById("callStatus");
@@ -1680,6 +1729,7 @@
       const projectOutboundProviderInput = document.getElementById("projectOutboundProviderInput");
       const projectTataAgentNumberInput = document.getElementById("projectTataAgentNumberInput");
       const projectTataCallerIdInput = document.getElementById("projectTataCallerIdInput");
+      const projectMaxConcurrentCallsInput = document.getElementById("projectMaxConcurrentCallsInput");
       const projectDescriptionInput = document.getElementById("projectDescriptionInput");
       const projectPromptInstructionInput = document.getElementById("projectPromptInstructionInput");
       const projectGeminiApiKeyEnvInput = document.getElementById("projectGeminiApiKeyEnvInput");
@@ -2291,6 +2341,7 @@
             outbound_call_provider: "",
             tata_agent_number: "",
             tata_caller_id: "",
+            max_concurrent_calls: null,
             whatsapp_consent_message: "",
             whatsapp_chat_opening_message: "",
           },
@@ -2328,6 +2379,10 @@
           outbound_call_provider: projectOutboundProviderInput.value || null,
           tata_agent_number: projectTataAgentNumberInput.value.trim() || null,
           tata_caller_id: projectTataCallerIdInput.value.trim() || null,
+          max_concurrent_calls: (() => {
+            const value = Number.parseInt(projectMaxConcurrentCallsInput.value || "", 10);
+            return Number.isFinite(value) && value > 0 ? value : null;
+          })(),
           whatsapp_consent_message: projectWhatsappConsentMessageInput.value.trim() || null,
           whatsapp_chat_opening_message: projectWhatsappChatOpeningInput.value.trim() || null,
         };
@@ -2382,6 +2437,9 @@
         projectOutboundProviderInput.value = project.runtime?.outbound_call_provider || "";
         projectTataAgentNumberInput.value = project.runtime?.tata_agent_number || "";
         projectTataCallerIdInput.value = project.runtime?.tata_caller_id || "";
+        projectMaxConcurrentCallsInput.value = project.runtime?.max_concurrent_calls
+          ? String(project.runtime.max_concurrent_calls)
+          : "";
         projectDescriptionInput.value = project.description || "";
         projectPromptInstructionInput.value = project.prompt_instruction || "";
         projectGeminiApiKeyEnvInput.value = project.runtime?.gemini_api_key_env || "";
@@ -2529,7 +2587,7 @@
         const project = selectedProject();
         activeProjectCard.textContent = project?.name || projectSelect.value || "-";
         projectHint.textContent = project
-          ? `${project.project_type || "custom"} project selected.${project.runtime?.gemini_api_key_env ? ` Gemini key from ${project.runtime.gemini_api_key_env}.` : project.runtime?.gemini_api_key_present ? " Gemini key configured on this project." : " Using default Gemini runtime unless overridden."} Outreach mode: ${project.runtime?.outreach_mode || "call_only"}${project.runtime?.outbound_call_provider ? ` via ${project.runtime.outbound_call_provider}` : ""}.`
+          ? `${project.project_type || "custom"} project selected.${project.runtime?.gemini_api_key_env ? ` Gemini key from ${project.runtime.gemini_api_key_env}.` : project.runtime?.gemini_api_key_present ? " Gemini key configured on this project." : " Using default Gemini runtime unless overridden."} Outreach mode: ${project.runtime?.outreach_mode || "call_only"}${project.runtime?.outbound_call_provider ? ` via ${project.runtime.outbound_call_provider}` : ""}. Concurrent calls: ${project.runtime?.max_concurrent_calls || "global default"}.`
           : "Select the active project so each call uses the right prompt, workflow, and Gemini runtime.";
       }
 
@@ -3241,6 +3299,40 @@
           : `Dialing ${data.to_number}.`;
       });
 
+      async function callParsedExcelLeads() {
+        errorText.textContent = "";
+        if (!importedExcelLeads.length) {
+          callStatus.textContent = "Parse an upload first, then click Call Parsed Leads.";
+          return;
+        }
+        const project = selectedProject();
+        const runtimeLimit = Number.parseInt(String(project?.runtime?.max_concurrent_calls || ""), 10);
+        const concurrency = Number.isFinite(runtimeLimit) && runtimeLimit > 0 ? runtimeLimit : null;
+        callStatus.textContent = `Queueing ${importedExcelLeads.length} calls...`;
+        const response = await fetch("/api/telephony/call-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: clientSelect.value,
+            project_id: projectSelect.value || null,
+            leads: importedExcelLeads.map((lead, index) => ({
+              customer_name: lead.customer_name || `Lead ${index + 1}`,
+              to_number: lead.to_number || "",
+            })),
+            lead_source: "excel",
+            max_concurrent_calls: concurrency,
+          }),
+        });
+        const data = await response.json().catch(() => ({ detail: "Failed to place batch calls." }));
+        if (!response.ok) {
+          const msg = data.detail || "Failed to place batch calls.";
+          callStatus.textContent = msg;
+          errorText.textContent = msg;
+          return;
+        }
+        callStatus.textContent = `Batch queued. Success: ${data.success_count}/${data.requested_count}. Failed: ${data.failed_count}. Concurrency: ${data.concurrency_used}.`;
+      }
+
       document.getElementById("stopBtn").addEventListener("click", async () => {
         if (remoteLocalMicModeBlocked()) {
           await stopBrowserAudioTransport();
@@ -3306,6 +3398,7 @@
       });
 
       parseExcelBtn.addEventListener("click", parseExcelLeads);
+      callExcelLeadsBtn.addEventListener("click", callParsedExcelLeads);
       document.getElementById("logoutBtn").addEventListener("click", async () => {
         await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
         window.location.href = "/";

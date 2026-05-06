@@ -272,6 +272,7 @@ class ProjectRuntimeConfig(BaseModel):
     outbound_call_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "tata"] | None = None
     tata_agent_number: str | None = None
     tata_caller_id: str | None = None
+    max_concurrent_calls: int | None = Field(default=None, ge=1, le=100)
     whatsapp_consent_message: str | None = None
     whatsapp_chat_opening_message: str | None = None
 
