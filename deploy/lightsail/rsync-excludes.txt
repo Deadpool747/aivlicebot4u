@@ -1,0 +1,13 @@
+.git/
+.venv/
+.aws/
+.env
+.env.*
+.DS_Store
+logs/
+sessions/
+voice_sales_agent/__pycache__/
+**/__pycache__/
+*.pyc
+clients/user_guest_*/
+clients/user_*/

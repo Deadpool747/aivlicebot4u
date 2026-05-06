@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "role_fit": "Does the contact influence clinic operations, scheduling, or front-desk workflow decisions?",
+    "location_complexity": "Do they manage one clinic or multiple locations?",
+    "pain_urgency": "Do they mention scheduling delays, staff overload, missed callbacks, or intake inefficiency?",
+    "timeline": "Is there interest in evaluating improvements this quarter or soon?"
+  }
+}

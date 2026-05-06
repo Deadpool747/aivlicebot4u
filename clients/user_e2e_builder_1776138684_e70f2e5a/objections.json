@@ -1,0 +1,12 @@
+{
+  "common": [
+    {
+      "objection": "I just want the details quickly.",
+      "response": "Share the concise approved details, then confirm the one most important requirement so the follow-up is accurate."
+    },
+    {
+      "objection": "Send this on WhatsApp or email.",
+      "response": "Confirm the best contact detail and capture any final requirement so the follow-up message is useful."
+    }
+  ]
+}

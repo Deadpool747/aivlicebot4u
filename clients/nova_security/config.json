@@ -1,0 +1,86 @@
+{
+  "client_id": "nova_security",
+  "identity": {
+    "display_name": "Nova Security Cloud",
+    "industry": "B2B cybersecurity software",
+    "website": "https://novasecurity.example.com",
+    "status": "active",
+    "tags": [
+      "b2b",
+      "security",
+      "sales"
+    ]
+  },
+  "business_profile": {
+    "primary_offer": "Cloud security posture management and alert triage automation for mid-market teams",
+    "target_audience": [
+      "security leaders",
+      "IT directors",
+      "compliance managers"
+    ],
+    "tone": [
+      "direct",
+      "credible",
+      "professional"
+    ],
+    "languages_supported": [
+      "english"
+    ],
+    "services": [
+      "cloud security posture management",
+      "alert triage automation"
+    ],
+    "locations": []
+  },
+  "conversation": {
+    "conversation_mode": "sales_discovery",
+    "default_opening_language": null,
+    "workflow_mode": "model_led",
+    "closure_mode": "default",
+    "opening_script": {},
+    "closure_examples": {
+      "positive": [],
+      "negative": [],
+      "non_closing_questions": [],
+      "guidance": null
+    },
+    "disallowed_claims": [
+      "Do not claim the platform eliminates all breaches.",
+      "Do not promise compliance certification outcomes."
+    ],
+    "allowed_contact_fields": [
+      "name",
+      "email",
+      "phone"
+    ],
+    "booking_rules": {},
+    "handoff_rules": {}
+  },
+  "voice": {
+    "voice_name": "Kore",
+    "persona_gender": "female",
+    "speaking_rate": 1.0
+  },
+  "model_routing": {
+    "live_generation": {
+      "temperature": 0.75,
+      "top_p": 0.9,
+      "top_k": 32,
+      "max_output_tokens": 2000
+    },
+    "structured_generation": {
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "top_k": 20,
+      "max_output_tokens": 2000
+    }
+  },
+  "import_metadata": {
+    "schema_version": 2,
+    "source": "local_files",
+    "external_id": null,
+    "imported_at": null,
+    "imported_from": null,
+    "notes": []
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "primary_cta": "Capture the requirement clearly and confirm follow-up using the visitor's submitted details",
+  "fallback_cta": "Answer the in-scope question briefly and offer a team follow-up",
+  "success_criteria": [
+    "The visitor states their main requirement",
+    "The conversation stays within the selected scenario",
+    "The demo ends with a clear follow-up expectation"
+  ]
+}

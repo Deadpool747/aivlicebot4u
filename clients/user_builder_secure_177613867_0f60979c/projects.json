@@ -1,0 +1,62 @@
+[
+  {
+    "project_id": "sales_agent",
+    "name": "Sales Agent",
+    "project_type": "sales",
+    "status": "active",
+    "description": "Primary outbound sales conversation for new healthcare automation leads.",
+    "prompt_instruction": "Qualify clinic operations pain, understand current scheduling process, and drive toward a demo or next sales step.",
+    "runtime": {
+      "gemini_api_key": null,
+      "gemini_api_key_env": "ACME_HEALTH_SALES_GEMINI_API_KEY",
+      "live_model": null,
+      "structured_model": null,
+      "tts_model": null,
+      "outreach_mode": "call_only",
+      "outbound_call_provider": "twilio",
+      "whatsapp_consent_message": "Namaskar! Can we call you now for a quick 2-minute Acme Health consultation? Reply YES or NO.",
+      "whatsapp_chat_opening_message": null
+    },
+    "intent_overrides": {}
+  },
+  {
+    "project_id": "lead_qualification_agent",
+    "name": "Lead Qualification Agent",
+    "project_type": "lead_qualification",
+    "status": "active",
+    "description": "Shorter discovery workflow for fresh inbound leads before handing off to sales.",
+    "prompt_instruction": "Verify interest, practice size, current workflow, and urgency. Keep the call brief and structured.",
+    "runtime": {
+      "gemini_api_key": null,
+      "gemini_api_key_env": "ACME_HEALTH_QUALIFICATION_GEMINI_API_KEY",
+      "live_model": null,
+      "structured_model": null,
+      "tts_model": null,
+      "outreach_mode": "call_only",
+      "outbound_call_provider": null,
+      "whatsapp_consent_message": null,
+      "whatsapp_chat_opening_message": null
+    },
+    "intent_overrides": {}
+  },
+  {
+    "project_id": "followup_agent",
+    "name": "Follow-up Agent",
+    "project_type": "followup",
+    "status": "active",
+    "description": "Follow-up outreach for callbacks, demos, and previously engaged prospects.",
+    "prompt_instruction": "Pick up prior context quickly, confirm if the prospect is still interested, and move toward the next promised action.",
+    "runtime": {
+      "gemini_api_key": null,
+      "gemini_api_key_env": "ACME_HEALTH_FOLLOWUP_GEMINI_API_KEY",
+      "live_model": null,
+      "structured_model": null,
+      "tts_model": null,
+      "outreach_mode": "call_only",
+      "outbound_call_provider": null,
+      "whatsapp_consent_message": null,
+      "whatsapp_chat_opening_message": null
+    },
+    "intent_overrides": {}
+  }
+]

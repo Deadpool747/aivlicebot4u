@@ -1,0 +1,17 @@
+[Unit]
+Description=Voice Sales Agent FastAPI Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/new_voice_agent
+EnvironmentFile=/opt/new_voice_agent/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/new_voice_agent/.venv/bin/python /opt/new_voice_agent/scripts/run_dashboard.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

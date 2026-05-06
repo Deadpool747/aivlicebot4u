@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "category": "Complaint category",
+    "priority": "Priority level",
+    "location_completeness": "Address/ward completeness",
+    "escalation_needed": "Immediate escalation required or not"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "primary_cta": "Schedule a tailored security workflow demo",
+  "fallback_cta": "Capture contact details and the main security pain point for follow-up",
+  "success_criteria": [
+    "The prospect shares current tooling or operational friction",
+    "A next step or follow-up owner is identified",
+    "Buying timeline signals are captured if mentioned"
+  ]
+}

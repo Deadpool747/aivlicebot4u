@@ -1,0 +1,9 @@
+{
+  "primary_cta": "Book a short workflow demo with a product specialist",
+  "fallback_cta": "Capture contact details and permission for follow-up",
+  "success_criteria": [
+    "The prospect shares a relevant pain point",
+    "A realistic next step is agreed",
+    "Contact details or the right stakeholder path is captured"
+  ]
+}

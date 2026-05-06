@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "provider": "cardiolab",
+  "event": "appointment_confirmed",
+  "base_url": "https://cardiolabwhatsappcrm-production.up.railway.app",
+  "username_env": "MAGNUM_CRM_USERNAME",
+  "password_env": "MAGNUM_CRM_PASSWORD",
+  "package_id": 1,
+  "hospital_id": 1,
+  "default_patient_city": "Nashik",
+  "default_patient_gender": "Male",
+  "default_patient_age": 35,
+  "notes_template": "Booked by Magnum AI flow ({client_id}/{project_id})"
+}

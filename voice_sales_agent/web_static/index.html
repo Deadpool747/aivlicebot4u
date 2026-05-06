@@ -1,0 +1,3417 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Voice Bot 4 U | Dashboard</title>
+    <style>
+      :root {
+        --bg: #f5f1e7;
+        --surface: rgba(255, 252, 247, 0.88);
+        --surface-strong: #fffdfa;
+        --ink: #172127;
+        --muted: #5d696f;
+        --accent: #b5531f;
+        --accent-2: #0b7869;
+        --line: rgba(23, 33, 39, 0.1);
+        --shadow: 0 22px 50px rgba(70, 55, 34, 0.09);
+        --radius: 20px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "IBM Plex Sans", "Avenir Next", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(181, 83, 31, 0.16), transparent 26%),
+          radial-gradient(circle at bottom right, rgba(11, 120, 105, 0.16), transparent 22%),
+          linear-gradient(145deg, #fbf6ef 0%, #efe6d8 100%);
+      }
+
+      main {
+        max-width: 1220px;
+        margin: 0 auto;
+        padding: 28px 18px 48px;
+      }
+
+      h1, h2, h3 {
+        margin: 0;
+        font-family: "IBM Plex Serif", Georgia, serif;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .shell {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 18px;
+        padding: 24px;
+        border-radius: 28px;
+        background:
+          linear-gradient(135deg, rgba(255, 250, 244, 0.94), rgba(251, 244, 234, 0.78)),
+          linear-gradient(90deg, rgba(181, 83, 31, 0.1), rgba(11, 120, 105, 0.08));
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .hero-copy {
+        display: grid;
+        gap: 10px;
+        max-width: 760px;
+      }
+
+      .hero-copy p {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .hero-badges {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+        font-size: 14px;
+      }
+
+      .badge-action {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        font: inherit;
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--accent);
+        flex: 0 0 auto;
+      }
+
+      .page-switch {
+        display: inline-grid;
+        grid-auto-flow: column;
+        gap: 8px;
+        padding: 6px;
+        width: fit-content;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .page-tab {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font: inherit;
+        font-weight: 700;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .page-tab.active {
+        color: white;
+        background: var(--ink);
+      }
+
+      .page {
+        display: none;
+      }
+
+      .page.active {
+        display: block;
+      }
+
+      .overview-grid {
+        display: grid;
+        grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .builder-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+        gap: 18px;
+      }
+
+      .builder-stack,
+      .builder-preview-stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .builder-callout {
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px dashed rgba(11, 120, 105, 0.24);
+        background: rgba(11, 120, 105, 0.08);
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .builder-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .builder-preview {
+        display: grid;
+        gap: 12px;
+      }
+
+      .builder-preview-card {
+        border-radius: 16px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .builder-preview-card strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 20px;
+      }
+
+      .builder-preview-block {
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .builder-preview-block pre {
+        margin: 0;
+        white-space: pre-wrap;
+        font: inherit;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .configure-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .configure-top {
+        display: grid;
+        grid-template-columns: 340px minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .panel-head p,
+      .helper {
+        color: var(--muted);
+        line-height: 1.5;
+        font-size: 14px;
+      }
+
+      .controls,
+      .config-stack,
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .section-title {
+        display: grid;
+        gap: 4px;
+      }
+
+      .section-title p {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .field-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .field-row {
+        display: grid;
+        gap: 8px;
+      }
+
+      .two-up {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      label {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      select,
+      button,
+      input,
+      textarea {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        padding: 12px 14px;
+        font: inherit;
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.84);
+      }
+
+      input,
+      select,
+      textarea {
+        transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: rgba(181, 83, 31, 0.45);
+        box-shadow: 0 0 0 4px rgba(181, 83, 31, 0.12);
+        background: white;
+      }
+
+      textarea {
+        min-height: 130px;
+        resize: vertical;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      button.primary {
+        color: white;
+        border-color: transparent;
+        background: linear-gradient(135deg, #b5531f, #d36a2f);
+      }
+
+      button.secondary {
+        color: white;
+        border-color: transparent;
+        background: linear-gradient(135deg, #0b7869, #16917f);
+      }
+
+      button.ghost {
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .action-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .source-switcher {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+      }
+
+      .source-button {
+        text-align: left;
+        min-height: 72px;
+        display: grid;
+        gap: 4px;
+        align-content: start;
+        background: rgba(255, 255, 255, 0.76);
+      }
+
+      .source-button.active {
+        color: white;
+        border-color: transparent;
+        background: linear-gradient(135deg, #172127, #314047);
+      }
+
+      .source-button small {
+        font-size: 12px;
+        color: inherit;
+        opacity: 0.85;
+      }
+
+      .source-panel {
+        display: none;
+        gap: 12px;
+      }
+
+      .source-panel.active {
+        display: grid;
+      }
+
+      .lead-preview {
+        display: grid;
+        gap: 8px;
+        max-height: 220px;
+        overflow: auto;
+      }
+
+      .lead-preview-item {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .status-card {
+        display: grid;
+        gap: 12px;
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        border-radius: 999px;
+        padding: 9px 12px;
+        background: rgba(23, 33, 39, 0.06);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .metric,
+      .info-card {
+        border-radius: 16px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .metric .label,
+      .label {
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 26px;
+      }
+
+      .index-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .index-detail-grid.four-up {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .index-detail-grid .info-card {
+        min-height: 112px;
+      }
+
+      .live-layout {
+        display: grid;
+        gap: 16px;
+      }
+
+      .transcript {
+        display: grid;
+        gap: 10px;
+        max-height: 420px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .turn {
+        border-radius: 14px;
+        padding: 12px 14px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+      }
+
+      .turn.agent {
+        border-left: 4px solid var(--accent-2);
+      }
+
+      .turn.user {
+        border-left: 4px solid var(--accent);
+      }
+
+      .summary {
+        display: grid;
+        gap: 10px;
+        margin-top: 8px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+      }
+
+      .timing-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .timing-card {
+        border-radius: 16px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .timing-card strong {
+        display: block;
+        font-size: 20px;
+        margin-top: 4px;
+      }
+
+      .timing-card input {
+        margin-top: 10px;
+      }
+
+      .timing-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .timing-note {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(11, 120, 105, 0.08);
+        border: 1px dashed rgba(11, 120, 105, 0.28);
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .editor-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .full {
+        grid-column: 1 / -1;
+      }
+
+      .editor-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .error {
+        color: #932f1b;
+      }
+
+      .muted-block {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .results-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .results-metrics {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .results-table {
+        display: grid;
+        gap: 10px;
+      }
+
+      .results-row {
+        display: grid;
+        grid-template-columns: repeat(10, minmax(130px, 1fr));
+        gap: 10px;
+        align-items: start;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .results-row.header {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .badge-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        background: rgba(23, 33, 39, 0.08);
+      }
+
+      .badge-pill.success {
+        background: rgba(11, 120, 105, 0.14);
+        color: #0b7869;
+      }
+
+      .badge-pill.fail {
+        background: rgba(181, 83, 31, 0.14);
+        color: #b5531f;
+      }
+
+      @media (max-width: 1080px) {
+        .overview-grid,
+        .builder-grid,
+        .configure-top {
+          grid-template-columns: 1fr;
+        }
+
+        .index-detail-grid,
+        .index-detail-grid.four-up {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        main {
+          padding: 18px 14px 32px;
+        }
+
+        .hero {
+          padding: 18px;
+          border-radius: 22px;
+        }
+
+        .page-switch {
+          width: 100%;
+          grid-auto-flow: row;
+        }
+
+        .action-row,
+        .builder-actions,
+        .metrics,
+        .results-metrics,
+        .two-up,
+        .timing-grid,
+        .timing-actions,
+        .editor-grid,
+        .editor-actions,
+        .index-detail-grid,
+        .index-detail-grid.four-up {
+          grid-template-columns: 1fr;
+        }
+
+        .panel {
+          padding: 16px;
+          border-radius: 18px;
+        }
+
+        .results-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 520px) {
+        main {
+          padding: 14px 10px 24px;
+        }
+
+        .hero-copy p {
+          font-size: 13px;
+        }
+
+        .page-tab {
+          padding: 9px 10px;
+          font-size: 13px;
+        }
+
+        .source-switcher {
+          grid-template-columns: 1fr;
+        }
+
+        .source-button {
+          min-height: 58px;
+        }
+
+        .lead-preview-item {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+
+        select,
+        button,
+        input,
+        textarea {
+          padding: 11px 12px;
+          font-size: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="shell">
+        <section class="hero">
+          <div class="hero-top">
+            <div class="hero-copy">
+              <h1>AI Voice Bot 4 U Dashboard</h1>
+              <p>
+                Manage live sessions, watch turn-by-turn activity, and keep client configuration
+                separate from the cleaner index page. The overview stays focused on operations,
+                while configuration includes client editing and lag timing details.
+              </p>
+            </div>
+            <div class="hero-badges">
+              <span class="badge"><span class="dot"></span> Responsive Dashboard</span>
+              <span class="badge"><span class="dot"></span> Live Session View</span>
+              <span class="badge"><span class="dot"></span> Separate Configure Page</span>
+              <span class="badge" id="workspaceBadge"><span class="dot"></span> Workspace: -</span>
+              <span class="badge" id="balanceBadge"><span class="dot"></span> Balance: -</span>
+              <button id="logoutBtn" class="badge badge-action" type="button">Log Out</button>
+            </div>
+          </div>
+
+          <div class="page-switch" role="tablist" aria-label="Dashboard pages">
+            <button class="page-tab active" id="overviewTab" data-page="overviewPage" type="button">Index</button>
+            <button class="page-tab" id="liveTab" data-page="livePage" type="button">Live</button>
+            <button class="page-tab" id="resultsTab" data-page="resultsPage" type="button">Results</button>
+            <button class="page-tab" id="configureTab" data-page="configurePage" type="button">Configure</button>
+          </div>
+        </section>
+
+        <section class="page active" id="overviewPage">
+          <div class="builder-grid">
+            <section class="builder-stack">
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="section-title">
+                    <h2>Agent Builder</h2>
+                    <p>
+                      Build a new workspace client draft, update the current one, or generate a new
+                      agent from quick business answers. The generated draft can be saved directly
+                      or refined later in Configure.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="builder-callout">
+                  Keep it simple: enter business basics and choose agent type. Language is optional.
+                  If you leave language empty, the agent will use Marathi by default and can handle Hindi and English too.
+                </div>
+
+                <div class="editor-grid" style="margin-top: 14px;">
+                  <div>
+                    <label for="builderBusinessName">Business Name</label>
+                    <input id="builderBusinessName" type="text" placeholder="LED Arts" />
+                  </div>
+                  <div>
+                    <label for="builderBusinessType">Business Type</label>
+                    <input id="builderBusinessType" type="text" placeholder="LED boards and signage, clinic, real estate..." />
+                  </div>
+                  <div>
+                    <label for="builderProjectName">Agent / Project Name</label>
+                    <input id="builderProjectName" type="text" placeholder="LED Arts Sales Agent (optional)" />
+                  </div>
+                  <div class="full">
+                    <label for="builderBusinessDescription">Description</label>
+                    <textarea id="builderBusinessDescription" placeholder="Briefly describe what the business does and what this agent should handle."></textarea>
+                  </div>
+                  <div>
+                    <label for="builderAgentType">Agent Type</label>
+                    <select id="builderAgentType">
+                      <option value="sales">Sales</option>
+                      <option value="customer_support">Customer support</option>
+                      <option value="appointment_booking">Appointment booking</option>
+                      <option value="lead_qualification">Lead qualification</option>
+                      <option value="followup">Follow-up</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="builderLanguages">Language (Optional)</label>
+                    <input id="builderLanguages" type="text" placeholder="Leave blank for Marathi default (supports Hindi and English too)" />
+                  </div>
+                  <div class="full">
+                    <label for="builderPricingNotes">Q&amp;A (Optional)</label>
+                    <textarea id="builderPricingNotes" placeholder="Add FAQs or common question-answer points (optional)."></textarea>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="section-title">
+                  <h2>Actions</h2>
+                  <p>
+                    Use these two simple actions first. Advanced tuning remains available in the
+                    Configure tab.
+                  </p>
+                </div>
+                <div class="builder-actions">
+                  <button id="saveBuilderAsWorkspaceBtn" class="primary" type="button">Edit Existing</button>
+                  <button id="loadNewBuilderBtn" class="ghost" type="button">Load New</button>
+                </div>
+                <p id="builderStatus" class="helper" style="margin-top: 10px;"></p>
+              </section>
+            </section>
+
+            <aside class="builder-preview-stack">
+              <section class="panel builder-preview">
+                <div class="section-title">
+                  <h2>Draft Preview</h2>
+                  <p>See the generated client and agent summary before saving it to the server.</p>
+                </div>
+
+                <div class="index-detail-grid">
+                  <div class="builder-preview-card">
+                    <div class="label">Client</div>
+                    <strong id="builderPreviewClient">-</strong>
+                  </div>
+                  <div class="builder-preview-card">
+                    <div class="label">Agent</div>
+                    <strong id="builderPreviewProject">-</strong>
+                  </div>
+                  <div class="builder-preview-card">
+                    <div class="label">Mode</div>
+                    <strong id="builderPreviewMode">-</strong>
+                  </div>
+                  <div class="builder-preview-card">
+                    <div class="label">Language</div>
+                    <strong id="builderPreviewLanguage">-</strong>
+                  </div>
+                </div>
+
+                <div class="builder-preview-block">
+                  <div class="label">Summary</div>
+                  <pre id="builderPreviewSummary">Generate a draft to preview the new client and project structure.</pre>
+                </div>
+                <div class="builder-preview-block">
+                  <div class="label">Prompt Direction</div>
+                  <pre id="builderGeneratedPrompt">The generated project prompt instruction will appear here.</pre>
+                </div>
+                <div class="builder-preview-block">
+                  <div class="label">Knowledge Preview</div>
+                  <pre id="builderGeneratedKnowledge">The generated client knowledge draft will appear here.</pre>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="section-title">
+                  <h2>Advanced Settings</h2>
+                  <p>
+                    For detailed configuration, open the Configure tab to edit prompt JSON, runtime,
+                    and project-level settings.
+                  </p>
+                </div>
+                <div class="index-detail-grid" style="margin-top: 12px;">
+                  <div class="info-card">
+                    <div class="label">Workspace Client</div>
+                    <strong id="activeClientCard">-</strong>
+                    <p class="muted-block">The current login is scoped to this workspace client.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Selected Agent</div>
+                    <strong id="activeProjectCard">-</strong>
+                    <p class="muted-block">Current project selected on the dashboard.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Opening Language</div>
+                    <strong id="openingLanguageCard">-</strong>
+                    <p class="muted-block">Latest session opening language when available.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Session</div>
+                    <strong id="sessionIdCard">-</strong>
+                    <p class="muted-block">Most recent active session id if a live run is in progress.</p>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section class="page" id="livePage">
+          <div class="overview-grid">
+            <aside class="panel controls">
+              <div class="section-title">
+                <h2>Session Control</h2>
+                <p>On hosted deployments, use Call for telephony sessions. Local Start is for same-machine mic demos only.</p>
+              </div>
+
+              <div class="field-grid">
+                <div class="field-row">
+                  <label>Lead Source</label>
+                  <div class="source-switcher" id="leadSourceButtons">
+                    <button class="source-button active" data-source-id="manual_single" type="button">
+                      <strong>Manual Single</strong>
+                      <small>Ready</small>
+                    </button>
+                    <button class="source-button" data-source-id="excel" type="button">
+                      <strong>Excel Upload</strong>
+                      <small>Ready</small>
+                    </button>
+                    <button class="source-button" data-source-id="meta" type="button">
+                      <strong>Meta Leads</strong>
+                      <small>Planned</small>
+                    </button>
+                    <button class="source-button" data-source-id="youtube" type="button">
+                      <strong>YouTube Leads</strong>
+                      <small>Planned</small>
+                    </button>
+                    <button class="source-button" data-source-id="indiamart" type="button">
+                      <strong>IndiaMART</strong>
+                      <small>Planned</small>
+                    </button>
+                    <button class="source-button" data-source-id="justdial" type="button">
+                      <strong>Justdial</strong>
+                      <small>Planned</small>
+                    </button>
+                  </div>
+                </div>
+                <div class="info-card">
+                  <div class="label">Lead Source Mode</div>
+                  <strong id="leadSourceStatusCard">Manual Single Number</strong>
+                  <p class="muted-block" id="leadSourceDescription">
+                    Use one name and one mobile number for direct UI testing right now.
+                  </p>
+                </div>
+                <div class="field-row">
+                  <label for="clientSelect">Client</label>
+                  <select id="clientSelect"></select>
+                </div>
+                <div class="field-row">
+                  <label for="projectSelect">Project / Agent</label>
+                  <select id="projectSelect"></select>
+                  <p class="helper" id="projectHint">
+                    Select the active project so each call uses the right prompt, workflow, and Gemini runtime.
+                  </p>
+                </div>
+                <div class="source-panel active" id="sourcePanel-manual_single">
+                  <div class="field-row">
+                    <label for="customerNameInput">Customer Name</label>
+                    <input id="customerNameInput" type="text" value="Salman Shaikh" />
+                  </div>
+                  <div class="field-row">
+                    <label for="phoneNumberInput">Mobile Number</label>
+                    <input id="phoneNumberInput" type="text" placeholder="+15551234567" />
+                    <p class="helper" id="leadSourceHint">
+                      Manual single-number mode is active. External lead connectors will plug into this same call flow.
+                    </p>
+                  </div>
+                </div>
+                <div class="source-panel" id="sourcePanel-excel">
+                  <div class="field-row">
+                    <label for="excelFileInput">Upload Excel or CSV</label>
+                    <input id="excelFileInput" type="file" accept=".csv,.xlsx,.xlsm,.xltx,.xltm" />
+                  </div>
+                  <div class="timing-actions">
+                    <button id="parseExcelBtn" class="secondary" type="button">Parse Leads</button>
+                    <button id="useFirstExcelLeadBtn" class="ghost" type="button">Use First Lead for Call</button>
+                  </div>
+                  <p id="excelStatus" class="helper">Upload a sheet with columns like Name and Phone or Mobile.</p>
+                  <div class="lead-preview" id="excelLeadPreview"></div>
+                </div>
+                <div class="source-panel" id="sourcePanel-meta">
+                  <div class="field-row">
+                    <label for="metaAccessTokenInput">Meta Access Token</label>
+                    <input id="metaAccessTokenInput" type="password" placeholder="Meta access token" />
+                  </div>
+                  <div class="two-up">
+                    <div class="field-row">
+                      <label for="metaFormIdInput">Form ID</label>
+                      <input id="metaFormIdInput" type="text" placeholder="Lead form id" />
+                    </div>
+                    <div class="field-row">
+                      <label for="metaPageIdInput">Page ID</label>
+                      <input id="metaPageIdInput" type="text" placeholder="Optional page id" />
+                    </div>
+                  </div>
+                  <p class="helper">Meta connector UI is ready for credentials, but backend sync is the next step.</p>
+                </div>
+                <div class="source-panel" id="sourcePanel-youtube">
+                  <div class="two-up">
+                    <div class="field-row">
+                      <label for="youtubeCampaignIdInput">Campaign ID</label>
+                      <input id="youtubeCampaignIdInput" type="text" placeholder="Campaign id" />
+                    </div>
+                    <div class="field-row">
+                      <label for="youtubeSheetUrlInput">Lead Sheet URL</label>
+                      <input id="youtubeSheetUrlInput" type="url" placeholder="Optional lead sheet url" />
+                    </div>
+                  </div>
+                  <p class="helper">Use this panel to define the YouTube lead source details we’ll connect next.</p>
+                </div>
+                <div class="source-panel" id="sourcePanel-indiamart">
+                  <div class="two-up">
+                    <div class="field-row">
+                      <label for="indiamartApiKeyInput">API Key</label>
+                      <input id="indiamartApiKeyInput" type="password" placeholder="IndiaMART API key" />
+                    </div>
+                    <div class="field-row">
+                      <label for="indiamartCrmKeyInput">GLUSR CRM Key</label>
+                      <input id="indiamartCrmKeyInput" type="text" placeholder="CRM key" />
+                    </div>
+                  </div>
+                  <p class="helper">IndiaMART connector configuration will consume these details in the next backend step.</p>
+                </div>
+                <div class="source-panel" id="sourcePanel-justdial">
+                  <div class="two-up">
+                    <div class="field-row">
+                      <label for="justdialVendorCodeInput">Vendor Code</label>
+                      <input id="justdialVendorCodeInput" type="text" placeholder="Vendor code" />
+                    </div>
+                    <div class="field-row">
+                      <label for="justdialEmailInput">Registered Email</label>
+                      <input id="justdialEmailInput" type="email" placeholder="Optional registered email" />
+                    </div>
+                  </div>
+                  <p class="helper">Justdial connector details are captured here so the source can plug into the same call flow.</p>
+                </div>
+              </div>
+
+              <div class="action-row">
+                <button id="startBtn" class="primary" type="button">Start Demo</button>
+                <button id="callBtn" class="primary" type="button">Call</button>
+                <button id="stopBtn" class="secondary" type="button">Stop</button>
+              </div>
+
+              <div class="status-card">
+                <div class="status-pill">
+                  <span class="dot"></span>
+                  <span id="statusText">Idle</span>
+                </div>
+                <p id="detailText">No active session.</p>
+                <p id="errorText" class="error"></p>
+                <p id="callStatus" class="helper"></p>
+                <p id="sessionPath" class="helper"></p>
+              </div>
+            </aside>
+
+            <section class="stack">
+              <section class="panel live-layout">
+                <div class="panel-head">
+                  <div class="section-title">
+                    <h2>Live View</h2>
+                    <p>Watch latency and post-call summary updates in real time.</p>
+                  </div>
+                </div>
+
+                <div class="metrics">
+                  <div class="metric">
+                    <div class="label">First Audio Latency</div>
+                    <strong id="firstLatency">-</strong>
+                  </div>
+                  <div class="metric">
+                    <div class="label">Turn Latency</div>
+                    <strong id="turnLatency">-</strong>
+                  </div>
+                </div>
+
+                <div class="summary" id="summaryBlock" hidden>
+                  <div class="label">Post-Call Summary</div>
+                  <p id="summaryText"></p>
+                  <div class="label">Suggested Next Action</div>
+                  <p id="nextActionText"></p>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="section-title">
+                    <h2>Session Snapshot</h2>
+                    <p>Quick operational details shown separately for easier session monitoring.</p>
+                  </div>
+                </div>
+
+                <div class="index-detail-grid four-up">
+                  <div class="info-card">
+                    <div class="label">Customer</div>
+                    <strong id="customerCard">-</strong>
+                    <p class="muted-block">Prospect name currently loaded for local or phone calls.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Dial Target</div>
+                    <strong id="phoneCard">-</strong>
+                    <p class="muted-block">Phone number prepared for outbound dialing from this dashboard.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Current Status</div>
+                    <strong id="statusCard">-</strong>
+                    <p class="muted-block">Live session state mirrored here for faster scanning.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Saved Output</div>
+                    <strong id="sessionDirCard">-</strong>
+                    <p class="muted-block">Latest session folder path once a call or local session runs.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Telephony</div>
+                    <strong id="telephonyProviderCard">-</strong>
+                    <p class="muted-block">Active outbound provider used when placing calls from the dashboard.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Lead Connector</div>
+                    <strong id="leadSourceCard">-</strong>
+                    <p class="muted-block">Current lead ingestion source selected for testing or future batch calling.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Latest Intents</div>
+                    <strong id="userIntentsCard">-</strong>
+                    <p class="muted-block">Most recent user intent tags from intent classification.</p>
+                  </div>
+                </div>
+              </section>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="resultsPage">
+          <div class="results-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <div class="section-title">
+                  <h2>Call Output</h2>
+                  <p>Track lead intake, call outcomes, follow-up workload, and recent call-level details from one place.</p>
+                </div>
+              </div>
+
+              <div class="results-metrics">
+                <div class="metric">
+                  <div class="label">Leads Arrived</div>
+                  <strong id="resultsLeadsArrived">-</strong>
+                </div>
+                <div class="metric">
+                  <div class="label">Unique Leads</div>
+                  <strong id="resultsUniqueLeads">-</strong>
+                </div>
+                <div class="metric">
+                  <div class="label">Calls Made</div>
+                  <strong id="resultsCallsMade">-</strong>
+                </div>
+                <div class="metric">
+                  <div class="label">Answered</div>
+                  <strong id="resultsSuccessfulCalls">-</strong>
+                </div>
+                <div class="metric">
+                  <div class="label">Not Answered</div>
+                  <strong id="resultsUnsuccessfulCalls">-</strong>
+                </div>
+                <div class="metric">
+                  <div class="label">Follow-Up</div>
+                  <strong id="resultsFollowUpRequired">-</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div class="section-title">
+                  <h2>Pipeline Detail</h2>
+                  <p>These are the most useful operational details to watch while scaling outreach.</p>
+                </div>
+              </div>
+
+              <div class="index-detail-grid four-up">
+                <div class="info-card">
+                  <div class="label">Not Called Yet</div>
+                  <strong id="resultsNotCalledYet">-</strong>
+                  <p class="muted-block">Leads that have arrived but do not yet have a matching outbound call recorded.</p>
+                </div>
+                <div class="info-card">
+                  <div class="label">Top Lead Source</div>
+                  <strong id="resultsTopLeadSource">-</strong>
+                  <p class="muted-block">Source contributing the most incoming leads right now.</p>
+                </div>
+                <div class="info-card">
+                  <div class="label">Top Call Source</div>
+                  <strong id="resultsTopCallSource">-</strong>
+                  <p class="muted-block">Source currently driving the highest number of placed calls.</p>
+                </div>
+                <div class="info-card">
+                  <div class="label">Primary Provider</div>
+                  <strong id="resultsPrimaryProvider">-</strong>
+                  <p class="muted-block">Which telephony provider is handling the most calls in the recent record.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div class="section-title">
+                  <h2>Recent Calls</h2>
+                  <p>Recent call outcomes with appointment details, call date/time, and next follow-up step.</p>
+                </div>
+              </div>
+
+              <div class="results-table" id="recentCallsTable">
+                <div class="results-row header">
+                  <div>Lead</div>
+                  <div>Phone</div>
+                  <div>Appointment Details</div>
+                  <div>Appt Date</div>
+                  <div>Appt Time</div>
+                  <div>Questions Asked</div>
+                  <div>Call Date</div>
+                  <div>Call Time</div>
+                  <div>Result</div>
+                  <div>Duration</div>
+                  <div>Follow-Up</div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="configurePage">
+          <div class="configure-grid">
+            <div class="configure-top">
+              <section class="panel config-stack">
+                <div class="section-title">
+                  <h2>Lag Timings</h2>
+                  <p>
+                    Reference view for the current lag-related timing values in the app. This section
+                    is HTML-only and meant for quick visibility on the configure page.
+                  </p>
+                </div>
+
+                <div class="timing-grid">
+                  <div class="timing-card">
+                    <div class="label">Playback Cooldown</div>
+                    <strong>Agent to User</strong>
+                    <p class="helper">Gap after agent audio before sending more user audio.</p>
+                    <input id="timingPlaybackCooldown" type="number" min="0" step="0.01" value="0.25" />
+                  </div>
+                  <div class="timing-card">
+                    <div class="label">Native Preroll</div>
+                    <strong>Opening Lead-In</strong>
+                    <p class="helper">Lead-in used before exact spoken opening lines.</p>
+                    <input id="timingNativePreroll" type="number" min="0" step="0.01" value="0.25" />
+                  </div>
+                  <div class="timing-card">
+                    <div class="label">Interrupt Grace</div>
+                    <strong>Barge-In Window</strong>
+                    <p class="helper">How quickly interruptions are considered valid.</p>
+                    <input id="timingInterruptGrace" type="number" min="0" step="0.01" value="0.30" />
+                  </div>
+                  <div class="timing-card">
+                    <div class="label">Barge-In Debounce</div>
+                    <strong>Repeat Protection</strong>
+                    <p class="helper">Prevents repeated interruption handling too quickly.</p>
+                    <input id="timingBargeDebounce" type="number" min="0" step="0.01" value="0.25" />
+                  </div>
+                  <div class="timing-card">
+                    <div class="label">Auto Stop Grace</div>
+                    <strong>Close Delay</strong>
+                    <p class="helper">Short wait before ending after a final closing line.</p>
+                    <input id="timingAutoStopGrace" type="number" min="0" step="0.01" value="0.20" />
+                  </div>
+                  <div class="timing-card">
+                    <div class="label">Current Profile</div>
+                    <strong id="timingProfileLabel">Fast</strong>
+                    <p class="helper">A simple dashboard-side reference profile for quick review.</p>
+                  </div>
+                </div>
+
+                <div class="timing-actions">
+                  <button id="saveTimingsBtn" class="secondary" type="button">Save Timing View</button>
+                  <button id="resetTimingsBtn" class="ghost" type="button">Reset Defaults</button>
+                </div>
+
+                <div class="timing-note">
+                  Keep the index page clean: lag timings live here as a dedicated configuration
+                  reference. These values are saved in your browser for UI visibility only right
+                  now, so the backend still follows the timing set in code.
+                </div>
+                <p id="timingStatus" class="helper"></p>
+              </section>
+
+              <section class="panel">
+                <div class="section-title">
+                  <h2>Index Page Detail</h2>
+                  <p>
+                    Summary of what the new index page shows: builder-first inputs, generated draft
+                    preview, workspace summary, and direct draft-to-client save actions.
+                  </p>
+                </div>
+
+                <div class="index-detail-grid">
+                  <div class="info-card">
+                    <div class="label">Clean Focus</div>
+                    <strong>Builder First</strong>
+                    <p class="muted-block">The index page now helps create and update clients and agents directly from business details.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Client Context</div>
+                    <strong>Generated Drafts</strong>
+                    <p class="muted-block">Business inputs are turned into prompt, knowledge, objections, qualification, and CTA drafts.</p>
+                  </div>
+                  <div class="info-card">
+                    <div class="label">Responsive</div>
+                    <strong>Live Separated</strong>
+                    <p class="muted-block">Live calling and session snapshot now run on their own dedicated tab.</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div class="section-title">
+                  <h2>Client Editor</h2>
+                  <p>
+                    Edit prompts, knowledge, objections, and generation settings for the selected
+                    client. This section stays on the configure page to keep the index page uncluttered.
+                  </p>
+                </div>
+              </div>
+
+              <div class="editor-grid">
+                <div class="full section-title">
+                  <h3>Projects / Agents</h3>
+                  <p>
+                    Create multiple agents inside the selected client, each with its own workflow,
+                    prompt instruction, and Gemini runtime overrides.
+                  </p>
+                </div>
+                <div>
+                  <label for="editorProjectSelect">Project</label>
+                  <select id="editorProjectSelect"></select>
+                </div>
+                <div>
+                  <label for="projectNameInput">Project Name</label>
+                  <input id="projectNameInput" type="text" />
+                </div>
+                <div>
+                  <label for="projectIdInput">Project ID</label>
+                  <input id="projectIdInput" type="text" placeholder="sales_agent" />
+                </div>
+                <div>
+                  <label for="projectTypeInput">Project Type</label>
+                  <select id="projectTypeInput">
+                    <option value="sales">sales</option>
+                    <option value="lead_qualification">lead_qualification</option>
+                    <option value="followup">followup</option>
+                    <option value="appointment_booking">appointment_booking</option>
+                    <option value="custom">custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="projectStatusInput">Project Status</label>
+                  <select id="projectStatusInput">
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                    <option value="draft">draft</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="projectOutreachModeInput">Outreach Mode</label>
+                  <select id="projectOutreachModeInput">
+                    <option value="call_only">call_only</option>
+                    <option value="chat_only">chat_only</option>
+                    <option value="consent_then_call">consent_then_call</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="projectOutboundProviderInput">Outbound Call Provider</label>
+                  <select id="projectOutboundProviderInput">
+                    <option value="">(Use app default)</option>
+                    <option value="twilio">twilio</option>
+                    <option value="exotel">exotel</option>
+                    <option value="airtel_iq">airtel_iq</option>
+                    <option value="tata">tata</option>
+                    <option value="meta_whatsapp">meta_whatsapp</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="projectTataAgentNumberInput">Tata Agent Number (Override)</label>
+                  <input id="projectTataAgentNumberInput" type="text" placeholder="Optional project-specific agent number" />
+                </div>
+                <div>
+                  <label for="projectTataCallerIdInput">Tata Caller ID (Override)</label>
+                  <input id="projectTataCallerIdInput" type="text" placeholder="Optional project-specific caller id" />
+                </div>
+                <div>
+                  <label for="telephonyMaxConcurrentInput">Max Concurrent Sessions</label>
+                  <input id="telephonyMaxConcurrentInput" type="number" min="1" step="1" placeholder="3" />
+                </div>
+                <div>
+                  <label for="saveAppSettingsBtn">Runtime Settings</label>
+                  <button id="saveAppSettingsBtn" class="ghost" type="button">Save Concurrency</button>
+                  <p id="appSettingsStatus" class="helper"></p>
+                </div>
+                <div class="full">
+                  <label for="projectDescriptionInput">Project Description</label>
+                  <textarea id="projectDescriptionInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="projectPromptInstructionInput">Project Prompt Instruction</label>
+                  <textarea id="projectPromptInstructionInput"></textarea>
+                </div>
+                <div>
+                  <label for="projectGeminiApiKeyEnvInput">Gemini API Key Env Var</label>
+                  <input id="projectGeminiApiKeyEnvInput" type="text" placeholder="ACME_HEALTH_SALES_GEMINI_API_KEY" />
+                </div>
+                <div>
+                  <label for="projectGeminiApiKeyInput">Gemini API Key</label>
+                  <input id="projectGeminiApiKeyInput" type="password" placeholder="Optional write-only key" />
+                </div>
+                <div>
+                  <label for="projectLiveModelInput">Live Model Override</label>
+                  <input id="projectLiveModelInput" type="text" placeholder="Optional" />
+                </div>
+                <div>
+                  <label for="projectStructuredModelInput">Structured Model Override</label>
+                  <input id="projectStructuredModelInput" type="text" placeholder="Optional" />
+                </div>
+                <div>
+                  <label for="projectTtsModelInput">TTS Model Override</label>
+                  <input id="projectTtsModelInput" type="text" placeholder="Optional" />
+                </div>
+                <div class="full">
+                  <label for="projectWhatsappConsentMessageInput">WhatsApp Consent Message (for consent_then_call)</label>
+                  <textarea id="projectWhatsappConsentMessageInput" placeholder="Can we call you now? Please reply YES or NO."></textarea>
+                </div>
+                <div class="full">
+                  <label for="projectWhatsappChatOpeningInput">WhatsApp Chat Opening Message (for chat_only)</label>
+                  <textarea id="projectWhatsappChatOpeningInput" placeholder="Hi, how can we help you today?"></textarea>
+                </div>
+                <div class="full editor-actions">
+                  <button id="addProjectBtn" class="ghost" type="button">Add Project</button>
+                  <button id="removeProjectBtn" class="ghost" type="button">Remove Project</button>
+                </div>
+                <div class="full">
+                  <p id="projectEditorStatus" class="helper">
+                    API keys stay server-side. If a key already exists for a project, leave the password field blank to keep it unchanged.
+                  </p>
+                </div>
+                <div>
+                  <label for="displayNameInput">Display Name</label>
+                  <input id="displayNameInput" type="text" />
+                </div>
+                <div>
+                  <label for="industryInput">Industry</label>
+                  <input id="industryInput" type="text" />
+                </div>
+                <div class="full">
+                  <label for="offerInput">Primary Offer</label>
+                  <input id="offerInput" type="text" />
+                </div>
+                <div>
+                  <label for="voiceNameInput">Voice Name</label>
+                  <input id="voiceNameInput" type="text" />
+                </div>
+                <div>
+                  <label for="statusInput">Status</label>
+                  <select id="statusInput">
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                    <option value="draft">draft</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="websiteInput">Website</label>
+                  <input id="websiteInput" type="text" />
+                </div>
+                <div>
+                  <label for="languagesInput">Languages Supported</label>
+                  <input id="languagesInput" type="text" placeholder="marathi, hindi, english" />
+                </div>
+                <div>
+                  <label for="tagsInput">Tags</label>
+                  <input id="tagsInput" type="text" placeholder="hospital, appointment_booking" />
+                </div>
+                <div class="full">
+                  <label for="servicesInput">Services</label>
+                  <input id="servicesInput" type="text" placeholder="heart checkup, callback coordination" />
+                </div>
+                <div class="full">
+                  <label for="locationsInput">Locations</label>
+                  <input id="locationsInput" type="text" placeholder="Aurangabad" />
+                </div>
+                <div>
+                  <label for="conversationModeInput">Conversation Mode</label>
+                  <select id="conversationModeInput">
+                    <option value="sales_discovery">sales_discovery</option>
+                    <option value="appointment_booking">appointment_booking</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="workflowModeInput">Workflow Mode</label>
+                  <select id="workflowModeInput">
+                    <option value="model_led">model_led</option>
+                    <option value="scripted">scripted</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="closureModeInput">Closure Mode</label>
+                  <select id="closureModeInput">
+                    <option value="default">default</option>
+                    <option value="appointment_booking">appointment_booking</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="defaultOpeningLanguageInput">Default Opening Language</label>
+                  <select id="defaultOpeningLanguageInput">
+                    <option value="">auto</option>
+                    <option value="marathi">marathi</option>
+                    <option value="hindi">hindi</option>
+                    <option value="english">english</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="resultsBaseTemplateInput">Results Base Template</label>
+                  <select id="resultsBaseTemplateInput">
+                    <option value="default_v1">default_v1</option>
+                  </select>
+                </div>
+                <div class="full">
+                  <label for="resultsExtraFieldsInput">Results Extra Fields (comma separated dot paths)</label>
+                  <input
+                    id="resultsExtraFieldsInput"
+                    type="text"
+                    placeholder="memory.preferred_doctor, summary.qualification.status, memory.appointment_slot"
+                  />
+                </div>
+                <div>
+                  <label for="liveTemperatureInput">Live Temperature</label>
+                  <input id="liveTemperatureInput" type="number" step="0.01" />
+                </div>
+                <div>
+                  <label for="liveTopPInput">Live Top P</label>
+                  <input id="liveTopPInput" type="number" step="0.01" />
+                </div>
+                <div>
+                  <label for="liveTopKInput">Live Top K</label>
+                  <input id="liveTopKInput" type="number" step="1" />
+                </div>
+                <div>
+                  <label for="liveMaxTokensInput">Live Max Tokens</label>
+                  <input id="liveMaxTokensInput" type="number" step="1" />
+                </div>
+                <div>
+                  <label for="structuredTemperatureInput">Structured Temperature</label>
+                  <input id="structuredTemperatureInput" type="number" step="0.01" />
+                </div>
+                <div>
+                  <label for="structuredTopPInput">Structured Top P</label>
+                  <input id="structuredTopPInput" type="number" step="0.01" />
+                </div>
+                <div>
+                  <label for="structuredTopKInput">Structured Top K</label>
+                  <input id="structuredTopKInput" type="number" step="1" />
+                </div>
+                <div>
+                  <label for="structuredMaxTokensInput">Structured Max Tokens</label>
+                  <input id="structuredMaxTokensInput" type="number" step="1" />
+                </div>
+                <div class="full">
+                  <label for="openingScriptInput">Opening Script JSON</label>
+                  <textarea id="openingScriptInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="closureExamplesInput">Closure Examples JSON</label>
+                  <textarea id="closureExamplesInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="bookingRulesInput">Booking Rules JSON</label>
+                  <textarea id="bookingRulesInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="handoffRulesInput">Handoff Rules JSON</label>
+                  <textarea id="handoffRulesInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="importMetadataInput">Import Metadata JSON</label>
+                  <textarea id="importMetadataInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="systemPromptInput">System Prompt</label>
+                  <textarea id="systemPromptInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="knowledgeInput">Knowledge</label>
+                  <textarea id="knowledgeInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="objectionsInput">Objections JSON</label>
+                  <textarea id="objectionsInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="qualificationInput">Qualification JSON</label>
+                  <textarea id="qualificationInput"></textarea>
+                </div>
+                <div class="full">
+                  <label for="ctaInput">CTA JSON</label>
+                  <textarea id="ctaInput"></textarea>
+                </div>
+              </div>
+
+              <div class="editor-actions">
+                <button id="loadEditorBtn" class="ghost" type="button">Load Client</button>
+                <button id="saveEditorBtn" class="primary" type="button">Save Client</button>
+              </div>
+              <p id="editorStatus" class="helper"></p>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const clientSelect = document.getElementById("clientSelect");
+      const projectSelect = document.getElementById("projectSelect");
+      const startBtn = document.getElementById("startBtn");
+      const projectHint = document.getElementById("projectHint");
+      const statusText = document.getElementById("statusText");
+      const detailText = document.getElementById("detailText");
+      const errorText = document.getElementById("errorText");
+      const sessionPath = document.getElementById("sessionPath");
+      const customerNameInput = document.getElementById("customerNameInput");
+      const phoneNumberInput = document.getElementById("phoneNumberInput");
+      const leadSourceButtons = document.getElementById("leadSourceButtons");
+      const leadSourceCard = document.getElementById("leadSourceCard");
+      const leadSourceStatusCard = document.getElementById("leadSourceStatusCard");
+      const leadSourceDescription = document.getElementById("leadSourceDescription");
+      const leadSourceHint = document.getElementById("leadSourceHint");
+      const excelFileInput = document.getElementById("excelFileInput");
+      const parseExcelBtn = document.getElementById("parseExcelBtn");
+      const useFirstExcelLeadBtn = document.getElementById("useFirstExcelLeadBtn");
+      const excelStatus = document.getElementById("excelStatus");
+      const excelLeadPreview = document.getElementById("excelLeadPreview");
+      const callStatus = document.getElementById("callStatus");
+      const firstLatency = document.getElementById("firstLatency");
+      const turnLatency = document.getElementById("turnLatency");
+      const summaryBlock = document.getElementById("summaryBlock");
+      const summaryText = document.getElementById("summaryText");
+      const nextActionText = document.getElementById("nextActionText");
+      const builderBusinessName = document.getElementById("builderBusinessName");
+      const builderBusinessType = document.getElementById("builderBusinessType");
+      const builderProjectName = document.getElementById("builderProjectName");
+      const builderAgentType = document.getElementById("builderAgentType");
+      const builderLanguages = document.getElementById("builderLanguages");
+      const builderBusinessDescription = document.getElementById("builderBusinessDescription");
+      const builderPricingNotes = document.getElementById("builderPricingNotes");
+      const saveBuilderAsWorkspaceBtn = document.getElementById("saveBuilderAsWorkspaceBtn");
+      const loadNewBuilderBtn = document.getElementById("loadNewBuilderBtn");
+      const builderStatus = document.getElementById("builderStatus");
+      const builderPreviewClient = document.getElementById("builderPreviewClient");
+      const builderPreviewProject = document.getElementById("builderPreviewProject");
+      const builderPreviewMode = document.getElementById("builderPreviewMode");
+      const builderPreviewLanguage = document.getElementById("builderPreviewLanguage");
+      const builderPreviewSummary = document.getElementById("builderPreviewSummary");
+      const builderGeneratedPrompt = document.getElementById("builderGeneratedPrompt");
+      const builderGeneratedKnowledge = document.getElementById("builderGeneratedKnowledge");
+      const displayNameInput = document.getElementById("displayNameInput");
+      const editorProjectSelect = document.getElementById("editorProjectSelect");
+      const projectNameInput = document.getElementById("projectNameInput");
+      const projectIdInput = document.getElementById("projectIdInput");
+      const projectTypeInput = document.getElementById("projectTypeInput");
+      const projectStatusInput = document.getElementById("projectStatusInput");
+      const projectOutreachModeInput = document.getElementById("projectOutreachModeInput");
+      const projectOutboundProviderInput = document.getElementById("projectOutboundProviderInput");
+      const projectTataAgentNumberInput = document.getElementById("projectTataAgentNumberInput");
+      const projectTataCallerIdInput = document.getElementById("projectTataCallerIdInput");
+      const projectDescriptionInput = document.getElementById("projectDescriptionInput");
+      const projectPromptInstructionInput = document.getElementById("projectPromptInstructionInput");
+      const projectGeminiApiKeyEnvInput = document.getElementById("projectGeminiApiKeyEnvInput");
+      const projectGeminiApiKeyInput = document.getElementById("projectGeminiApiKeyInput");
+      const projectLiveModelInput = document.getElementById("projectLiveModelInput");
+      const projectStructuredModelInput = document.getElementById("projectStructuredModelInput");
+      const projectTtsModelInput = document.getElementById("projectTtsModelInput");
+      const projectWhatsappConsentMessageInput = document.getElementById("projectWhatsappConsentMessageInput");
+      const projectWhatsappChatOpeningInput = document.getElementById("projectWhatsappChatOpeningInput");
+      const addProjectBtn = document.getElementById("addProjectBtn");
+      const removeProjectBtn = document.getElementById("removeProjectBtn");
+      const projectEditorStatus = document.getElementById("projectEditorStatus");
+      const industryInput = document.getElementById("industryInput");
+      const offerInput = document.getElementById("offerInput");
+      const voiceNameInput = document.getElementById("voiceNameInput");
+      const statusInput = document.getElementById("statusInput");
+      const websiteInput = document.getElementById("websiteInput");
+      const languagesInput = document.getElementById("languagesInput");
+      const tagsInput = document.getElementById("tagsInput");
+      const servicesInput = document.getElementById("servicesInput");
+      const locationsInput = document.getElementById("locationsInput");
+      const conversationModeInput = document.getElementById("conversationModeInput");
+      const workflowModeInput = document.getElementById("workflowModeInput");
+      const closureModeInput = document.getElementById("closureModeInput");
+      const defaultOpeningLanguageInput = document.getElementById("defaultOpeningLanguageInput");
+      const resultsBaseTemplateInput = document.getElementById("resultsBaseTemplateInput");
+      const resultsExtraFieldsInput = document.getElementById("resultsExtraFieldsInput");
+      const liveTemperatureInput = document.getElementById("liveTemperatureInput");
+      const liveTopPInput = document.getElementById("liveTopPInput");
+      const liveTopKInput = document.getElementById("liveTopKInput");
+      const liveMaxTokensInput = document.getElementById("liveMaxTokensInput");
+      const structuredTemperatureInput = document.getElementById("structuredTemperatureInput");
+      const structuredTopPInput = document.getElementById("structuredTopPInput");
+      const structuredTopKInput = document.getElementById("structuredTopKInput");
+      const structuredMaxTokensInput = document.getElementById("structuredMaxTokensInput");
+      const openingScriptInput = document.getElementById("openingScriptInput");
+      const closureExamplesInput = document.getElementById("closureExamplesInput");
+      const bookingRulesInput = document.getElementById("bookingRulesInput");
+      const handoffRulesInput = document.getElementById("handoffRulesInput");
+      const importMetadataInput = document.getElementById("importMetadataInput");
+      const systemPromptInput = document.getElementById("systemPromptInput");
+      const knowledgeInput = document.getElementById("knowledgeInput");
+      const objectionsInput = document.getElementById("objectionsInput");
+      const qualificationInput = document.getElementById("qualificationInput");
+      const ctaInput = document.getElementById("ctaInput");
+      const editorStatus = document.getElementById("editorStatus");
+      const openingLanguageCard = document.getElementById("openingLanguageCard");
+      const sessionIdCard = document.getElementById("sessionIdCard");
+      const activeClientCard = document.getElementById("activeClientCard");
+      const activeProjectCard = document.getElementById("activeProjectCard");
+      const customerCard = document.getElementById("customerCard");
+      const phoneCard = document.getElementById("phoneCard");
+      const statusCard = document.getElementById("statusCard");
+      const sessionDirCard = document.getElementById("sessionDirCard");
+      const telephonyProviderCard = document.getElementById("telephonyProviderCard");
+      const telephonyMaxConcurrentInput = document.getElementById("telephonyMaxConcurrentInput");
+      const saveAppSettingsBtn = document.getElementById("saveAppSettingsBtn");
+      const appSettingsStatus = document.getElementById("appSettingsStatus");
+      const userIntentsCard = document.getElementById("userIntentsCard");
+      const workspaceBadge = document.getElementById("workspaceBadge");
+      const balanceBadge = document.getElementById("balanceBadge");
+      const resultsLeadsArrived = document.getElementById("resultsLeadsArrived");
+      const resultsUniqueLeads = document.getElementById("resultsUniqueLeads");
+      const resultsCallsMade = document.getElementById("resultsCallsMade");
+      const resultsSuccessfulCalls = document.getElementById("resultsSuccessfulCalls");
+      const resultsUnsuccessfulCalls = document.getElementById("resultsUnsuccessfulCalls");
+      const resultsFollowUpRequired = document.getElementById("resultsFollowUpRequired");
+      const resultsNotCalledYet = document.getElementById("resultsNotCalledYet");
+      const resultsTopLeadSource = document.getElementById("resultsTopLeadSource");
+      const resultsTopCallSource = document.getElementById("resultsTopCallSource");
+      const resultsPrimaryProvider = document.getElementById("resultsPrimaryProvider");
+      const recentCallsTable = document.getElementById("recentCallsTable");
+      const pageTabs = document.querySelectorAll(".page-tab");
+      const pages = document.querySelectorAll(".page");
+      const timingPlaybackCooldown = document.getElementById("timingPlaybackCooldown");
+      const timingNativePreroll = document.getElementById("timingNativePreroll");
+      const timingInterruptGrace = document.getElementById("timingInterruptGrace");
+      const timingBargeDebounce = document.getElementById("timingBargeDebounce");
+      const timingAutoStopGrace = document.getElementById("timingAutoStopGrace");
+      const timingProfileLabel = document.getElementById("timingProfileLabel");
+      const timingStatus = document.getElementById("timingStatus");
+      const urlParams = new URLSearchParams(window.location.search);
+      const autoStartDemoRequested = (() => {
+        const fromQuery = ["1", "true", "yes"].includes(String(urlParams.get("start_demo") || "").toLowerCase());
+        let fromStorage = false;
+        try {
+          fromStorage = window.sessionStorage.getItem("start_demo") === "1";
+        } catch (error) {
+          fromStorage = false;
+        }
+        return fromQuery || fromStorage;
+      })();
+      let autoStartDemoTriggered = false;
+      let activatingProjectSelection = false;
+
+      const timingDefaults = {
+        playbackCooldown: "0.25",
+        nativePreroll: "0.25",
+        interruptGrace: "0.30",
+        bargeDebounce: "0.25",
+        autoStopGrace: "0.20",
+      };
+      const timingStorageKey = "voiceAgentLagTimings";
+      const DEFAULT_RESULTS_COLUMNS = [
+        { key: "lead_name", label: "Lead" },
+        { key: "to_number", label: "Phone" },
+        { key: "appointment_details", label: "Appointment Details" },
+        { key: "appointment_date", label: "Appt Date" },
+        { key: "appointment_time", label: "Appt Time" },
+        { key: "important_questions_asked", label: "Questions Asked" },
+        { key: "call_date", label: "Call Date" },
+        { key: "call_time", label: "Call Time" },
+        { key: "result", label: "Result" },
+        { key: "duration_seconds", label: "Duration" },
+        { key: "follow_up", label: "Follow-Up" },
+      ];
+      let dashboardSessionKey = "dashboard";
+      let requiresWorkflowConfiguration = false;
+      const BROWSER_INPUT_SAMPLE_RATE = 16000;
+      const BROWSER_OUTPUT_SAMPLE_RATE = 24000;
+      let availableLeadSources = [];
+      let availableProjects = [];
+      let editorProjects = [];
+      let activeEditorProjectIndex = -1;
+      let lastBuilderDraft = null;
+      let editorConfigCache = {
+        target_audience: [],
+        tone: [],
+        disallowed_claims: [],
+        allowed_contact_fields: ["name", "email", "phone"],
+        intent_overrides: {},
+        speaking_rate: 1.0,
+      };
+      let editorDefaultSystemPrompt = "";
+      let editorDefaultKnowledge = "";
+      let editorDefaultObjections = {};
+      let editorDefaultQualification = {};
+      let editorDefaultCta = {};
+      let activeLeadSourceId = "manual_single";
+      let importedExcelLeads = [];
+      let browserAudioWs = null;
+      let browserMicStream = null;
+      let browserMicContext = null;
+      let browserMicSource = null;
+      let browserMicProcessor = null;
+      let browserMicSink = null;
+      let browserPlaybackContext = null;
+      let browserPlaybackCursor = 0;
+
+      function remoteLocalMicModeBlocked() {
+        // Force browser-mic transport for all environments to avoid server-side mic capture issues.
+        return true;
+      }
+
+      function applySessionModeGuard() {
+        if (!remoteLocalMicModeBlocked()) {
+          return;
+        }
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.textContent = "Start Demo (Browser Mic)";
+          startBtn.title = "Uses your device microphone through browser permission.";
+        }
+        callStatus.textContent = "Remote dashboard detected. Start uses this device mic permission and streams audio to the server.";
+      }
+
+      async function ensureLocalMicPermission() {
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+          throw new Error("Browser microphone permission API is unavailable in this browser.");
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      }
+
+      function websocketBaseUrl() {
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        return `${scheme}://${window.location.host}`;
+      }
+
+      function floatToPcm16Bytes(samples) {
+        const out = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i += 1) {
+          const s = Math.max(-1, Math.min(1, samples[i]));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return new Uint8Array(out.buffer);
+      }
+
+      function base64FromBytes(bytes) {
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 1) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+      }
+
+      function bytesFromBase64(encoded) {
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+
+      function decodePcm16ToFloat32(bytes) {
+        const sampleCount = Math.floor(bytes.length / 2);
+        const out = new Float32Array(sampleCount);
+        for (let i = 0; i < sampleCount; i += 1) {
+          const lo = bytes[i * 2];
+          const hi = bytes[i * 2 + 1];
+          let value = (hi << 8) | lo;
+          if (value >= 0x8000) {
+            value -= 0x10000;
+          }
+          out[i] = value / 0x8000;
+        }
+        return out;
+      }
+
+      async function ensureBrowserPlaybackContext() {
+        if (browserPlaybackContext) {
+          if (browserPlaybackContext.state === "suspended") {
+            await browserPlaybackContext.resume();
+          }
+          return browserPlaybackContext;
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+          throw new Error("Web Audio API is unavailable in this browser.");
+        }
+        browserPlaybackContext = new AudioCtx();
+        browserPlaybackCursor = browserPlaybackContext.currentTime;
+        return browserPlaybackContext;
+      }
+
+      async function playBrowserAudioChunk(payload, sampleRate) {
+        const context = await ensureBrowserPlaybackContext();
+        const pcm = decodePcm16ToFloat32(bytesFromBase64(payload));
+        if (!pcm.length) {
+          return;
+        }
+        const buffer = context.createBuffer(1, pcm.length, Number(sampleRate) || BROWSER_OUTPUT_SAMPLE_RATE);
+        buffer.copyToChannel(pcm, 0);
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        const now = context.currentTime + 0.01;
+        const when = Math.max(now, browserPlaybackCursor);
+        source.start(when);
+        browserPlaybackCursor = when + buffer.duration;
+      }
+
+      async function startBrowserAudioTransport() {
+        if (browserAudioWs && browserAudioWs.readyState === WebSocket.OPEN) {
+          return;
+        }
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+          throw new Error("Browser microphone API is unavailable.");
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+          throw new Error("Web Audio API is unavailable in this browser.");
+        }
+        await ensureBrowserPlaybackContext();
+        const ws = new WebSocket(`${websocketBaseUrl()}/ws/browser-audio/${dashboardSessionKey}`);
+        await new Promise((resolve, reject) => {
+          const timer = window.setTimeout(() => reject(new Error("Timed out connecting audio channel.")), 10000);
+          ws.onopen = () => {
+            window.clearTimeout(timer);
+            resolve();
+          };
+          ws.onerror = () => {
+            window.clearTimeout(timer);
+            reject(new Error("Could not connect browser audio channel."));
+          };
+        });
+        browserAudioWs = ws;
+        browserAudioWs.onclose = () => {
+          browserAudioWs = null;
+        };
+        browserAudioWs.onmessage = async (event) => {
+          let message;
+          try {
+            message = JSON.parse(event.data);
+          } catch (error) {
+            return;
+          }
+          if (!message || typeof message !== "object") {
+            return;
+          }
+          if (message.event === "audio_chunk" && typeof message.payload === "string") {
+            try {
+              await playBrowserAudioChunk(message.payload, message.sample_rate);
+            } catch (error) {
+              console.error("Playback error", error);
+              const messageText = error instanceof Error ? error.message : "Browser audio playback failed.";
+              errorText.textContent = messageText;
+              callStatus.textContent = messageText;
+            }
+            return;
+          }
+          if (message.event === "flush" && browserPlaybackContext) {
+            browserPlaybackCursor = browserPlaybackContext.currentTime + 0.01;
+          }
+        };
+
+        browserMicStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        browserMicContext = new AudioCtx({ sampleRate: BROWSER_INPUT_SAMPLE_RATE });
+        if (browserMicContext.state === "suspended") {
+          await browserMicContext.resume();
+        }
+        browserMicSource = browserMicContext.createMediaStreamSource(browserMicStream);
+        browserMicProcessor = browserMicContext.createScriptProcessor(2048, 1, 1);
+        browserMicSink = browserMicContext.createGain();
+        browserMicSink.gain.value = 0;
+        browserMicSource.connect(browserMicProcessor);
+        browserMicProcessor.connect(browserMicSink);
+        browserMicSink.connect(browserMicContext.destination);
+        browserMicProcessor.onaudioprocess = (evt) => {
+          if (!browserAudioWs || browserAudioWs.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          const channel = evt.inputBuffer.getChannelData(0);
+          const payload = base64FromBytes(floatToPcm16Bytes(channel));
+          browserAudioWs.send(
+            JSON.stringify({
+              event: "audio_chunk",
+              sample_rate: browserMicContext.sampleRate || BROWSER_INPUT_SAMPLE_RATE,
+              payload,
+            })
+          );
+        };
+      }
+
+      async function stopBrowserAudioTransport(sendStop = true) {
+        if (browserMicProcessor) {
+          browserMicProcessor.onaudioprocess = null;
+          withNoThrow(() => browserMicProcessor.disconnect());
+          browserMicProcessor = null;
+        }
+        if (browserMicSource) {
+          withNoThrow(() => browserMicSource.disconnect());
+          browserMicSource = null;
+        }
+        if (browserMicSink) {
+          withNoThrow(() => browserMicSink.disconnect());
+          browserMicSink = null;
+        }
+        if (browserMicStream) {
+          browserMicStream.getTracks().forEach((track) => track.stop());
+          browserMicStream = null;
+        }
+        if (browserMicContext) {
+          await browserMicContext.close().catch(() => {});
+          browserMicContext = null;
+        }
+        if (browserPlaybackContext) {
+          await browserPlaybackContext.close().catch(() => {});
+          browserPlaybackContext = null;
+          browserPlaybackCursor = 0;
+        }
+        if (browserAudioWs) {
+          if (sendStop && browserAudioWs.readyState === WebSocket.OPEN) {
+            browserAudioWs.send(JSON.stringify({ event: "stop" }));
+          }
+          if (browserAudioWs.readyState === WebSocket.OPEN || browserAudioWs.readyState === WebSocket.CONNECTING) {
+            browserAudioWs.close();
+          }
+          browserAudioWs = null;
+        }
+      }
+
+      function withNoThrow(fn) {
+        try {
+          fn();
+        } catch (error) {
+          return;
+        }
+      }
+
+      function setNumberInput(element, value) {
+        element.value = value ?? "";
+      }
+
+      function csvToList(value) {
+        return (value || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      function normalizeSupportedLanguagesList(value) {
+        const aliases = {
+          marathi: "marathi",
+          mar: "marathi",
+          hindi: "hindi",
+          hin: "hindi",
+          english: "english",
+          eng: "english",
+        };
+        const normalized = [];
+        csvToList(value).forEach((item) => {
+          const key = String(item || "").trim().toLowerCase();
+          const mapped = aliases[key] || "";
+          if (mapped && !normalized.includes(mapped)) {
+            normalized.push(mapped);
+          }
+        });
+        return normalized;
+      }
+
+      function listToCsv(value) {
+        return Array.isArray(value) ? value.join(", ") : "";
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function switchPage(pageId) {
+        pages.forEach((page) => page.classList.toggle("active", page.id === pageId));
+        pageTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.page === pageId));
+      }
+
+      pageTabs.forEach((tab) => {
+        tab.addEventListener("click", () => switchPage(tab.dataset.page));
+      });
+
+      function currentTimingProfile() {
+        const values = [
+          Number(timingPlaybackCooldown.value || timingDefaults.playbackCooldown),
+          Number(timingNativePreroll.value || timingDefaults.nativePreroll),
+          Number(timingInterruptGrace.value || timingDefaults.interruptGrace),
+          Number(timingBargeDebounce.value || timingDefaults.bargeDebounce),
+          Number(timingAutoStopGrace.value || timingDefaults.autoStopGrace),
+        ];
+        const maxValue = Math.max(...values);
+        if (maxValue <= 0.25) {
+          return "Very Fast";
+        }
+        if (maxValue <= 0.4) {
+          return "Fast";
+        }
+        return "Balanced";
+      }
+
+      function renderTimingProfile() {
+        timingProfileLabel.textContent = currentTimingProfile();
+      }
+
+      function applyTimingValues(values) {
+        timingPlaybackCooldown.value = values.playbackCooldown;
+        timingNativePreroll.value = values.nativePreroll;
+        timingInterruptGrace.value = values.interruptGrace;
+        timingBargeDebounce.value = values.bargeDebounce;
+        timingAutoStopGrace.value = values.autoStopGrace;
+        renderTimingProfile();
+      }
+
+      function loadTimingView() {
+        const saved = window.localStorage.getItem(timingStorageKey);
+        if (!saved) {
+          applyTimingValues(timingDefaults);
+          return;
+        }
+        try {
+          applyTimingValues({ ...timingDefaults, ...JSON.parse(saved) });
+          timingStatus.textContent = "Loaded dashboard timing view from this browser.";
+        } catch (error) {
+          applyTimingValues(timingDefaults);
+          timingStatus.textContent = "Could not read saved timing view. Defaults restored.";
+        }
+      }
+
+      function saveTimingView() {
+        const payload = {
+          playbackCooldown: timingPlaybackCooldown.value || timingDefaults.playbackCooldown,
+          nativePreroll: timingNativePreroll.value || timingDefaults.nativePreroll,
+          interruptGrace: timingInterruptGrace.value || timingDefaults.interruptGrace,
+          bargeDebounce: timingBargeDebounce.value || timingDefaults.bargeDebounce,
+          autoStopGrace: timingAutoStopGrace.value || timingDefaults.autoStopGrace,
+        };
+        window.localStorage.setItem(timingStorageKey, JSON.stringify(payload));
+        renderTimingProfile();
+        timingStatus.textContent = "Saved timing values in this browser. Backend timing remains code-driven.";
+      }
+
+      function resetTimingView() {
+        window.localStorage.removeItem(timingStorageKey);
+        applyTimingValues(timingDefaults);
+        timingStatus.textContent = "Timing view reset to the current default reference values.";
+      }
+
+      function slugifyProjectId(value) {
+        return (value || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 48);
+      }
+
+      function parseEditorJsonField(textValue, fieldLabel) {
+        try {
+          const parsed = JSON.parse(textValue || "{}");
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error(`${fieldLabel} must be a JSON object.`);
+          }
+          return { ok: true, value: parsed };
+        } catch (error) {
+          return { ok: false, error: `${fieldLabel} JSON error: ${error.message}` };
+        }
+      }
+
+      function buildGenericPromptAssets(project) {
+        const projectName = String(project?.name || project?.project_id || "Selected Project").trim();
+        const projectType = String(project?.project_type || "custom").trim().toLowerCase();
+        const instruction = String(project?.prompt_instruction || "").trim();
+        const baseObjective = {
+          sales: "Handle sales conversations, understand requirements, and move toward a clear next step.",
+          lead_qualification: "Qualify the lead, capture key details, and decide readiness for follow-up.",
+          followup: "Run structured follow-up conversations and confirm progress or blockers.",
+          appointment_booking: "Handle appointment-related conversations and confirm booking intent and slots.",
+          custom: "Handle the configured workflow clearly and professionally.",
+        }[projectType] || "Handle the configured workflow clearly and professionally.";
+        return {
+          system_prompt: [
+            `You are the assistant for ${projectName}.`,
+            `Primary objective: ${baseObjective}`,
+            instruction ? `Project instruction: ${instruction}` : "Use concise, professional, and context-aware responses.",
+          ].join("\n"),
+          knowledge: [
+            `# ${projectName} Knowledge`,
+            "",
+            `- Project type: ${projectType}`,
+            "- Keep responses aligned to the selected project workflow.",
+            "- Capture only relevant details and avoid unrelated assumptions.",
+          ].join("\n"),
+          objections: {
+            common: [
+              "Acknowledge the concern and clarify the next step.",
+              "Do not overpromise outcomes outside the configured workflow.",
+            ],
+          },
+          qualification: {
+            fields: {
+              requirement: "What is the user's exact requirement?",
+              timeline: "What timeline is expected?",
+            },
+          },
+          cta: {
+            primary_cta: "Confirm the next action for this project.",
+            fallback_cta: "Capture contact details and arrange follow-up.",
+          },
+        };
+      }
+
+      function resolveProjectPromptAssets(project) {
+        const assets = project?.prompt_assets || {};
+        const genericAssets = buildGenericPromptAssets(project);
+        return {
+          system_prompt: String(assets.system_prompt || genericAssets.system_prompt).trim(),
+          knowledge: String(assets.knowledge || genericAssets.knowledge).trim(),
+          objections: assets.objections && typeof assets.objections === "object" && !Array.isArray(assets.objections)
+            ? assets.objections
+            : { ...(genericAssets.objections || {}) },
+          qualification: assets.qualification && typeof assets.qualification === "object" && !Array.isArray(assets.qualification)
+            ? assets.qualification
+            : { ...(genericAssets.qualification || {}) },
+          cta: assets.cta && typeof assets.cta === "object" && !Array.isArray(assets.cta)
+            ? assets.cta
+            : { ...(genericAssets.cta || {}) },
+        };
+      }
+
+      function defaultEditorProject() {
+        return {
+          project_id: `project_${editorProjects.length + 1}`,
+          name: `Project ${editorProjects.length + 1}`,
+          project_type: "custom",
+          status: "draft",
+          description: "",
+          prompt_instruction: "",
+          prompt_assets: {
+            system_prompt: editorDefaultSystemPrompt || "",
+            knowledge: editorDefaultKnowledge || "",
+            objections: { ...(editorDefaultObjections || {}) },
+            qualification: { ...(editorDefaultQualification || {}) },
+            cta: { ...(editorDefaultCta || {}) },
+          },
+          runtime: {
+            gemini_api_key_env: "",
+            live_model: "",
+            structured_model: "",
+            tts_model: "",
+            outreach_mode: "call_only",
+            outbound_call_provider: "",
+            tata_agent_number: "",
+            tata_caller_id: "",
+            whatsapp_consent_message: "",
+            whatsapp_chat_opening_message: "",
+          },
+        };
+      }
+
+      function syncEditorProjectFromInputs(enforceJsonValidation = true) {
+        if (activeEditorProjectIndex < 0 || !editorProjects[activeEditorProjectIndex]) {
+          return true;
+        }
+        const existing = editorProjects[activeEditorProjectIndex];
+        const existingAssets = existing.prompt_assets || {};
+        const parsedObjections = parseEditorJsonField(objectionsInput.value, "Objections");
+        if (!parsedObjections.ok && enforceJsonValidation) {
+          editorStatus.textContent = parsedObjections.error;
+          return false;
+        }
+        const parsedQualification = parseEditorJsonField(qualificationInput.value, "Qualification");
+        if (!parsedQualification.ok && enforceJsonValidation) {
+          editorStatus.textContent = parsedQualification.error;
+          return false;
+        }
+        const parsedCta = parseEditorJsonField(ctaInput.value, "CTA");
+        if (!parsedCta.ok && enforceJsonValidation) {
+          editorStatus.textContent = parsedCta.error;
+          return false;
+        }
+        const runtime = {
+          ...(existing.runtime || {}),
+          gemini_api_key_env: projectGeminiApiKeyEnvInput.value.trim() || null,
+          live_model: projectLiveModelInput.value.trim() || null,
+          structured_model: projectStructuredModelInput.value.trim() || null,
+          tts_model: projectTtsModelInput.value.trim() || null,
+          outreach_mode: projectOutreachModeInput.value || "call_only",
+          outbound_call_provider: projectOutboundProviderInput.value || null,
+          tata_agent_number: projectTataAgentNumberInput.value.trim() || null,
+          tata_caller_id: projectTataCallerIdInput.value.trim() || null,
+          whatsapp_consent_message: projectWhatsappConsentMessageInput.value.trim() || null,
+          whatsapp_chat_opening_message: projectWhatsappChatOpeningInput.value.trim() || null,
+        };
+        const freshApiKey = projectGeminiApiKeyInput.value.trim();
+        if (freshApiKey) {
+          runtime.gemini_api_key = freshApiKey;
+          runtime.gemini_api_key_present = true;
+        }
+        editorProjects[activeEditorProjectIndex] = {
+          ...existing,
+          project_id: slugifyProjectId(projectIdInput.value) || existing.project_id || `project_${activeEditorProjectIndex + 1}`,
+          name: projectNameInput.value.trim() || existing.name || `Project ${activeEditorProjectIndex + 1}`,
+          project_type: projectTypeInput.value || "custom",
+          status: projectStatusInput.value || "draft",
+          description: projectDescriptionInput.value.trim() || null,
+          prompt_instruction: projectPromptInstructionInput.value.trim() || null,
+          prompt_assets: {
+            system_prompt: systemPromptInput.value.trim(),
+            knowledge: knowledgeInput.value.trim(),
+            objections: parsedObjections.ok ? parsedObjections.value : (existingAssets.objections || {}),
+            qualification: parsedQualification.ok ? parsedQualification.value : (existingAssets.qualification || {}),
+            cta: parsedCta.ok ? parsedCta.value : (existingAssets.cta || {}),
+          },
+          runtime,
+        };
+        return true;
+      }
+
+      function renderEditorProjectOptions() {
+        editorProjectSelect.innerHTML = "";
+        editorProjects.forEach((project, index) => {
+          const option = document.createElement("option");
+          option.value = String(index);
+          option.textContent = `${project.name || `Project ${index + 1}`} (${project.project_type || "custom"})`;
+          editorProjectSelect.appendChild(option);
+        });
+      }
+
+      function loadEditorProject(index) {
+        if (!editorProjects.length) {
+          editorProjects = [defaultEditorProject()];
+        }
+        activeEditorProjectIndex = Math.max(0, Math.min(index, editorProjects.length - 1));
+        renderEditorProjectOptions();
+        editorProjectSelect.value = String(activeEditorProjectIndex);
+        const project = editorProjects[activeEditorProjectIndex];
+        projectNameInput.value = project.name || "";
+        projectIdInput.value = project.project_id || "";
+        projectTypeInput.value = project.project_type || "custom";
+        projectStatusInput.value = project.status || "draft";
+        projectOutreachModeInput.value = project.runtime?.outreach_mode || "call_only";
+        projectOutboundProviderInput.value = project.runtime?.outbound_call_provider || "";
+        projectTataAgentNumberInput.value = project.runtime?.tata_agent_number || "";
+        projectTataCallerIdInput.value = project.runtime?.tata_caller_id || "";
+        projectDescriptionInput.value = project.description || "";
+        projectPromptInstructionInput.value = project.prompt_instruction || "";
+        projectGeminiApiKeyEnvInput.value = project.runtime?.gemini_api_key_env || "";
+        projectGeminiApiKeyInput.value = "";
+        projectLiveModelInput.value = project.runtime?.live_model || "";
+        projectStructuredModelInput.value = project.runtime?.structured_model || "";
+        projectTtsModelInput.value = project.runtime?.tts_model || "";
+        projectWhatsappConsentMessageInput.value = project.runtime?.whatsapp_consent_message || "";
+        projectWhatsappChatOpeningInput.value = project.runtime?.whatsapp_chat_opening_message || "";
+        const assets = resolveProjectPromptAssets(project);
+        systemPromptInput.value = assets.system_prompt || "";
+        knowledgeInput.value = assets.knowledge || "";
+        objectionsInput.value = JSON.stringify(assets.objections || {}, null, 2);
+        qualificationInput.value = JSON.stringify(assets.qualification || {}, null, 2);
+        ctaInput.value = JSON.stringify(assets.cta || {}, null, 2);
+        projectEditorStatus.textContent = project.runtime?.gemini_api_key_present || project.runtime?.gemini_api_key
+          ? "A Gemini API key already exists for this project. Leave the password field blank to keep it unchanged."
+          : "No direct Gemini API key stored yet. You can use an env var name or provide a new key now.";
+      }
+
+      [
+        timingPlaybackCooldown,
+        timingNativePreroll,
+        timingInterruptGrace,
+        timingBargeDebounce,
+        timingAutoStopGrace,
+      ].forEach((input) => {
+        input.addEventListener("input", renderTimingProfile);
+      });
+
+      function applyEditorPayload(data, message = "") {
+        editorConfigCache = {
+          target_audience: Array.isArray(data.config.target_audience) ? [...data.config.target_audience] : [],
+          tone: Array.isArray(data.config.tone) ? [...data.config.tone] : [],
+          disallowed_claims: Array.isArray(data.config.disallowed_claims) ? [...data.config.disallowed_claims] : [],
+          allowed_contact_fields: Array.isArray(data.config.allowed_contact_fields) && data.config.allowed_contact_fields.length
+            ? [...data.config.allowed_contact_fields]
+            : ["name", "email", "phone"],
+          intent_overrides: data.config.intent_overrides || {},
+          speaking_rate: data.config.voice?.speaking_rate ?? 1.0,
+        };
+        displayNameInput.value = data.config.display_name || "";
+        industryInput.value = data.config.industry || "";
+        offerInput.value = data.config.primary_offer || "";
+        voiceNameInput.value = data.config.voice?.voice_name || "";
+        statusInput.value = data.config.status || "active";
+        websiteInput.value = data.config.website || "";
+        languagesInput.value = listToCsv(data.config.languages_supported || []);
+        tagsInput.value = listToCsv(data.config.tags || []);
+        servicesInput.value = listToCsv(data.config.services || []);
+        locationsInput.value = listToCsv(data.config.locations || []);
+        conversationModeInput.value = data.config.conversation_mode || "sales_discovery";
+        workflowModeInput.value = data.config.workflow_mode || "model_led";
+        closureModeInput.value = data.config.closure_mode || "default";
+        defaultOpeningLanguageInput.value = data.config.default_opening_language || "";
+        resultsBaseTemplateInput.value = data.config.results_base_template || "default_v1";
+        resultsExtraFieldsInput.value = listToCsv(data.config.results_extra_fields || []);
+        setNumberInput(liveTemperatureInput, data.config.live_generation?.temperature);
+        setNumberInput(liveTopPInput, data.config.live_generation?.top_p);
+        setNumberInput(liveTopKInput, data.config.live_generation?.top_k);
+        setNumberInput(liveMaxTokensInput, data.config.live_generation?.max_output_tokens);
+        setNumberInput(structuredTemperatureInput, data.config.structured_generation?.temperature);
+        setNumberInput(structuredTopPInput, data.config.structured_generation?.top_p);
+        setNumberInput(structuredTopKInput, data.config.structured_generation?.top_k);
+        setNumberInput(structuredMaxTokensInput, data.config.structured_generation?.max_output_tokens);
+        openingScriptInput.value = JSON.stringify(data.config.opening_script || {}, null, 2);
+        closureExamplesInput.value = JSON.stringify(data.config.closure_examples || {}, null, 2);
+        bookingRulesInput.value = JSON.stringify(data.config.booking_rules || {}, null, 2);
+        handoffRulesInput.value = JSON.stringify(data.config.handoff_rules || {}, null, 2);
+        importMetadataInput.value = JSON.stringify(data.config.import_metadata || {}, null, 2);
+        editorDefaultSystemPrompt = data.system_prompt || "";
+        editorDefaultKnowledge = data.knowledge || "";
+        editorDefaultObjections = data.objections && typeof data.objections === "object" ? { ...data.objections } : {};
+        editorDefaultQualification = data.qualification && typeof data.qualification === "object" ? { ...data.qualification } : {};
+        editorDefaultCta = data.cta && typeof data.cta === "object" ? { ...data.cta } : {};
+        editorProjects = Array.isArray(data.projects) && data.projects.length
+          ? data.projects.map((project) => ({
+              ...project,
+              prompt_assets: {
+                ...(project.prompt_assets || {}),
+              },
+              runtime: { ...(project.runtime || {}) },
+            }))
+          : [defaultEditorProject()];
+        const preferredProjectIndex = Math.max(
+          0,
+          editorProjects.findIndex((project) => project.project_id === data.active_project_id)
+        );
+        loadEditorProject(preferredProjectIndex);
+        if (message) {
+          editorStatus.textContent = message;
+        }
+      }
+
+      function populateBuilderFromPayload(data) {
+        builderBusinessName.value = data.config.display_name || "";
+        builderBusinessType.value = data.config.industry || "";
+        builderBusinessDescription.value = data.config.primary_offer || "";
+        builderLanguages.value = listToCsv(data.config.languages_supported || []);
+        builderPricingNotes.value = "";
+        const activeProject = Array.isArray(data.projects)
+          ? data.projects.find((project) => project.project_id === data.active_project_id) || data.projects[0]
+          : null;
+        builderProjectName.value = activeProject?.name || "";
+        builderAgentType.value = activeProject?.project_type || "sales";
+      }
+
+      function renderBuilderPreview(payload) {
+        const summary = payload?.summary || {};
+        const project = Array.isArray(payload?.projects) ? payload.projects[0] || {} : {};
+        builderPreviewClient.textContent = summary.display_name || payload?.config?.display_name || "-";
+        builderPreviewProject.textContent = summary.project_name || project.name || "-";
+        builderPreviewMode.textContent = summary.project_type || project.project_type || "-";
+        builderPreviewLanguage.textContent = summary.primary_language || payload?.config?.default_opening_language || "-";
+        builderPreviewSummary.textContent = [
+          `Business: ${summary.display_name || payload?.config?.display_name || "-"}`,
+          `Goal: ${payload?.config?.primary_offer || "-"}`,
+          `Direction: ${summary.direction || "-"}`,
+          `Project: ${summary.project_name || project.name || "-"}`,
+        ].join("\n");
+        builderGeneratedPrompt.textContent = project.prompt_instruction || "The generated project prompt instruction will appear here.";
+        builderGeneratedKnowledge.textContent = payload?.knowledge || "The generated client knowledge draft will appear here.";
+      }
+
+      async function loadEditor(clientId) {
+        editorStatus.textContent = "Loading client files...";
+        const res = await fetch(`/api/clients/${clientId}`);
+        const data = await res.json();
+        if (!res.ok) {
+          editorStatus.textContent = data.detail || "Failed to load client.";
+          return;
+        }
+        applyEditorPayload(data, `Loaded ${clientId}.`);
+        populateBuilderFromPayload(data);
+        if (!lastBuilderDraft) {
+          renderBuilderPreview(null);
+        }
+      }
+
+      function selectedProject() {
+        return availableProjects.find((project) => project.project_id === projectSelect.value) || null;
+      }
+
+      function renderProjectSelection() {
+        const project = selectedProject();
+        activeProjectCard.textContent = project?.name || projectSelect.value || "-";
+        projectHint.textContent = project
+          ? `${project.project_type || "custom"} project selected.${project.runtime?.gemini_api_key_env ? ` Gemini key from ${project.runtime.gemini_api_key_env}.` : project.runtime?.gemini_api_key_present ? " Gemini key configured on this project." : " Using default Gemini runtime unless overridden."} Outreach mode: ${project.runtime?.outreach_mode || "call_only"}${project.runtime?.outbound_call_provider ? ` via ${project.runtime.outbound_call_provider}` : ""}.`
+          : "Select the active project so each call uses the right prompt, workflow, and Gemini runtime.";
+      }
+
+      async function loadProjects(clientId, preferredProjectId = "") {
+        const res = await fetch(`/api/clients/${clientId}/projects`);
+        const data = await res.json().catch(() => ({ projects: [] }));
+        availableProjects = Array.isArray(data.projects) ? data.projects : [];
+        const previousValue = projectSelect.value;
+        projectSelect.innerHTML = "";
+        availableProjects.forEach((project) => {
+          const option = document.createElement("option");
+          option.value = project.project_id;
+          option.textContent = `${project.name} (${project.project_type || "custom"})`;
+          projectSelect.appendChild(option);
+        });
+        projectSelect.value =
+          availableProjects.find((project) => project.project_id === preferredProjectId)?.project_id
+          || availableProjects.find((project) => project.project_id === previousValue)?.project_id
+          || availableProjects.find((project) => project.is_active)?.project_id
+          || availableProjects[0]?.project_id
+          || "";
+        renderProjectSelection();
+      }
+
+      async function setActiveProject(clientId, projectId) {
+        const normalizedClientId = String(clientId || "").trim();
+        const normalizedProjectId = String(projectId || "").trim();
+        if (!normalizedClientId || !normalizedProjectId) {
+          return false;
+        }
+        const res = await fetch(`/api/clients/${normalizedClientId}/active-project`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project_id: normalizedProjectId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const detail = data.detail || "Failed to set active project.";
+          projectEditorStatus.textContent = detail;
+          callStatus.textContent = detail;
+          return false;
+        }
+        return true;
+      }
+
+      function numberOrNull(value) {
+        return value === "" ? null : Number(value);
+      }
+
+      function ensureUniqueProjectId(baseId) {
+        const raw = String(baseId || "custom_agent").trim() || "custom_agent";
+        const normalized = raw.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") || "custom_agent";
+        let candidate = normalized;
+        let counter = 2;
+        const existingIds = new Set(editorProjects.map((project) => project.project_id));
+        while (existingIds.has(candidate)) {
+          candidate = `${normalized}_${counter}`;
+          counter += 1;
+        }
+        return candidate;
+      }
+
+      function ensureUniqueProjectIdAgainst(projects, baseId) {
+        const raw = String(baseId || "custom_agent").trim() || "custom_agent";
+        const normalized = raw.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") || "custom_agent";
+        const used = new Set(
+          (Array.isArray(projects) ? projects : [])
+            .map((project) => String(project?.project_id || "").trim())
+            .filter(Boolean)
+        );
+        let candidate = normalized;
+        let counter = 2;
+        while (used.has(candidate)) {
+          candidate = `${normalized}_${counter}`;
+          counter += 1;
+        }
+        return candidate;
+      }
+
+      function buildBuilderRequest() {
+        const description = builderBusinessDescription.value.trim();
+        const qna = builderPricingNotes.value.trim();
+        const normalizedLanguages = normalizeSupportedLanguagesList(builderLanguages.value).join(",");
+        return {
+          business_name: builderBusinessName.value.trim(),
+          business_type: builderBusinessType.value.trim(),
+          website: "",
+          business_description: description,
+          why_build_agent: "",
+          agent_goal: description,
+          project_name: builderProjectName.value.trim(),
+          call_direction: "inbound",
+          target_audience: "",
+          preferred_languages: normalizedLanguages,
+          services_products: "",
+          service_area: "",
+          voice_tone: "",
+          pricing_notes: qna,
+          do_not_say: "",
+          end_user_details: qna,
+          business_narrative: "",
+          additional_notes: "",
+          agent_type: builderAgentType.value || "sales",
+        };
+      }
+
+      function isBuilderFormMostlyEmpty() {
+        const fields = [
+          builderBusinessName.value,
+          builderBusinessType.value,
+          builderProjectName.value,
+          builderBusinessDescription.value,
+          builderPricingNotes.value,
+          builderLanguages.value,
+        ];
+        return fields.every((value) => !String(value || "").trim());
+      }
+
+      async function generateBuilderDraft() {
+        builderStatus.textContent = "Generating draft...";
+        const response = await fetch("/api/client-builder/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildBuilderRequest()),
+        });
+        const data = await response.json().catch(() => ({ detail: "Failed to generate draft." }));
+        if (!response.ok) {
+          builderStatus.textContent = data.detail || "Failed to generate draft.";
+          return null;
+        }
+        lastBuilderDraft = data;
+        renderBuilderPreview(data);
+        builderStatus.textContent = "Draft generated. Click Edit Existing to apply it to the current workspace client.";
+        return data;
+      }
+
+      async function replaceWorkspaceWithBuilderDraft() {
+        if (isBuilderFormMostlyEmpty()) {
+          builderStatus.textContent = "Builder is empty. Auto-loading current client details first...";
+          await loadEditor(clientSelect.value);
+          lastBuilderDraft = null;
+        }
+        if (!lastBuilderDraft) {
+          const generated = await generateBuilderDraft();
+          if (!generated) {
+            return;
+          }
+        }
+        applyEditorPayload(lastBuilderDraft, "Applied generated draft to the advanced editor.");
+        await saveEditor(clientSelect.value);
+        builderStatus.textContent = "Existing workspace client updated successfully.";
+      }
+
+      async function loadNewAsProject() {
+        const generated = await generateBuilderDraft();
+        if (!generated) {
+          return;
+        }
+        const existingProjects = Array.isArray(editorProjects)
+          ? editorProjects.map((project) => ({ ...project, runtime: { ...(project.runtime || {}) }, status: "inactive" }))
+          : [];
+        applyEditorPayload(generated, "Loaded new client draft into Configure.");
+        const generatedProject = editorProjects[0]
+          ? { ...editorProjects[0], runtime: { ...(editorProjects[0].runtime || {}) } }
+          : { ...defaultEditorProject(), runtime: { ...defaultEditorProject().runtime } };
+        generatedProject.project_id = ensureUniqueProjectIdAgainst(
+          existingProjects,
+          generatedProject.project_id || generatedProject.name || "new_agent"
+        );
+        generatedProject.status = "active";
+        editorProjects = [generatedProject, ...existingProjects];
+        loadEditorProject(0);
+        const draftProjectId = generatedProject.project_id || "";
+        await saveEditor(clientSelect.value);
+        await loadProjects(clientSelect.value, draftProjectId);
+        await loadEditor(clientSelect.value);
+        if (draftProjectId && availableProjects.some((project) => project.project_id === draftProjectId)) {
+          projectSelect.value = draftProjectId;
+        }
+        renderProjectSelection();
+        builderStatus.textContent = "New client draft is now active. Live and Configure are using the latest generated details.";
+      }
+
+      async function saveEditor(clientId) {
+        editorStatus.textContent = "Saving client files...";
+        if (!syncEditorProjectFromInputs()) {
+          return;
+        }
+        const preferredProjectIdFromEditor = String(
+          editorProjects[activeEditorProjectIndex]?.project_id || projectSelect.value || ""
+        ).trim();
+        let openingScript;
+        let closureExamples;
+        let bookingRules;
+        let handoffRules;
+        let importMetadata;
+        try {
+          openingScript = JSON.parse(openingScriptInput.value || "{}");
+          closureExamples = JSON.parse(closureExamplesInput.value || "{}");
+          bookingRules = JSON.parse(bookingRulesInput.value || "{}");
+          handoffRules = JSON.parse(handoffRulesInput.value || "{}");
+          importMetadata = JSON.parse(importMetadataInput.value || "{}");
+        } catch (error) {
+          editorStatus.textContent = `JSON error: ${error.message}`;
+          return;
+        }
+        const selectedProjectAssets = resolveProjectPromptAssets(editorProjects[activeEditorProjectIndex]);
+
+        const payload = {
+          config: {
+            client_id: clientId,
+            display_name: displayNameInput.value.trim(),
+            industry: industryInput.value.trim(),
+            status: statusInput.value || "active",
+            website: websiteInput.value.trim() || null,
+            primary_offer: offerInput.value.trim(),
+            target_audience: editorConfigCache.target_audience || [],
+            tone: editorConfigCache.tone || [],
+            languages_supported: normalizeSupportedLanguagesList(languagesInput.value),
+            services: csvToList(servicesInput.value),
+            locations: csvToList(locationsInput.value),
+            tags: csvToList(tagsInput.value),
+            conversation_mode: conversationModeInput.value || "sales_discovery",
+            workflow_mode: workflowModeInput.value || "model_led",
+            closure_mode: closureModeInput.value || "default",
+            default_opening_language: defaultOpeningLanguageInput.value || null,
+            results_base_template: resultsBaseTemplateInput.value || "default_v1",
+            results_extra_fields: csvToList(resultsExtraFieldsInput.value),
+            opening_script: openingScript,
+            closure_examples: closureExamples,
+            disallowed_claims: editorConfigCache.disallowed_claims || [],
+            allowed_contact_fields: editorConfigCache.allowed_contact_fields || ["name", "email", "phone"],
+            booking_rules: bookingRules,
+            handoff_rules: handoffRules,
+            intent_overrides: editorConfigCache.intent_overrides || {},
+            import_metadata: importMetadata,
+            voice: {
+              voice_name: voiceNameInput.value.trim() || "Aoede",
+              speaking_rate: editorConfigCache.speaking_rate ?? 1.0,
+            },
+            live_generation: {
+              temperature: numberOrNull(liveTemperatureInput.value),
+              top_p: numberOrNull(liveTopPInput.value),
+              top_k: numberOrNull(liveTopKInput.value),
+              max_output_tokens: numberOrNull(liveMaxTokensInput.value),
+            },
+            structured_generation: {
+              temperature: numberOrNull(structuredTemperatureInput.value),
+              top_p: numberOrNull(structuredTopPInput.value),
+              top_k: numberOrNull(structuredTopKInput.value),
+              max_output_tokens: numberOrNull(structuredMaxTokensInput.value),
+            },
+          },
+          system_prompt: selectedProjectAssets.system_prompt,
+          knowledge: selectedProjectAssets.knowledge,
+          objections: selectedProjectAssets.objections,
+          qualification: selectedProjectAssets.qualification,
+          cta: selectedProjectAssets.cta,
+          projects: editorProjects,
+          active_project_id: preferredProjectIdFromEditor || null,
+        };
+
+        const res = await fetch(`/api/clients/${clientId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          editorStatus.textContent = `Saved ${clientId}.`;
+          await loadProjects(clientId, preferredProjectIdFromEditor);
+          if (preferredProjectIdFromEditor && availableProjects.some((project) => project.project_id === preferredProjectIdFromEditor)) {
+            projectSelect.value = preferredProjectIdFromEditor;
+          }
+          renderProjectSelection();
+          await loadEditor(clientId);
+          await loadWorkspaceSummary();
+          await loadAnalytics();
+          await pollState();
+          return;
+        }
+        editorStatus.textContent = data.detail || "Failed to save client.";
+      }
+
+      async function loadClients() {
+        const res = await fetch("/api/clients");
+        const data = await res.json();
+        dashboardSessionKey = data.workspace_session_key || "dashboard";
+        requiresWorkflowConfiguration = Boolean(data.requires_configuration);
+        clientSelect.innerHTML = "";
+        const clientItems = Array.isArray(data.client_items) && data.client_items.length
+          ? data.client_items
+          : (data.clients || []).map((clientId) => ({ client_id: clientId, label: clientId }));
+        clientItems.forEach((item) => {
+          const clientId = String(item?.client_id || "").trim();
+          if (!clientId) {
+            return;
+          }
+          const option = document.createElement("option");
+          option.value = clientId;
+          option.textContent = String(item?.label || clientId);
+          clientSelect.appendChild(option);
+        });
+        if (requiresWorkflowConfiguration) {
+          switchPage("overviewPage");
+          builderStatus.textContent = "New workspace created for your account. Use the Agent Builder to generate your first client and save it.";
+          editorStatus.textContent = "You can still refine the generated draft later from Configure.";
+          callStatus.textContent = "This account is new. Build or load a client draft before running live calls.";
+        }
+      }
+
+      function selectedLeadSource() {
+        return availableLeadSources.find((source) => source.id === activeLeadSourceId) || null;
+      }
+
+      function renderLeadSource() {
+        const source = selectedLeadSource();
+        document.querySelectorAll(".source-button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.sourceId === activeLeadSourceId);
+        });
+        document.querySelectorAll(".source-panel").forEach((panel) => {
+          panel.classList.toggle("active", panel.id === `sourcePanel-${activeLeadSourceId}`);
+        });
+        leadSourceCard.textContent = source?.label || "-";
+        leadSourceStatusCard.textContent = source?.label || "-";
+        leadSourceDescription.textContent = source?.description || "No lead source selected.";
+        if (!source) {
+          leadSourceHint.textContent = "";
+          return;
+        }
+        leadSourceHint.textContent = source.supports_direct_call
+          ? "Manual single-number mode is active. Enter one name and one number and place the call."
+          : `${source.label} is planned. Use Manual Single Number for live testing right now.`;
+      }
+
+      async function loadLeadSources() {
+        const res = await fetch("/api/lead-sources");
+        const data = await res.json();
+        availableLeadSources = Array.isArray(data.sources) ? data.sources : [];
+        leadSourceButtons.innerHTML = "";
+        availableLeadSources.forEach((source) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "source-button";
+          button.dataset.sourceId = source.id;
+          button.innerHTML = `<strong>${source.label}</strong><small>${source.status === "ready" ? "Ready" : "Planned"}</small>`;
+          button.addEventListener("click", () => {
+            activeLeadSourceId = source.id;
+            renderLeadSource();
+          });
+          leadSourceButtons.appendChild(button);
+        });
+        activeLeadSourceId = "manual_single";
+        renderLeadSource();
+      }
+
+      function renderExcelLeadPreview() {
+        excelLeadPreview.innerHTML = "";
+        importedExcelLeads.forEach((lead, index) => {
+          const item = document.createElement("div");
+          item.className = "lead-preview-item";
+          item.innerHTML = `
+            <div>${lead.customer_name || `Lead ${index + 1}`}</div>
+            <div>${lead.to_number || "-"}</div>
+            <button type="button" class="ghost" data-lead-index="${index}">Use</button>
+          `;
+          item.querySelector("button").addEventListener("click", () => {
+            customerNameInput.value = lead.customer_name || `Lead ${index + 1}`;
+            phoneNumberInput.value = lead.to_number || "";
+            activeLeadSourceId = "manual_single";
+            renderLeadSource();
+            customerCard.textContent = customerNameInput.value.trim() || "-";
+            phoneCard.textContent = phoneNumberInput.value.trim() || "-";
+          });
+          excelLeadPreview.appendChild(item);
+        });
+      }
+
+      async function parseExcelLeads() {
+        const file = excelFileInput.files?.[0];
+        if (!file) {
+          excelStatus.textContent = "Choose a CSV or Excel file first.";
+          return;
+        }
+        const formData = new FormData();
+        formData.append("file", file);
+        excelStatus.textContent = "Parsing uploaded leads...";
+        const response = await fetch("/api/lead-sources/excel/parse", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json().catch(() => ({ detail: "Failed to parse upload." }));
+        if (!response.ok) {
+          excelStatus.textContent = data.detail || "Failed to parse upload.";
+          importedExcelLeads = [];
+          renderExcelLeadPreview();
+          return;
+        }
+        importedExcelLeads = Array.isArray(data.leads) ? data.leads : [];
+        excelStatus.textContent = `Parsed ${data.count} leads from ${data.file_name}. Use one lead now or keep this list for queued calling later.`;
+        renderExcelLeadPreview();
+      }
+
+      function renderTurns(turns) {
+        void turns;
+      }
+
+      function renderState(state) {
+        statusText.textContent = state.status;
+        detailText.textContent = state.detail;
+        errorText.textContent = state.last_error || "";
+        sessionPath.textContent = state.session_dir
+          ? `Saved to: ${state.session_dir}`
+          : state.customer_name
+            ? `Customer: ${state.customer_name}${state.opening_language ? ` | Opening: ${state.opening_language}` : ""}`
+            : "";
+        firstLatency.textContent = state.metrics.latest_first_audio_latency_ms
+          ? `${Math.round(state.metrics.latest_first_audio_latency_ms)} ms`
+          : "-";
+        turnLatency.textContent = state.metrics.latest_turn_latency_ms
+          ? `${Math.round(state.metrics.latest_turn_latency_ms)} ms`
+          : "-";
+        openingLanguageCard.textContent = state.opening_language || "-";
+        sessionIdCard.textContent = state.session_id || "-";
+        activeClientCard.textContent = state.active_client_id || clientSelect.value || "-";
+        activeProjectCard.textContent = state.active_project_id || selectedProject()?.name || projectSelect.value || "-";
+        customerCard.textContent = state.customer_name || customerNameInput.value.trim() || "-";
+        phoneCard.textContent = phoneNumberInput.value.trim() || "-";
+        leadSourceCard.textContent = selectedLeadSource()?.label || "-";
+        statusCard.textContent = state.status || "-";
+        sessionDirCard.textContent = state.session_dir || "-";
+        userIntentsCard.textContent = Array.isArray(state.latest_user_intents) && state.latest_user_intents.length
+          ? state.latest_user_intents.join(", ")
+          : "-";
+        renderTurns(state.turns || []);
+        if (state.summary) {
+          summaryBlock.hidden = false;
+          summaryText.textContent = state.summary.summary || "";
+          nextActionText.textContent = state.summary.suggested_next_action || "";
+        } else {
+          summaryBlock.hidden = true;
+        }
+        const normalizedStatus = String(state.status || "").toLowerCase();
+        const sessionActive = ["starting", "listening", "speaking", "running", "processing"].includes(normalizedStatus);
+        startBtn.disabled = sessionActive;
+        callBtn.disabled = sessionActive;
+        stopBtn.disabled = !sessionActive;
+      }
+
+      async function pollState() {
+        const res = await fetch("/api/session");
+        const state = await res.json();
+        renderState(state);
+      }
+
+      async function loadAppSettings() {
+        const res = await fetch("/api/settings");
+        const data = await res.json();
+        if (!res.ok) {
+          telephonyProviderCard.textContent = "-";
+          appSettingsStatus.textContent = "Failed to load runtime settings.";
+          return;
+        }
+        telephonyProviderCard.textContent = data.telephony_provider || "-";
+        telephonyMaxConcurrentInput.value = String(
+          Number.isFinite(Number(data.telephony_max_concurrent_sessions))
+            ? Math.max(1, Number(data.telephony_max_concurrent_sessions))
+            : 1
+        );
+        appSettingsStatus.textContent = "";
+      }
+
+      async function saveAppSettings() {
+        const requested = Number.parseInt(telephonyMaxConcurrentInput.value || "1", 10);
+        if (!Number.isFinite(requested) || requested < 1) {
+          appSettingsStatus.textContent = "Max concurrency must be 1 or higher.";
+          return;
+        }
+        appSettingsStatus.textContent = "Saving runtime settings...";
+        const res = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            telephony_max_concurrent_sessions: requested,
+          }),
+        });
+        const data = await res.json().catch(() => ({ detail: "Failed to save runtime settings." }));
+        if (!res.ok) {
+          appSettingsStatus.textContent = data.detail || "Failed to save runtime settings.";
+          return;
+        }
+        telephonyMaxConcurrentInput.value = String(data.telephony_max_concurrent_sessions || requested);
+        appSettingsStatus.textContent = `Saved max concurrency: ${data.telephony_max_concurrent_sessions}.`;
+      }
+
+      function topBreakdownEntry(breakdown) {
+        const entries = Object.entries(breakdown || {});
+        if (!entries.length) {
+          return "-";
+        }
+        entries.sort((a, b) => b[1] - a[1]);
+        return `${entries[0][0]} (${entries[0][1]})`;
+      }
+
+      function formatMoney(currency, amount) {
+        const value = Number(amount || 0);
+        const normalized = Number.isFinite(value) ? value : 0;
+        return `${currency || "INR"} ${normalized.toFixed(2)}`;
+      }
+
+      async function loadWorkspaceSummary() {
+        const res = await fetch("/api/workspace/summary");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          workspaceBadge.textContent = "Workspace: -";
+          balanceBadge.textContent = "Balance: -";
+          workspaceBadge.title = "";
+          balanceBadge.title = "";
+          return;
+        }
+        const userName = data.user?.name || data.user?.email || "User";
+        const billing = data.billing || {};
+        const currency = billing.currency || "INR";
+        workspaceBadge.innerHTML = `<span class="dot"></span> Workspace: ${userName}`;
+        balanceBadge.innerHTML = `<span class="dot"></span> Balance: ${formatMoney(currency, billing.total_estimated_cost)}`;
+        workspaceBadge.title = `Workspace client: ${data.workspace_client_id || "-"}`;
+        balanceBadge.title = [
+          `Combined detected rate/min: ${formatMoney(currency, billing.combined_effective_rate_per_minute)}`,
+          `Minute charges: ${formatMoney(currency, billing.minute_charges_total)}`,
+          `Non-minute charges: ${formatMoney(currency, billing.non_minute_charges_total)}`,
+          `Sessions: ${billing.total_sessions ?? 0}`,
+        ].join(" | ");
+      }
+
+      function renderAnalytics(data) {
+        const summary = data.summary || {};
+        resultsLeadsArrived.textContent = summary.leads_arrived ?? "-";
+        resultsUniqueLeads.textContent = summary.unique_leads_arrived ?? "-";
+        resultsCallsMade.textContent = summary.calls_made ?? "-";
+        resultsSuccessfulCalls.textContent = summary.successful_calls ?? "-";
+        resultsUnsuccessfulCalls.textContent = summary.unsuccessful_calls ?? "-";
+        resultsFollowUpRequired.textContent = summary.follow_up_required ?? "-";
+        resultsNotCalledYet.textContent = summary.not_called_yet ?? "-";
+        resultsTopLeadSource.textContent = topBreakdownEntry(data.source_breakdown);
+        resultsTopCallSource.textContent = topBreakdownEntry(data.call_source_breakdown);
+        resultsPrimaryProvider.textContent = topBreakdownEntry(data.provider_breakdown);
+        const columns = Array.isArray(data.table_columns) && data.table_columns.length
+          ? data.table_columns
+          : DEFAULT_RESULTS_COLUMNS;
+        const columnCount = Math.max(columns.length, 1);
+        const gridTemplate = `repeat(${columnCount}, minmax(130px, 1fr))`;
+        recentCallsTable.innerHTML = "";
+
+        const headerRow = document.createElement("div");
+        headerRow.className = "results-row header";
+        headerRow.style.gridTemplateColumns = gridTemplate;
+        columns.forEach((column) => {
+          const cell = document.createElement("div");
+          cell.textContent = String(column?.label || column?.key || "Field");
+          headerRow.appendChild(cell);
+        });
+        recentCallsTable.appendChild(headerRow);
+
+        (data.recent_calls || []).forEach((call) => {
+          const row = document.createElement("div");
+          row.className = "results-row";
+          row.style.gridTemplateColumns = gridTemplate;
+          columns.forEach((column) => {
+            const key = String(column?.key || "").trim();
+            const rawValue = call?.[key];
+            const cell = document.createElement("div");
+
+            if (key === "result") {
+              const value = String(rawValue || "-");
+              const normalized = value === "successful" ? "successful" : "unsuccessful";
+              const pill = document.createElement("span");
+              pill.className = `badge-pill ${normalized === "successful" ? "success" : "fail"}`;
+              pill.textContent = normalized === "successful" ? "answered" : "not_answered";
+              cell.appendChild(pill);
+              row.appendChild(cell);
+              return;
+            }
+
+            if (key === "duration_seconds") {
+              if (rawValue === null || rawValue === undefined || rawValue === "" || rawValue === "-") {
+                cell.textContent = "-";
+              } else {
+                cell.textContent = `${rawValue}s`;
+              }
+              row.appendChild(cell);
+              return;
+            }
+
+            if (key === "lead_name") {
+              const leadName = rawValue ? String(rawValue) : "-";
+              const phone = call?.to_number ? String(call.to_number) : "";
+              cell.innerHTML = `<strong>${escapeHtml(leadName)}</strong>${
+                phone && phone !== "-" ? `<div class="helper">${escapeHtml(phone)}</div>` : ""
+              }`;
+              row.appendChild(cell);
+              return;
+            }
+
+            cell.textContent = rawValue === null || rawValue === undefined || rawValue === "" ? "-" : String(rawValue);
+            row.appendChild(cell);
+          });
+          recentCallsTable.appendChild(row);
+        });
+      }
+
+      async function loadAnalytics() {
+        const res = await fetch("/api/analytics/overview");
+        const data = await res.json();
+        if (!res.ok) {
+          return;
+        }
+        renderAnalytics(data);
+      }
+
+      async function startDemoSession() {
+        errorText.textContent = "";
+        try {
+          if (remoteLocalMicModeBlocked()) {
+            callStatus.textContent = "Requesting microphone permission and connecting browser audio...";
+            await startBrowserAudioTransport();
+          } else {
+            await ensureLocalMicPermission();
+          }
+        } catch (err) {
+          const msg = err instanceof Error
+            ? `Microphone permission is required for Start Demo. ${err.message}`
+            : "Microphone permission is required for Start Demo.";
+          errorText.textContent = msg;
+          callStatus.textContent = msg;
+          return false;
+        }
+        callStatus.textContent = remoteLocalMicModeBlocked()
+          ? "Microphone connected. Starting browser-streaming session..."
+          : "";
+        const response = await fetch("/api/session/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: clientSelect.value,
+            project_id: projectSelect.value || null,
+            customer_name: customerNameInput.value.trim() || "Salman Shaikh",
+            transport: remoteLocalMicModeBlocked() ? "browser" : "local",
+            session_key: dashboardSessionKey,
+          }),
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: "Failed to start session." }));
+          const msg = error.detail || "Failed to start session.";
+          errorText.textContent = msg;
+          callStatus.textContent = msg;
+          if (remoteLocalMicModeBlocked()) {
+            await stopBrowserAudioTransport(false);
+          }
+          return false;
+        }
+        if (remoteLocalMicModeBlocked()) {
+          callStatus.textContent = "Live browser microphone session started.";
+        }
+        await pollState();
+        return true;
+      }
+
+      document.getElementById("startBtn").addEventListener("click", async () => {
+        await startDemoSession();
+      });
+
+      document.getElementById("callBtn").addEventListener("click", async () => {
+        errorText.textContent = "";
+        const source = selectedLeadSource();
+        if (source?.id === "excel") {
+          callStatus.textContent = "Excel import is for batch lead intake. Pick a parsed lead with Use, then place the call from Manual Single Number.";
+          return;
+        }
+        if (source && !source.supports_direct_call) {
+          callStatus.textContent = `${source.label} form is captured in the UI, but live connector sync is the next backend step. Use Manual Single Number for calling right now.`;
+          return;
+        }
+        const toNumber = phoneNumberInput.value.trim();
+        if (!toNumber) {
+          callStatus.textContent = "Enter a mobile number in E.164 format, for example +15551234567.";
+          return;
+        }
+        callStatus.textContent = "Dialing mobile phone...";
+        const response = await fetch("/api/telephony/call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: clientSelect.value,
+            project_id: projectSelect.value || null,
+            customer_name: customerNameInput.value.trim() || "Salman Shaikh",
+            to_number: toNumber,
+            lead_source: activeLeadSourceId || "manual_single",
+          }),
+        });
+        const data = await response.json().catch(() => ({ detail: "Failed to place call." }));
+        if (!response.ok) {
+          const msg = data.detail || "Failed to place call.";
+          callStatus.textContent = msg;
+          errorText.textContent = msg;
+          return;
+        }
+        callStatus.textContent = data.call_sid
+          ? `Dialing ${data.to_number}. Call SID: ${data.call_sid}`
+          : `Dialing ${data.to_number}.`;
+      });
+
+      document.getElementById("stopBtn").addEventListener("click", async () => {
+        if (remoteLocalMicModeBlocked()) {
+          await stopBrowserAudioTransport();
+        }
+        const response = await fetch(`/api/session/stop?session_key=${encodeURIComponent(dashboardSessionKey)}`, { method: "POST" });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: "Failed to stop session." }));
+          errorText.textContent = error.detail || "Failed to stop session.";
+          return;
+        }
+        if (remoteLocalMicModeBlocked()) {
+          callStatus.textContent = "Browser microphone session stopped.";
+        }
+        await pollState();
+      });
+
+      document.getElementById("loadEditorBtn").addEventListener("click", async () => {
+        await loadEditor(clientSelect.value);
+      });
+
+      document.getElementById("saveEditorBtn").addEventListener("click", async () => {
+        await saveEditor(clientSelect.value);
+      });
+      saveAppSettingsBtn.addEventListener("click", saveAppSettings);
+
+      document.getElementById("saveTimingsBtn").addEventListener("click", saveTimingView);
+      document.getElementById("resetTimingsBtn").addEventListener("click", resetTimingView);
+
+      editorProjectSelect.addEventListener("change", () => {
+        syncEditorProjectFromInputs(false);
+        loadEditorProject(Number(editorProjectSelect.value || "0"));
+      });
+
+      projectNameInput.addEventListener("input", () => {
+        if (!projectIdInput.value.trim()) {
+          projectIdInput.value = slugifyProjectId(projectNameInput.value);
+        }
+      });
+
+      addProjectBtn.addEventListener("click", () => {
+        syncEditorProjectFromInputs(false);
+        const project = defaultEditorProject();
+        editorProjects.push(project);
+        loadEditorProject(editorProjects.length - 1);
+      });
+
+      removeProjectBtn.addEventListener("click", () => {
+        if (editorProjects.length <= 1) {
+          projectEditorStatus.textContent = "Keep at least one project on the client.";
+          return;
+        }
+        editorProjects.splice(activeEditorProjectIndex, 1);
+        loadEditorProject(Math.max(0, activeEditorProjectIndex - 1));
+        projectEditorStatus.textContent = "Removed the current project from the editor. Save the client to persist this change.";
+      });
+
+      customerNameInput.addEventListener("input", () => {
+        customerCard.textContent = customerNameInput.value.trim() || "-";
+      });
+
+      phoneNumberInput.addEventListener("input", () => {
+        phoneCard.textContent = phoneNumberInput.value.trim() || "-";
+      });
+
+      parseExcelBtn.addEventListener("click", parseExcelLeads);
+      document.getElementById("logoutBtn").addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+        window.location.href = "/";
+      });
+      useFirstExcelLeadBtn.addEventListener("click", () => {
+        if (!importedExcelLeads.length) {
+          excelStatus.textContent = "Parse an upload first.";
+          return;
+        }
+        const lead = importedExcelLeads[0];
+        customerNameInput.value = lead.customer_name || "Lead 1";
+        phoneNumberInput.value = lead.to_number || "";
+        activeLeadSourceId = "manual_single";
+        renderLeadSource();
+        customerCard.textContent = customerNameInput.value.trim() || "-";
+        phoneCard.textContent = phoneNumberInput.value.trim() || "-";
+        excelStatus.textContent = "Moved the first uploaded lead into Manual Single Number mode for live testing.";
+      });
+
+      builderBusinessName.addEventListener("input", () => {
+        if (!builderProjectName.value.trim()) {
+          builderProjectName.value = builderBusinessName.value.trim()
+            ? `${builderBusinessName.value.trim()} Agent`
+            : "";
+        }
+      });
+
+      saveBuilderAsWorkspaceBtn.addEventListener("click", async () => {
+        await replaceWorkspaceWithBuilderDraft();
+      });
+
+      loadNewBuilderBtn.addEventListener("click", async () => {
+        await loadNewAsProject();
+      });
+
+      clientSelect.addEventListener("change", async () => {
+        activeClientCard.textContent = clientSelect.value || "-";
+        await loadProjects(clientSelect.value);
+        await loadEditor(clientSelect.value);
+      });
+
+      projectSelect.addEventListener("change", async () => {
+        renderProjectSelection();
+        if (activatingProjectSelection) {
+          return;
+        }
+        const selectedProjectId = String(projectSelect.value || "").trim();
+        if (!selectedProjectId) {
+          return;
+        }
+        activatingProjectSelection = true;
+        try {
+          const activated = await setActiveProject(clientSelect.value, selectedProjectId);
+          if (!activated) {
+            return;
+          }
+          projectEditorStatus.textContent = `Active project updated to ${selectedProjectId}.`;
+          await loadProjects(clientSelect.value, selectedProjectId);
+          await loadEditor(clientSelect.value);
+          await loadWorkspaceSummary();
+          await loadAnalytics();
+          await pollState();
+          renderProjectSelection();
+        } finally {
+          activatingProjectSelection = false;
+        }
+      });
+
+      loadClients().then(async () => {
+        applySessionModeGuard();
+        await loadLeadSources();
+        loadTimingView();
+        await loadWorkspaceSummary();
+        await loadAppSettings();
+        await loadAnalytics();
+        await loadProjects(clientSelect.value);
+        await loadEditor(clientSelect.value);
+        await pollState();
+        activeClientCard.textContent = clientSelect.value || "-";
+        renderProjectSelection();
+        customerCard.textContent = customerNameInput.value.trim() || "-";
+        phoneCard.textContent = phoneNumberInput.value.trim() || "-";
+        leadSourceCard.textContent = selectedLeadSource()?.label || "-";
+        if (autoStartDemoRequested && !autoStartDemoTriggered) {
+          autoStartDemoTriggered = true;
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete("start_demo");
+          window.history.replaceState({}, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+          try {
+            window.sessionStorage.removeItem("start_demo");
+          } catch (error) {
+            // ignore storage errors
+          }
+          callStatus.textContent = "Auto-starting demo. Please allow microphone permission...";
+          const started = await startDemoSession();
+          if (!started) {
+            callStatus.textContent = "Auto-start could not complete. Click Start Demo once to continue.";
+          }
+        }
+      });
+      setInterval(pollState, 1000);
+      setInterval(loadAnalytics, 5000);
+      setInterval(loadWorkspaceSummary, 5000);
+      window.addEventListener("beforeunload", () => {
+        stopBrowserAudioTransport(false);
+      });
+    </script>
+  </body>
+</html>

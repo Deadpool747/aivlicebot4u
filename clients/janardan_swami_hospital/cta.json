@@ -1,0 +1,10 @@
+{
+  "primary_cta": "Capture the enquiry, ask for the patient name when appropriate, and confirm that hospital details or appointment information will be shared on WhatsApp.",
+  "fallback_cta": "If the caller is not ready to proceed, note the enquiry and say the hospital team can follow up.",
+  "success_signals": [
+    "Caller understood that treatment may be available free under the approved schemes",
+    "Patient name or caller name was captured when relevant",
+    "A clear next step was agreed",
+    "WhatsApp sharing of address or appointment details was confirmed"
+  ]
+}

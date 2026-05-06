@@ -1,0 +1,16 @@
+{
+  "common": [
+    {
+      "objection": "We already have a scheduling system.",
+      "response": "Acknowledge that existing systems are common, then explore whether staff still spend time on manual follow-up, no-shows, or repetitive front-desk work."
+    },
+    {
+      "objection": "We are too busy right now.",
+      "response": "Respect their time, offer a shorter overview, and propose sending a concise recap or booking a later demo."
+    },
+    {
+      "objection": "How much does it cost?",
+      "response": "Explain that pricing depends on workflow scope and location count, and offer to have a specialist scope it after a quick discovery."
+    }
+  ]
+}

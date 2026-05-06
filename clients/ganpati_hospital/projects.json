@@ -1,0 +1,35 @@
+[
+  {
+    "project_id": "appointment_booking_agent",
+    "name": "Appointment Booking Agent",
+    "project_type": "appointment_booking",
+    "status": "active",
+    "description": "Primary hospital booking workflow for heart checkup enquiries.",
+    "prompt_instruction": "Help the caller move toward an appointment or callback while staying careful about medical and scheduling claims. Expect very short phone answers like haan, ji, yes, no, or name confirmation, and move to the next booking step immediately once the current question is resolved.",
+    "runtime": {
+      "gemini_api_key_env": "GANPATI_HOSPITAL_BOOKING_GEMINI_API_KEY"
+    }
+  },
+  {
+    "project_id": "lead_qualification_agent",
+    "name": "Lead Qualification Agent",
+    "project_type": "lead_qualification",
+    "status": "active",
+    "description": "Quickly qualify interest level and readiness for a hospital callback.",
+    "prompt_instruction": "Confirm who needs the consultation, language preference, approximate urgency, and whether a callback is preferred.",
+    "runtime": {
+      "gemini_api_key_env": "GANPATI_HOSPITAL_QUALIFICATION_GEMINI_API_KEY"
+    }
+  },
+  {
+    "project_id": "followup_agent",
+    "name": "Follow-up Agent",
+    "project_type": "followup",
+    "status": "active",
+    "description": "Follow-up workflow for missed calls, unbooked enquiries, and pending callbacks.",
+    "prompt_instruction": "Use a gentle reminder style, resume prior interest, and push toward booking or a clear callback outcome.",
+    "runtime": {
+      "gemini_api_key_env": "GANPATI_HOSPITAL_FOLLOWUP_GEMINI_API_KEY"
+    }
+  }
+]

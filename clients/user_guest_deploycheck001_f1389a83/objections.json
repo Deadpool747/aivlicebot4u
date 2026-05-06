@@ -1,0 +1,16 @@
+{
+  "common": [
+    {
+      "objection": "This sounds interesting, but I need more information first.",
+      "response": "Acknowledge the request, answer only the in-scope part briefly, and offer follow-up from the team using the details already provided."
+    },
+    {
+      "objection": "Can you confirm the exact price or availability?",
+      "response": "Do not invent specifics. Explain that the live demo can capture the requirement and the team can confirm the exact details."
+    },
+    {
+      "objection": "I just want a quick summary.",
+      "response": "Give a short summary of what the selected scenario can help with, then ask one focused follow-up question."
+    }
+  ]
+}

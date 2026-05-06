@@ -1,0 +1,9 @@
+{
+  "fields": {
+    "fit": "What is the caller trying to achieve or buy?",
+    "timing": "How soon do they want this handled?",
+    "contact": "What is the best callback or follow-up path?",
+    "scope": "What size, type, service, or use-case details matter most?",
+    "availability": "Which day or time works best for them?"
+  }
+}

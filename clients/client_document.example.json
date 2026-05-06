@@ -1,0 +1,116 @@
+{
+  "client_id": "example_clinic",
+  "identity": {
+    "display_name": "Example Clinic",
+    "industry": "Healthcare",
+    "website": "https://example.com",
+    "status": "active",
+    "tags": [
+      "hospital",
+      "marathi",
+      "lead-gen"
+    ]
+  },
+  "business_profile": {
+    "primary_offer": "Heart checkup appointment booking",
+    "target_audience": [
+      "patients",
+      "family members"
+    ],
+    "tone": [
+      "warm",
+      "respectful",
+      "efficient"
+    ],
+    "languages_supported": [
+      "marathi",
+      "hindi",
+      "english"
+    ],
+    "services": [
+      "heart checkup",
+      "follow-up booking"
+    ],
+    "locations": [
+      "Aurangabad"
+    ]
+  },
+  "conversation": {
+    "conversation_mode": "appointment_booking",
+    "default_opening_language": "marathi",
+    "workflow_mode": "model_led",
+    "closure_mode": "appointment_booking",
+    "opening_script": {
+      "marathi": "नमस्कार, मी Example Clinic मधून बोलते आहे...",
+      "hindi": "नमस्कार, मैं Example Clinic से बोल रही हूँ...",
+      "english": "Hello, this is Example Clinic calling..."
+    },
+    "closure_examples": {
+      "guidance": "Use a short final booking confirmation or enquiry-noted ending in the caller's language.",
+      "positive": [
+        "धन्यवाद. तुमची अपॉइंटमेंट उद्या सकाळी 11 वाजता निश्चित झाली आहे."
+      ],
+      "negative": [
+        "ठीक आहे. तुमची विचारणा नोंदवली आहे. धन्यवाद."
+      ],
+      "non_closing_questions": [
+        "तुम्हाला कोणता दिवस आणि वेळ हवी आहे?"
+      ]
+    },
+    "disallowed_claims": [
+      "Do not diagnose or promise unsupported services."
+    ],
+    "allowed_contact_fields": [
+      "name",
+      "phone"
+    ],
+    "booking_rules": {
+      "preferred_window": "next_1_to_2_days",
+      "whatsapp_followup": "send_address_and_precheck_instructions"
+    },
+    "handoff_rules": {
+      "unknown_doctor_schedule": "front_desk_callback",
+      "emergency_symptoms": "advise_immediate_hospital_visit"
+    }
+  },
+  "voice": {
+    "voice_name": "Aoede",
+    "persona_gender": "female",
+    "speaking_rate": 1.0
+  },
+  "model_routing": {
+    "live_generation": {
+      "temperature": 0.35,
+      "top_p": 0.9,
+      "top_k": 32,
+      "max_output_tokens": 1600
+    },
+    "structured_generation": {
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "top_k": 20,
+      "max_output_tokens": 1800
+    }
+  },
+  "import_metadata": {
+    "schema_version": 2,
+    "source": "manual_import",
+    "external_id": "crm-123",
+    "imported_at": "2026-03-30T00:00:00+00:00",
+    "imported_from": "spreadsheet_row",
+    "notes": [
+      "Imported from business team intake sheet"
+    ]
+  },
+  "system_prompt": "Client-specific behavioral instructions go here.",
+  "knowledge": "Verified business facts go here.",
+  "objections": {
+    "common": []
+  },
+  "qualification": {
+    "fields": {}
+  },
+  "cta": {
+    "primary_cta": "Book the checkup appointment."
+  }
+}

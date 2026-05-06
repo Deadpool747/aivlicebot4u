@@ -1,0 +1,90 @@
+{
+  "client_id": "user_builder_secure_177613867_0f60979c",
+  "identity": {
+    "display_name": "Builder Secure Workflow",
+    "industry": "Healthcare operations software",
+    "website": "https://acmehealth.example.com",
+    "status": "draft",
+    "tags": [
+      "healthcare",
+      "sales",
+      "operations",
+      "user_workspace"
+    ]
+  },
+  "business_profile": {
+    "primary_offer": "AI-powered patient scheduling and intake automation for multi-location clinics",
+    "target_audience": [
+      "clinic owners",
+      "operations directors",
+      "practice managers"
+    ],
+    "tone": [
+      "consultative",
+      "warm",
+      "efficient"
+    ],
+    "languages_supported": [
+      "english"
+    ],
+    "services": [
+      "patient scheduling automation",
+      "intake automation"
+    ],
+    "locations": []
+  },
+  "conversation": {
+    "conversation_mode": "sales_discovery",
+    "default_opening_language": null,
+    "workflow_mode": "model_led",
+    "closure_mode": "default",
+    "opening_script": {},
+    "closure_examples": {
+      "positive": [],
+      "negative": [],
+      "non_closing_questions": [],
+      "guidance": null
+    },
+    "disallowed_claims": [
+      "Do not promise HIPAA certifications or pricing plans that are not listed in knowledge.md.",
+      "Do not claim medical diagnosis capabilities."
+    ],
+    "allowed_contact_fields": [
+      "name",
+      "email",
+      "phone"
+    ],
+    "booking_rules": {},
+    "handoff_rules": {},
+    "intent_overrides": {}
+  },
+  "voice": {
+    "voice_name": "Aoede",
+    "persona_gender": "female",
+    "speaking_rate": 1.0
+  },
+  "model_routing": {
+    "live_generation": {
+      "temperature": 0.4,
+      "top_p": 0.9,
+      "top_k": 40,
+      "max_output_tokens": 2000
+    },
+    "structured_generation": {
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "top_k": 20,
+      "max_output_tokens": 2000
+    }
+  },
+  "import_metadata": {
+    "schema_version": 2,
+    "source": "user_workspace_bootstrap",
+    "external_id": "0f60979c-b61f-4e18-9e02-cfe3ceda7e0f",
+    "imported_at": null,
+    "imported_from": "acme_health",
+    "notes": [
+      "Workspace client auto-provisioned per authenticated user."
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "caller_name": "Did we capture the caller's name if they shared it?",
+    "patient_name": "Did we capture the patient's name if the caller was asking on behalf of someone?",
+    "primary_need": "Did we understand whether the caller needed treatment information, appointment support, doctor availability, or address details?",
+    "next_step": "Did the call end with a clear next step such as appointment note, WhatsApp sharing, or hospital callback?"
+  }
+}

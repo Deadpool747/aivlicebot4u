@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "interest_in_checkup": "Did the caller show interest in getting the heart checkup done?",
+    "patient_name": "Did we capture the caller or patient full name?",
+    "patient_age": "Did we capture the patient's age?",
+    "bp_or_sugar": "Did we capture whether the caller has BP or sugar?",
+    "family_heart_history": "Did we capture whether there is family history of heart disease or heart trouble?",
+    "preferred_visit_day": "Did we capture whether the caller will come tomorrow or on another specific day?",
+    "whatsapp_follow_up": "Did we confirm that address and pre-checkup instructions can be sent on WhatsApp?",
+    "urgency": "Did we identify whether the case is routine or needs urgent escalation?"
+  }
+}

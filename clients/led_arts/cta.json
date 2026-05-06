@@ -1,0 +1,10 @@
+{
+  "primary_cta": "Board requirement नोंदवून LED Arts कडून quotation follow-up सेट करा",
+  "fallback_cta": "Product type, size, location, आणि contact details capture करा",
+  "success_criteria": [
+    "ग्राहकाचा product interest स्पष्ट होतो",
+    "Size किंवा अंदाजित requirement नोंदवली जाते",
+    "Location किंवा installation need captured होते",
+    "Follow-up साठी योग्य संपर्क माहिती मिळते"
+  ]
+}

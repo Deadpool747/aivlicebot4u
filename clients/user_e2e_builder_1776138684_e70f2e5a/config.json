@@ -1,0 +1,90 @@
+{
+  "client_id": "user_e2e_builder_1776138684_e70f2e5a",
+  "identity": {
+    "display_name": "Sunrise Dental",
+    "industry": "Dental clinic",
+    "website": null,
+    "status": "draft",
+    "tags": [
+      "dental_clinic",
+      "inbound",
+      "user_workspace"
+    ]
+  },
+  "business_profile": {
+    "primary_offer": "Book inbound appointments and answer FAQs",
+    "target_audience": [],
+    "tone": [],
+    "languages_supported": [
+      "english",
+      "hindi"
+    ],
+    "services": [
+      "dental consultation",
+      "root canal",
+      "teeth cleaning"
+    ],
+    "locations": [
+      "Dubai"
+    ]
+  },
+  "conversation": {
+    "conversation_mode": "appointment_booking",
+    "default_opening_language": "english",
+    "workflow_mode": "model_led",
+    "closure_mode": "appointment_booking",
+    "opening_script": {
+      "english": "Hello {customer_name}, this is Sunrise Dental. Could you briefly tell me what you need help with today?",
+      "marathi": "\u0928\u092e\u0938\u094d\u0915\u093e\u0930 {customer_name}, \u092e\u0940 Sunrise Dental \u0915\u0921\u0942\u0928 \u092c\u094b\u0932\u0924\u0947 \u0906\u0939\u0947. Book inbound appointments and answer FAQs \u092e\u0932\u093e \u0925\u094b\u0921\u0915\u094d\u092f\u093e\u0924 \u0938\u093e\u0902\u0917\u093e\u0932 \u0915\u093e?",
+      "hindi": "\u0928\u092e\u0938\u094d\u0915\u093e\u0930 {customer_name}, \u092e\u0948\u0902 Sunrise Dental \u0938\u0947 \u092c\u094b\u0932 \u0930\u0939\u0940 \u0939\u0942\u0901\u0964 \u0915\u0943\u092a\u092f\u093e \u0905\u092a\u0928\u0940 \u091c\u0930\u0942\u0930\u0924 \u0915\u0947 \u092c\u093e\u0930\u0947 \u092e\u0947\u0902 \u0938\u0902\u0915\u094d\u0937\u0947\u092a \u092e\u0947\u0902 \u092c\u0924\u093e\u090f\u0902\u0917\u0947?"
+    },
+    "closure_examples": {
+      "positive": [
+        "Thank you. We have captured your requirement and the team can follow up on the details shared."
+      ],
+      "negative": [],
+      "non_closing_questions": [],
+      "guidance": "Close by confirming the need captured and the next follow-up step."
+    },
+    "disallowed_claims": [
+      "Do not promise exact pricing, timelines, or policies unless they are explicitly provided in approved knowledge."
+    ],
+    "allowed_contact_fields": [
+      "name",
+      "email",
+      "phone"
+    ],
+    "booking_rules": {},
+    "handoff_rules": {},
+    "intent_overrides": {}
+  },
+  "voice": {
+    "voice_name": "Kore",
+    "persona_gender": "female",
+    "speaking_rate": 1.0
+  },
+  "model_routing": {
+    "live_generation": {
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 32,
+      "max_output_tokens": 2000
+    },
+    "structured_generation": {
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "top_k": 20,
+      "max_output_tokens": 2000
+    }
+  },
+  "import_metadata": {
+    "schema_version": 2,
+    "source": "client_builder_ui",
+    "external_id": null,
+    "imported_at": null,
+    "imported_from": "user_e2e_builder_1776138684_e70f2e5a",
+    "notes": [
+      "Generated from the dashboard client builder."
+    ]
+  }
+}

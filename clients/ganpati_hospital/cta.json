@@ -1,0 +1,10 @@
+{
+  "primary_cta": "Book a heart-checkup appointment and confirm that WhatsApp details will be shared",
+  "fallback_cta": "If the visit day is not finalized, note the enquiry and let the hospital team follow up",
+  "success_criteria": [
+    "The caller shows interest in heart checkup",
+    "Full name and age are captured",
+    "BP or sugar status and family heart history are captured",
+    "A visit day is agreed and the caller is told that WhatsApp details will be sent"
+  ]
+}

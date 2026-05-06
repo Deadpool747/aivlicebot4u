@@ -1,0 +1,35 @@
+[
+  {
+    "project_id": "sales_agent",
+    "name": "Sales Agent",
+    "project_type": "sales",
+    "status": "active",
+    "description": "Primary outbound B2B security sales workflow.",
+    "prompt_instruction": "Drive a focused discovery call around cloud posture, alert fatigue, compliance pressure, and demo interest.",
+    "runtime": {
+      "gemini_api_key_env": "NOVA_SECURITY_SALES_GEMINI_API_KEY"
+    }
+  },
+  {
+    "project_id": "lead_qualification_agent",
+    "name": "Lead Qualification Agent",
+    "project_type": "lead_qualification",
+    "status": "active",
+    "description": "Quick qualification workflow for inbound cybersecurity leads.",
+    "prompt_instruction": "Verify company fit, team size, cloud footprint, and whether the lead is a decision-maker or evaluator.",
+    "runtime": {
+      "gemini_api_key_env": "NOVA_SECURITY_QUALIFICATION_GEMINI_API_KEY"
+    }
+  },
+  {
+    "project_id": "followup_agent",
+    "name": "Follow-up Agent",
+    "project_type": "followup",
+    "status": "active",
+    "description": "Follow-up workflow for demo no-shows, stalled deals, and nurture calls.",
+    "prompt_instruction": "Reference prior context naturally, uncover blockers, and secure a concrete next step with the prospect.",
+    "runtime": {
+      "gemini_api_key_env": "NOVA_SECURITY_FOLLOWUP_GEMINI_API_KEY"
+    }
+  }
+]

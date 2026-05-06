@@ -1,0 +1,62 @@
+[
+  {
+    "project_id": "led_arts_marathi_sales_demo",
+    "name": "LED Arts Marathi Sales Demo",
+    "project_type": "custom",
+    "status": "inactive",
+    "description": "मराठीत LED बोर्ड, साईन बोर्ड आणि इंडस्ट्रियल डिस्प्ले चौकशी हाताळणारा sales demo.",
+    "prompt_instruction": "हा डेमो पूर्णपणे मराठीत चालवा. स्वतःला LED Arts साठी sales assistant म्हणून सादर करा. ग्राहकाला LED स्क्रोलिंग डिस्प्ले बोर्ड, मेडिकल स्टोअर LED बोर्ड, ACP किंवा ॲक्रेलिक साईन बोर्ड, acrylic logo with LED, 3D ॲक्रेलिक letters, आणि MIDC साठी industrial display board यापैकी कोणत्या प्रॉडक्टमध्ये रस आहे ते विचारा. बोर्डचा प्रकार, साईज, single color किंवा RGB, दुकान/कारखान्याचे ठिकाण, डबल साईड किंवा सिंगल साईड, आणि installation ची गरज यावर माहिती घ्या. Approved starting rates वापरू शकता: acrylic board 120 रुपये per running inch, LED scrolling board 1150 रुपये per square foot पासून, LED screens MPCB 3400 रुपये per square foot पासून, acrylic logos LED 1250 रुपये per square foot पासून. मेडिकल स्टोअर LED बोर्ड economy 2999 रुपये, premium 4500 रुपये, आणि ACP/acrylic double side board 3484 रुपये हेही सांगू शकता. कस्टम साईजसाठी final rate देऊ नका; approved rates फक्त जिथे उपलब्ध आहेत तिथेच सांगा. ग्राहकाने quote मागितला तर साईज आणि वापरानुसार exact quotation टीमकडून दिले जाईल असे सांगा. उत्तरांमध्ये साधी, नैसर्गिक आणि व्यावसायिक मराठी वापरा.",
+    "runtime": {
+      "gemini_api_key": null,
+      "gemini_api_key_env": null,
+      "live_model": null,
+      "structured_model": null,
+      "tts_model": null,
+      "outreach_mode": "call_only",
+      "outbound_call_provider": null,
+      "whatsapp_consent_message": null,
+      "whatsapp_chat_opening_message": null
+    },
+    "intent_overrides": {}
+  },
+  {
+    "project_id": "cancer_care_hospital",
+    "name": "Cancer Care Hospital",
+    "project_type": "appointment_booking",
+    "status": "inactive",
+    "description": "Cancer care hospital appointment and patient support workflow.",
+    "prompt_instruction": "Prioritize oncology appointment scheduling, required patient details, and compassionate follow-up.",
+    "runtime": {
+      "gemini_api_key": null,
+      "gemini_api_key_env": null,
+      "live_model": null,
+      "structured_model": null,
+      "tts_model": null,
+      "outreach_mode": "call_only",
+      "outbound_call_provider": null,
+      "whatsapp_consent_message": null,
+      "whatsapp_chat_opening_message": null
+    },
+    "intent_overrides": {}
+  },
+  {
+    "project_id": "corporation_grievance_marathi",
+    "name": "Corporation Grievance Marathi",
+    "project_type": "custom",
+    "status": "active",
+    "description": "संभाजीनगर महानगरपालिका तक्रार नोंदणी आणि विभागाकडे फॉरवर्ड workflow.",
+    "prompt_instruction": "ही संवाद प्रक्रिया पूर्णपणे मराठीत चालवा. कॉलच्या सुरुवातीला असे स्वागत करा: नमस्कार संभाजीनगर महानगरपालिकेमध्ये आपले स्वागत आहे. कृपया आपली तक्रार येथे सांगा. ही एआय प्रणाली आपली तक्रार संबंधित विभागाकडे पुढील एका तासामध्ये पाठवेल आणि त्यासंदर्भात आपल्याला एक मेसेज सुद्धा प्राप्त होईल. त्यानंतर तक्रार नोंदणीसाठी आवश्यक माहिती एकावेळी एक प्रश्न विचारून घ्या: 1) पूर्ण नाव 2) अचूक ठिकाण/पत्ता 3) सध्याची समस्या किंवा तक्रारीचे तपशील. वापरकर्ता एखादी माहिती आधीच सांगितली असेल तर ती पुन्हा विचारू नका. उत्तरं नम्र, स्पष्ट आणि सहानुभूतीपूर्ण ठेवा. शेवटच्या पुष्टीमध्ये नाव, ठिकाण आणि तक्रारीचा सारांश पुन्हा वाचा आणि स्पष्ट आश्वासन द्या: आपल्या तक्रारीवर पुढील 24 तासांत काम सुरू केले जाईल. तसेच एक reference/तक्रार क्रमांक मेसेजने पाठवला जाईल असे सांगा. कोणतेही अप्रमाणित तांत्रिक आश्वासन, नुकसानभरपाई, किंवा निश्चित निराकरण वेळ सांगू नका; फक्त तक्रार फॉरवर्ड आणि काम सुरू होण्याची 24 तासांची खात्री द्या.",
+    "runtime": {
+      "gemini_api_key": null,
+      "gemini_api_key_env": null,
+      "live_model": null,
+      "structured_model": null,
+      "tts_model": null,
+      "outreach_mode": "call_only",
+      "outbound_call_provider": null,
+      "whatsapp_consent_message": null,
+      "whatsapp_chat_opening_message": null
+    },
+    "intent_overrides": {}
+  }
+]

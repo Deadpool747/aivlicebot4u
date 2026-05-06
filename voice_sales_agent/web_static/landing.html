@@ -1,0 +1,3120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ray AI Voice Assistant | Voice Agent for Call Automation & Lead Capture</title>
+    <meta
+      name="description"
+      content="Ray is an AI voice assistant and voice agent platform for call automation, lead capture, appointment booking, and CRM-ready summaries for sales and support teams."
+    />
+    <meta
+      name="keywords"
+      content="AI voice assistant, voice agent, call automation, lead capture, AI call center, voice AI for sales, voice AI for support, CRM integration, appointment scheduling"
+    />
+    <meta name="robots" content="index,follow" />
+    <meta name="theme-color" content="#0b1628" />
+    <link rel="canonical" href="https://aivoicebot4u.com/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ray" />
+    <meta property="og:url" content="https://aivoicebot4u.com/" />
+    <meta property="og:title" content="Ray AI Voice Assistant | Voice Agent for Call Automation & Lead Capture" />
+    <meta
+      property="og:description"
+      content="Learn how Ray answers calls, captures leads, extracts key details, and automates follow-ups with an AI voice assistant built for modern teams."
+    />
+    <meta
+      property="og:image"
+      content="https://images.unsplash.com/photo-1677442135136-760c813028c0?auto=format&fit=crop&w=1600&q=80"
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Ray AI Voice Assistant | Voice Agent for Call Automation" />
+    <meta
+      name="twitter:description"
+      content="AI voice assistant for sales and support teams: automate calls, capture lead details, and send clean call summaries to your workflow."
+    />
+    <meta
+      name="twitter:image"
+      content="https://images.unsplash.com/photo-1677442135136-760c813028c0?auto=format&fit=crop&w=1600&q=80"
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Ray",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": "https://aivoicebot4u.com/",
+        "description": "AI voice assistant platform for call handling, lead capture, summaries, and automated follow-up workflows.",
+        "offers": {
+          "@type": "Offer",
+          "price": "49",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Can I start a live AI voice demo right away?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Click Start/Stop on the landing page. Ray requests microphone permission and starts the live demo immediately."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What details does Ray extract from calls?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Ray extracts structured lead details such as name, email, phone number, callback date, budget, intent, and a short call summary."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can Ray integrate with CRM and internal tools?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Ray supports CRM integration and automation workflows so teams can sync updates, trigger follow-ups, and reduce manual data entry."
+            }
+          }
+        ]
+      }
+    </script>
+
+    <style>
+      :root {
+        --bg-1: #07111f;
+        --bg-2: #0f1a2d;
+        --bg-3: #08111d;
+        --surface: rgba(10, 20, 36, 0.78);
+        --surface-strong: rgba(9, 18, 33, 0.9);
+        --brand: #34d399;
+        --brand-strong: #10b981;
+        --accent: #7dd3fc;
+        --text: #f8fafc;
+        --muted: #96a6bc;
+        --line: rgba(148, 163, 184, 0.2);
+        --shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+        --radius-xl: 32px;
+        --radius-lg: 24px;
+        --radius-md: 18px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Manrope", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 8% 16%, rgba(52, 211, 153, 0.12), transparent 26%),
+          radial-gradient(circle at 86% 20%, rgba(125, 211, 252, 0.11), transparent 28%),
+          radial-gradient(circle at 50% 82%, rgba(16, 185, 129, 0.08), transparent 32%),
+          linear-gradient(150deg, var(--bg-1) 0%, var(--bg-2) 52%, var(--bg-3) 100%);
+        min-height: 100vh;
+        overflow-x: clip;
+        scroll-behavior: smooth;
+      }
+
+      img {
+        max-width: 100%;
+        display: block;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .page-glow {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background:
+          radial-gradient(circle at 22% 24%, rgba(52, 211, 153, 0.08), transparent 36%),
+          radial-gradient(circle at 78% 18%, rgba(125, 211, 252, 0.08), transparent 34%);
+        animation: driftGlow 14s ease-in-out infinite alternate;
+      }
+
+      @keyframes driftGlow {
+        from {
+          transform: translateY(0px) scale(1);
+        }
+        to {
+          transform: translateY(-12px) scale(1.03);
+        }
+      }
+
+      .container {
+        width: min(1380px, calc(100% - 2rem));
+        margin-inline: auto;
+        position: relative;
+        z-index: 2;
+      }
+
+      .nav-wrap {
+        position: sticky;
+        top: 10px;
+        z-index: 40;
+        padding-top: 0.9rem;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(8, 18, 34, 0.74);
+        backdrop-filter: blur(14px);
+        box-shadow: var(--shadow);
+        padding: 0.62rem 0.74rem;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        color: var(--text);
+        text-decoration: none;
+        padding-inline: 0.46rem;
+      }
+
+      .brand-mark {
+        width: 140px;
+        height: 54px;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        padding: 0;
+      }
+
+      .brand-mark img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 0;
+        display: block;
+      }
+
+      .brand span {
+        font-weight: 800;
+      }
+
+      .nav-links {
+        display: inline-flex;
+        gap: 1.1rem;
+      }
+
+      .nav-links a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      .actions {
+        display: inline-flex;
+        gap: 0.56rem;
+      }
+
+      .btn {
+        border: 1px solid transparent;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.44rem;
+        font-weight: 800;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .btn:disabled {
+        opacity: 0.72;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .btn-start {
+        background: linear-gradient(135deg, var(--brand), #2dd4bf);
+        color: #03221a;
+        padding: 0.74rem 1.16rem;
+        box-shadow: 0 14px 34px rgba(16, 185, 129, 0.35);
+      }
+
+      .btn-start:hover {
+        background: linear-gradient(135deg, var(--brand-strong), #14b8a6);
+      }
+
+      .btn-ghost {
+        border-color: var(--line);
+        background: rgba(8, 17, 33, 0.74);
+        color: var(--text);
+        padding: 0.7rem 1.04rem;
+      }
+
+      .hero {
+        margin-top: 1rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-xl);
+        background: linear-gradient(152deg, rgba(8, 18, 33, 0.93), rgba(10, 20, 36, 0.82));
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .demo-intake {
+        margin-top: 1.2rem;
+        padding: 1rem;
+        border-radius: 24px;
+        border: 1px solid rgba(125, 211, 252, 0.2);
+        background: linear-gradient(160deg, rgba(8, 18, 34, 0.88), rgba(9, 26, 46, 0.76));
+        box-shadow: 0 18px 40px rgba(2, 6, 23, 0.25);
+      }
+
+      .demo-intake-head {
+        display: grid;
+        gap: 0.36rem;
+        margin-bottom: 0.85rem;
+      }
+
+      .demo-intake-head strong {
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+      }
+
+      .demo-intake-head p,
+      .demo-helper {
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.55;
+      }
+
+      .demo-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.82rem;
+      }
+
+      .demo-field {
+        display: grid;
+        gap: 0.38rem;
+      }
+
+      .demo-field label {
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: var(--text);
+      }
+
+      .demo-field input,
+      .demo-field select {
+        width: 100%;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        background: rgba(7, 15, 29, 0.9);
+        color: var(--text);
+        font: inherit;
+        padding: 0.85rem 0.95rem;
+      }
+
+      .demo-field input::placeholder {
+        color: #7f90a6;
+      }
+
+      .demo-field input:focus,
+      .demo-field select:focus {
+        outline: none;
+        border-color: rgba(52, 211, 153, 0.72);
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14);
+      }
+
+      .demo-field--full {
+        grid-column: 1 / -1;
+      }
+
+      .hero::before,
+      .hero::after {
+        content: "";
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(44px);
+        pointer-events: none;
+      }
+
+      .hero::before {
+        width: 320px;
+        height: 320px;
+        background: rgba(52, 211, 153, 0.18);
+        top: -105px;
+        left: -90px;
+      }
+
+      .hero::after {
+        width: 340px;
+        height: 340px;
+        background: rgba(125, 211, 252, 0.16);
+        right: -90px;
+        bottom: -120px;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.08fr 0.92fr;
+        align-items: stretch;
+        gap: 1rem;
+        padding: clamp(1.4rem, 4vw, 3.15rem);
+      }
+
+      .hero-copy {
+        display: grid;
+        align-content: center;
+        gap: 1rem;
+      }
+
+      .kicker {
+        width: fit-content;
+        border: 1px solid rgba(52, 211, 153, 0.4);
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.12);
+        color: #bbf7d0;
+        font-size: 0.78rem;
+        font-weight: 800;
+        padding: 0.42rem 0.78rem;
+      }
+
+      .hero-copy h1 {
+        font-size: clamp(2.15rem, 5vw, 4.3rem);
+        line-height: 1.02;
+        text-wrap: balance;
+      }
+
+      .hero-copy p {
+        color: var(--muted);
+        font-size: 1.04rem;
+        line-height: 1.72;
+        max-width: 62ch;
+      }
+
+      .hero-ctas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.62rem;
+      }
+
+      .btn-start.hero-start {
+        font-size: 1rem;
+        padding: 0.8rem 1.28rem;
+        box-shadow: 0 18px 44px rgba(16, 185, 129, 0.42);
+      }
+
+      .offline-note {
+        color: #bff9de;
+        font-size: 0.86rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.38rem;
+      }
+
+      .hero-visual {
+        display: grid;
+        align-content: stretch;
+        grid-template-rows: auto 1fr;
+        gap: 0.8rem;
+        height: 100%;
+      }
+
+      .visual-main {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        padding: 0.86rem;
+        overflow: hidden;
+      }
+
+      .visual-main img {
+        width: 100%;
+        height: 360px;
+        object-fit: contain;
+        background: rgba(6, 14, 26, 0.92);
+        border-radius: 16px;
+        border: 1px solid var(--line);
+      }
+
+      .wave-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(8, 17, 32, 0.86);
+        padding: 1rem;
+        min-height: 330px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      #liveCallPreviewCard {
+        display: none !important;
+      }
+
+      .wave-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.54rem;
+      }
+
+      .live-chip {
+        border: 1px solid rgba(52, 211, 153, 0.36);
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.12);
+        color: #d1fae5;
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 0.26rem 0.55rem;
+      }
+
+      .wave {
+        height: 58px;
+        display: flex;
+        align-items: end;
+        justify-content: center;
+        gap: 5px;
+      }
+
+      .wave span {
+        width: 5px;
+        border-radius: 99px;
+        background: linear-gradient(180deg, #6ee7b7, #7dd3fc);
+        animation: beat 1.25s ease-in-out infinite;
+      }
+
+      .wave span:nth-child(1) {
+        height: 18px;
+        animation-delay: 0s;
+      }
+      .wave span:nth-child(2) {
+        height: 34px;
+        animation-delay: 0.08s;
+      }
+      .wave span:nth-child(3) {
+        height: 28px;
+        animation-delay: 0.16s;
+      }
+      .wave span:nth-child(4) {
+        height: 44px;
+        animation-delay: 0.24s;
+      }
+      .wave span:nth-child(5) {
+        height: 26px;
+        animation-delay: 0.32s;
+      }
+      .wave span:nth-child(6) {
+        height: 38px;
+        animation-delay: 0.4s;
+      }
+      .wave span:nth-child(7) {
+        height: 20px;
+        animation-delay: 0.48s;
+      }
+
+      @keyframes beat {
+        0%,
+        100% {
+          transform: scaleY(0.68);
+          opacity: 0.72;
+        }
+        50% {
+          transform: scaleY(1.22);
+          opacity: 1;
+        }
+      }
+
+      .dialog {
+        margin-top: 0.56rem;
+        display: grid;
+        gap: 0.55rem;
+        min-height: 200px;
+        flex: 1;
+        align-content: start;
+      }
+
+      .bubble {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 0.64rem 0.72rem;
+        background: rgba(8, 16, 29, 0.88);
+        color: #cbd5e1;
+        font-size: 0.86rem;
+        line-height: 1.45;
+      }
+
+      .bubble.ai {
+        border-color: rgba(52, 211, 153, 0.38);
+        background: rgba(6, 22, 18, 0.8);
+        color: #d1fae5;
+      }
+
+      .preview-points {
+        margin: 0.34rem 0 0;
+        padding: 0.5rem 0.6rem 0.56rem;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 12px;
+        background: rgba(8, 16, 30, 0.84);
+        display: grid;
+        gap: 0.28rem;
+      }
+
+      .preview-points span {
+        color: #b8c5d9;
+        font-size: 0.8rem;
+        line-height: 1.4;
+      }
+
+      .live-preview-grid {
+        display: grid;
+        gap: 0.48rem;
+      }
+
+      .preview-item {
+        display: grid;
+        gap: 0.26rem;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        background: rgba(7, 15, 28, 0.88);
+        padding: 0.5rem 0.58rem;
+      }
+
+      .preview-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #9eb3ca;
+        font-weight: 800;
+      }
+
+      .preview-value {
+        min-height: 1.1rem;
+        color: #dbe8f8;
+        font-size: 0.86rem;
+        line-height: 1.4;
+        outline: none;
+      }
+
+      .preview-value.is-empty::before {
+        content: attr(data-placeholder);
+        color: #7d91a8;
+      }
+
+      .preview-note {
+        font-size: 0.75rem;
+        color: #91a7c0;
+      }
+
+      .trust {
+        margin-top: 1rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: rgba(10, 20, 36, 0.78);
+        backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+        padding: 1rem;
+      }
+
+      .trust-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 0.9rem;
+      }
+
+      .logos {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.55rem;
+      }
+
+      .logo {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(8, 17, 31, 0.86);
+        padding: 0.64rem 0.56rem 0.68rem;
+        text-align: left;
+        color: #b8c5d9;
+        font-size: 0.78rem;
+        font-weight: 700;
+        display: grid;
+        gap: 0.28rem;
+      }
+
+      .logo i {
+        color: #bff9de;
+        font-size: 1rem;
+      }
+
+      .logo small {
+        color: var(--muted);
+        font-size: 0.72rem;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.55rem;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(8, 17, 31, 0.86);
+        padding: 0.74rem;
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .metric i {
+        color: #bff9de;
+        font-size: 0.95rem;
+      }
+
+      .metric strong {
+        display: block;
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 1.06rem;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 0.79rem;
+      }
+
+      section {
+        margin-top: 1rem;
+      }
+
+      .block {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+        padding: clamp(1rem, 2.6vw, 1.4rem);
+      }
+
+      .head {
+        display: grid;
+        gap: 0.34rem;
+        margin-bottom: 0.9rem;
+      }
+
+      .head h2 {
+        font-size: clamp(1.44rem, 2.5vw, 2.2rem);
+      }
+
+      .head p {
+        color: var(--muted);
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.76rem;
+      }
+
+      .feature {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(8, 16, 30, 0.84);
+        padding: 0.96rem;
+        transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+      }
+
+      .feature:hover {
+        transform: translateY(-3px);
+        border-color: rgba(52, 211, 153, 0.42);
+        box-shadow: 0 14px 32px rgba(16, 185, 129, 0.2);
+      }
+
+      .icon-wrap {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        border: 1px solid rgba(125, 211, 252, 0.32);
+        background: linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(125, 211, 252, 0.2));
+        display: grid;
+        place-items: center;
+        margin-bottom: 0.65rem;
+      }
+
+      .icon-wrap i {
+        color: #c8f8e4;
+      }
+
+      .feature h3 {
+        font-size: 1.04rem;
+        margin-bottom: 0.3rem;
+      }
+
+      .feature p {
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+
+      .showcase {
+        display: grid;
+        grid-template-columns: 1.04fr 0.96fr;
+        gap: 0.8rem;
+      }
+
+      .img-card,
+      .live-ui,
+      .side-panel,
+      .use-case,
+      .faq-item,
+      .reason {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(8, 16, 30, 0.86);
+      }
+
+      .img-card,
+      .use-case {
+        overflow: hidden;
+      }
+
+      .img-card img {
+        width: 100%;
+        height: 330px;
+        object-fit: cover;
+      }
+
+      .live-ui,
+      .side-panel {
+        padding: 0.9rem;
+      }
+
+      .live-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.66rem;
+      }
+
+      .status-badge {
+        border: 1px solid rgba(52, 211, 153, 0.35);
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.13);
+        color: #d1fae5;
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 0.26rem 0.58rem;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .event {
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: rgba(9, 17, 31, 0.88);
+        padding: 0.6rem;
+        color: #cbd5e1;
+        font-size: 0.87rem;
+        line-height: 1.45;
+      }
+
+      .event strong {
+        color: #e2e8f0;
+      }
+
+      .event.ai {
+        border-color: rgba(52, 211, 153, 0.35);
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.72rem;
+      }
+
+      .step {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(8, 16, 30, 0.84);
+        padding: 0.84rem;
+      }
+
+      .num {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--brand), var(--accent));
+        color: #06271f;
+        font-weight: 900;
+        margin-bottom: 0.45rem;
+      }
+
+      .step h3 {
+        font-size: 0.95rem;
+        margin-bottom: 0.28rem;
+      }
+
+      .step p {
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.46;
+      }
+
+      .use-cases {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.76rem;
+      }
+
+      .use-case img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+      }
+
+      .use-body {
+        padding: 0.86rem;
+        display: grid;
+        gap: 0.34rem;
+      }
+
+      .use-body p {
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      .reasons {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.72rem;
+      }
+
+      .reason {
+        padding: 0.86rem;
+      }
+
+      .reason i {
+        color: #bbf7d0;
+      }
+
+      .reason h3 {
+        font-size: 1rem;
+        margin: 0.44rem 0 0.3rem;
+      }
+
+      .reason p {
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      .testimonials {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.72rem;
+      }
+
+      .quote {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(8, 16, 30, 0.84);
+        padding: 0.9rem;
+      }
+
+      .quote p {
+        color: #cbd5e1;
+        line-height: 1.6;
+        font-size: 0.9rem;
+      }
+
+      .person {
+        margin-top: 0.72rem;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+      }
+
+      .person img {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid var(--line);
+      }
+
+      .person small {
+        display: block;
+        color: var(--muted);
+      }
+
+      .pricing-toggle {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(8, 16, 30, 0.84);
+        padding: 0.2rem;
+        margin-bottom: 0.8rem;
+      }
+
+      .toggle-btn {
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 0.42rem 0.86rem;
+        cursor: pointer;
+      }
+
+      .toggle-btn.active {
+        background: rgba(52, 211, 153, 0.18);
+        color: #d1fae5;
+      }
+
+      .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.72rem;
+      }
+
+      .plan {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(8, 16, 30, 0.84);
+        padding: 0.95rem;
+      }
+
+      .plan.popular {
+        border-color: rgba(52, 211, 153, 0.52);
+        box-shadow: 0 18px 44px rgba(16, 185, 129, 0.2);
+      }
+
+      .plan h3 {
+        margin-bottom: 0.3rem;
+      }
+
+      .price {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 1.95rem;
+        margin: 0.38rem 0 0.58rem;
+      }
+
+      .price small {
+        font-size: 0.84rem;
+        color: var(--muted);
+      }
+
+      .plan ul {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 0.76rem;
+        display: grid;
+        gap: 0.34rem;
+        color: #cbd5e1;
+        font-size: 0.87rem;
+      }
+
+      .plan ul li::before {
+        content: "•";
+        color: var(--brand);
+        margin-right: 0.42rem;
+      }
+
+      .faq {
+        display: grid;
+        gap: 0.55rem;
+      }
+
+      .faq-item {
+        overflow: hidden;
+      }
+
+      .faq-q {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.7rem;
+        padding: 0.82rem;
+        cursor: pointer;
+      }
+
+      .faq-q strong {
+        font-size: 0.96rem;
+      }
+
+      .faq-a {
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+        transition: max-height 220ms ease, opacity 220ms ease;
+        padding: 0 0.82rem;
+      }
+
+      .faq-a p {
+        color: var(--muted);
+        line-height: 1.56;
+        padding-bottom: 0.82rem;
+      }
+
+      .faq-item.open .faq-a {
+        max-height: 180px;
+        opacity: 1;
+      }
+
+      .faq-item.open .faq-q i {
+        transform: rotate(180deg);
+      }
+
+      .faq-q i {
+        transition: transform 180ms ease;
+      }
+
+      .final {
+        text-align: center;
+        border: 1px solid rgba(52, 211, 153, 0.36);
+        border-radius: var(--radius-lg);
+        background:
+          radial-gradient(circle at 20% 0%, rgba(52, 211, 153, 0.16), transparent 35%),
+          radial-gradient(circle at 80% 100%, rgba(125, 211, 252, 0.16), transparent 35%),
+          rgba(8, 16, 30, 0.9);
+        padding: clamp(1.2rem, 3vw, 2rem);
+      }
+
+      .final p {
+        color: var(--muted);
+        margin: 0.62rem auto 0.9rem;
+        max-width: 64ch;
+      }
+
+      footer {
+        margin: 1rem 0 1.4rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: rgba(8, 16, 30, 0.84);
+        padding: 1rem;
+      }
+
+      .foot-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.72rem;
+      }
+
+      .foot-col {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .foot-col a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.88rem;
+      }
+
+      .copyright {
+        margin-top: 0.72rem;
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(14px);
+        transition: opacity 520ms ease, transform 520ms ease;
+      }
+
+      .reveal.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 1160px) {
+        .hero-grid,
+        .trust-grid,
+        .showcase {
+          grid-template-columns: 1fr;
+        }
+
+        .feature-grid,
+        .testimonials,
+        .pricing-grid,
+        .use-cases {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .steps,
+        .reasons {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 780px) {
+        .container {
+          width: min(1380px, calc(100% - 1.24rem));
+        }
+
+        .nav {
+          border-radius: 22px;
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+
+        .nav-links {
+          display: none;
+        }
+
+        .actions {
+          width: 100%;
+        }
+
+        .actions .btn {
+          flex: 1;
+        }
+
+        .feature-grid,
+        .testimonials,
+        .pricing-grid,
+        .steps,
+        .logos,
+        .metrics,
+        .foot-grid,
+        .use-cases,
+        .reasons {
+          grid-template-columns: 1fr;
+        }
+
+        .visual-main img,
+        .img-card img {
+          height: 230px;
+        }
+
+        .demo-grid {
+          grid-template-columns: 1fr;
+        }
+
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-glow"></div>
+
+    <div class="container nav-wrap">
+      <header class="nav">
+        <a class="brand" href="/" aria-label="Ray home">
+          <span class="brand-mark" aria-hidden="true"><img src="/logo.png" alt="Ray logo" loading="eager" /></span>
+        </a>
+
+        <nav class="nav-links" aria-label="Primary navigation">
+          <a href="#how">How Ray Works</a>
+          <a href="#features">Features</a>
+          <a href="#why">Why Ray</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+
+        <div class="actions">
+          <a class="btn btn-ghost" href="/login"><i class="bi bi-person-circle"></i>Login</a>
+          <a class="btn btn-ghost" href="/signup"><i class="bi bi-person-plus"></i>Sign Up</a>
+          <button class="btn btn-start start-demo-link" type="button"><i class="bi bi-play-circle-fill"></i>Start/Stop</button>
+        </div>
+      </header>
+    </div>
+
+    <main class="container">
+      <section class="hero reveal">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <span class="kicker"><i class="bi bi-stars"></i> Meet Ray</span>
+            <h1>Ray is an AI voice assistant that automates calls and captures qualified leads in real time.</h1>
+            <p>
+              Ray answers inbound and outbound calls, extracts key caller details like name, phone, email, date, and budget, then sends a clean summary your team can act on fast.
+            </p>
+            <div class="hero-ctas">
+              <button class="btn btn-start hero-start start-demo-link" type="button"><i class="bi bi-play-circle-fill"></i>Start/Stop</button>
+              <a class="btn btn-ghost" href="#how"><i class="bi bi-compass"></i>See How It Works</a>
+              <a class="btn btn-ghost" href="#features"><i class="bi bi-grid"></i>View Features</a>
+            </div>
+            <div class="demo-intake" id="demoIntake">
+              <div class="demo-intake-head">
+                <strong>Quick Start</strong>
+                <p>Pick a script, click Start/Stop, and speak. Ray begins immediately.</p>
+              </div>
+              <div class="demo-grid">
+                <div class="demo-field demo-field--full">
+                  <label for="demoProjectSelect">Demo Script</label>
+                  <select id="demoProjectSelect" autocomplete="off">
+                    <option value="">Loading available demos...</option>
+                  </select>
+                </div>
+                <div class="demo-field">
+                  <label for="demoNameInput">Name</label>
+                  <input id="demoNameInput" type="text" autocomplete="name" placeholder="Your full name" />
+                </div>
+                <div class="demo-field">
+                  <label for="demoPhoneInput">Phone Number</label>
+                  <input id="demoPhoneInput" type="tel" autocomplete="tel" placeholder="+91 98765 43210" />
+                </div>
+                <div class="demo-field demo-field--full">
+                  <label for="demoEmailInput">Email</label>
+                  <input id="demoEmailInput" type="email" autocomplete="email" placeholder="you@example.com" />
+                </div>
+              </div>
+              <p class="demo-helper" id="demoHelperText">Preparing guest demo scripts and voice settings...</p>
+            </div>
+            <span class="offline-note" id="heroDemoStatus"><i class="bi bi-lightning-charge-fill"></i>New here? Click Start/Stop to try Ray in under a minute.</span>
+          </div>
+
+          <div class="hero-visual">
+            <div class="visual-main">
+              <img
+                src="/static/ray-handling-indian-calls-and-leads.png"
+                alt="Ray AI handling Indian voice calls and lead capture dashboard"
+                loading="eager"
+              />
+            </div>
+            <div class="wave-card" id="liveCallPreviewCard" hidden aria-hidden="true" style="display:none !important;">
+              <div class="wave-top">
+                <strong>Live Call Preview</strong>
+                <span class="live-chip">AI ACTIVE</span>
+              </div>
+              <div class="wave" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="dialog">
+                <div class="bubble ai" id="heroLeadSummary">Live preview updates automatically while the call is active.</div>
+                <div class="live-preview-grid" id="livePreviewGrid">
+                  <div class="preview-item">
+                    <span class="preview-label">Appointment</span>
+                    <div class="preview-value is-empty" id="previewAppointment" data-field="appointment" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Budget</span>
+                    <div class="preview-value is-empty" id="previewBudget" data-field="budget" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Callback</span>
+                    <div class="preview-value is-empty" id="previewCallback" data-field="callback" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Deadline</span>
+                    <div class="preview-value is-empty" id="previewDeadline" data-field="deadline" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Decision / Commitment</span>
+                    <div class="preview-value is-empty" id="previewDecision" data-field="decision" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Goal</span>
+                    <div class="preview-value is-empty" id="previewGoal" data-field="goal" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Next Steps</span>
+                    <div class="preview-value is-empty" id="previewNextSteps" data-field="next_steps" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Running Summary</span>
+                    <div class="preview-value is-empty" id="previewSummary" data-field="summary" data-placeholder="Not mentioned yet" contenteditable="true"></div>
+                  </div>
+                </div>
+                <div class="preview-note">Tip: click any field to edit or confirm extracted details.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="trust reveal" aria-label="Trusted by modern teams">
+        <div class="trust-grid">
+          <div class="logos">
+            <div class="logo"><i class="bi bi-1-circle"></i><strong>What It Is</strong><small>AI voice agent software for sales and support calls</small></div>
+            <div class="logo"><i class="bi bi-2-circle"></i><strong>What It Does</strong><small>Handles conversations, captures leads, and logs outcomes</small></div>
+            <div class="logo"><i class="bi bi-3-circle"></i><strong>Why Useful</strong><small>Increases response speed and reduces missed opportunities</small></div>
+            <div class="logo"><i class="bi bi-4-circle"></i><strong>Core Features</strong><small>Voice automation, extraction, analytics, CRM sync</small></div>
+            <div class="logo"><i class="bi bi-5-circle"></i><strong>Next Step</strong><small>Start a live demo and review structured call data</small></div>
+          </div>
+          <div class="metrics">
+            <article class="metric"><i class="bi bi-telephone-inbound-fill"></i><strong>10,000+</strong><span>Calls automated</span></article>
+            <article class="metric"><i class="bi bi-lightning-charge-fill"></i><strong>95%</strong><span>Faster response handling</span></article>
+            <article class="metric"><i class="bi bi-clock-history"></i><strong>24/7</strong><span>AI voice availability</span></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="block reveal">
+        <div class="head">
+          <h2>AI Voice Assistant Features For Faster Call Handling</h2>
+          <p>Everything teams need to automate calls, capture lead details, and move conversations to the next step.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature"><div class="icon-wrap"><i class="bi bi-telephone-forward-fill"></i></div><h3>Smart Voice Calls</h3><p>Adaptive AI calls with contextual and intent-aware response logic.</p></article>
+          <article class="feature"><div class="icon-wrap"><i class="bi bi-chat-dots-fill"></i></div><h3>Real-Time Conversations</h3><p>Natural dialogue with low latency and clear turn-by-turn handling.</p></article>
+          <article class="feature"><div class="icon-wrap"><i class="bi bi-diagram-3-fill"></i></div><h3>Intelligent Automation</h3><p>Trigger follow-ups, reminders, and workflows instantly.</p></article>
+          <article class="feature"><div class="icon-wrap"><i class="bi bi-plug-fill"></i></div><h3>CRM Integration</h3><p>Bi-directional sync with your sales and support systems.</p></article>
+          <article class="feature"><div class="icon-wrap"><i class="bi bi-graph-up-arrow"></i></div><h3>Call Analytics</h3><p>Track conversion, quality, and sentiment with live reporting.</p></article>
+          <article class="feature"><div class="icon-wrap"><i class="bi bi-sliders2-vertical"></i></div><h3>Custom Workflows</h3><p>Shape voice flows by team, product line, and compliance needs.</p></article>
+        </div>
+      </section>
+
+      <section id="demo" class="block reveal">
+        <div class="head">
+          <h2>See A Live Voice AI Demo</h2>
+          <p>Start a live call test, speak naturally, and watch lead details and intent appear in real time.</p>
+        </div>
+        <div class="showcase">
+          <div class="img-card">
+            <img
+              src="https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=1400&q=80"
+              alt="Operations dashboard with AI voice metrics and customer data"
+              loading="lazy"
+            />
+          </div>
+          <div class="live-ui">
+            <div class="live-head">
+              <h3>Live Conversation Feed</h3>
+              <span class="status-badge">CALL ACTIVE</span>
+            </div>
+            <div class="timeline">
+              <div class="event"><strong>Lead:</strong> "Can someone call me tomorrow morning?"</div>
+              <div class="event ai"><strong>AI:</strong> "Sure. Callback is scheduled for 10:00 AM and confirmation is now sent."</div>
+              <div class="event"><strong>System:</strong> CRM updated • Task assigned • Reminder queued</div>
+            </div>
+            <div class="side-panel" style="margin-top: 0.72rem">
+              <div class="timeline">
+                <div class="event"><i class="bi bi-activity"></i> Intent: Callback request</div>
+                <div class="event"><i class="bi bi-speedometer2"></i> Confidence: 97.4%</div>
+                <div class="event"><i class="bi bi-emoji-smile-fill"></i> Sentiment: Positive</div>
+                <div class="event"><i class="bi bi-lightning-fill"></i> Recommended action: Priority follow-up</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how" class="block reveal">
+        <div class="head">
+          <h2>How Ray Works In 5 Simple Steps</h2>
+          <p>A beginner-friendly flow to understand what the AI voice assistant does and how to start.</p>
+        </div>
+        <div class="steps">
+          <article class="step"><span class="num">1</span><h3>What Ray Is</h3><p>Ray is your AI voice teammate for handling calls and lead capture.</p></article>
+          <article class="step"><span class="num">2</span><h3>What It Does</h3><p>It talks to callers, answers questions, and records important details.</p></article>
+          <article class="step"><span class="num">3</span><h3>Why It Helps</h3><p>Your team saves time and responds faster with fewer missed leads.</p></article>
+          <article class="step"><span class="num">4</span><h3>Key Features</h3><p>Live conversations, extraction, summaries, automation, and analytics.</p></article>
+          <article class="step"><span class="num">5</span><h3>What To Do Next</h3><p>Click Start/Stop, run a demo call, and review the live output.</p></article>
+        </div>
+      </section>
+
+      <section id="use-cases" class="block reveal">
+        <div class="head">
+          <h2>Voice AI Use Cases For Sales, Support, And Operations</h2>
+          <p>Practical business use cases where AI call automation delivers immediate value.</p>
+        </div>
+        <div class="use-cases">
+          <article class="use-case">
+            <img src="https://images.unsplash.com/photo-1556745757-8d76bdb6984b?auto=format&fit=crop&w=900&q=80" alt="Sales team handling voice-qualified inbound leads" loading="lazy" />
+            <div class="use-body"><h3>Lead Qualification</h3><p>Qualify inbound leads instantly and route high-intent prospects to the right rep.</p></div>
+          </article>
+          <article class="use-case">
+            <img src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=900&q=80" alt="Customer support team using AI voice automation" loading="lazy" />
+            <div class="use-body"><h3>Customer Support</h3><p>Handle repetitive support requests 24/7 with faster resolution and lower wait time.</p></div>
+          </article>
+          <article class="use-case">
+            <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=900&q=80" alt="Operations team monitoring AI workflow and analytics" loading="lazy" />
+            <div class="use-body"><h3>Ops Automation</h3><p>Run callbacks, reminders, and workflow triggers with measurable operational control.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="why" class="block reveal">
+        <div class="head">
+          <h2>Why Teams Choose Ray Voice AI</h2>
+          <p>Reliable AI call handling, simple onboarding, and scalable performance for growing teams.</p>
+        </div>
+        <div class="reasons">
+          <article class="reason"><i class="bi bi-cpu-fill"></i><h3>Fast Inference</h3><p>Low-latency response architecture optimized for live conversations.</p></article>
+          <article class="reason"><i class="bi bi-shield-check"></i><h3>Reliable Operations</h3><p>Consistent call handling with quality controls and monitoring.</p></article>
+          <article class="reason"><i class="bi bi-arrows-fullscreen"></i><h3>Built to Scale</h3><p>From startup pilots to enterprise workloads without rebuilding.</p></article>
+          <article class="reason"><i class="bi bi-grid-1x2-fill"></i><h3>Simple Interface</h3><p>Elegant workflows that keep teams productive without complexity.</p></article>
+        </div>
+      </section>
+
+      <section id="testimonials" class="block reveal">
+        <div class="head">
+          <h2>Customer Results</h2>
+          <p>What teams report after switching to Ray.</p>
+        </div>
+        <div class="testimonials">
+          <article class="quote">
+            <p>"Ray cut response delay by over 70% and doubled qualified callbacks in weeks."</p>
+            <div class="person"><img src="https://i.pravatar.cc/80?img=32" alt="Rhea Malik" loading="lazy" /><div><strong>Rhea Malik</strong><small>VP Revenue, Nexora</small></div></div>
+          </article>
+          <article class="quote">
+            <p>"It looks premium and behaves like enterprise software. Our team adopted it immediately."</p>
+            <div class="person"><img src="https://i.pravatar.cc/80?img=15" alt="Arjun Patel" loading="lazy" /><div><strong>Arjun Patel</strong><small>COO, Orion Labs</small></div></div>
+          </article>
+          <article class="quote">
+            <p>"We now run 24/7 voice support operations with reliable quality and measurable ROI."</p>
+            <div class="person"><img src="https://i.pravatar.cc/80?img=47" alt="Sana Iqbal" loading="lazy" /><div><strong>Sana Iqbal</strong><small>Head of CX, Veltrix</small></div></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="pricing" class="block reveal">
+        <div class="head">
+          <h2>Simple Voice AI Pricing</h2>
+          <p>Choose the right plan for your call volume and automation needs.</p>
+        </div>
+
+        <div class="pricing-toggle" role="tablist" aria-label="Billing mode">
+          <button class="toggle-btn active" type="button" data-mode="monthly">Monthly</button>
+          <button class="toggle-btn" type="button" data-mode="yearly">Yearly</button>
+        </div>
+
+        <div class="pricing-grid">
+          <article class="plan">
+            <h3>Starter</h3>
+            <p class="price" data-monthly="$49" data-yearly="$39">$49 <small>/mo</small></p>
+            <ul>
+              <li>Up to 2,000 AI minutes</li>
+              <li>Core analytics dashboard</li>
+              <li>Email support</li>
+            </ul>
+            <a class="btn btn-ghost" href="/signup"><i class="bi bi-check2-circle"></i>Choose Starter</a>
+          </article>
+
+          <article class="plan popular">
+            <h3>Growth</h3>
+            <p class="price" data-monthly="$149" data-yearly="$119">$149 <small>/mo</small></p>
+            <ul>
+              <li>Up to 10,000 AI minutes</li>
+              <li>Advanced workflow engine</li>
+              <li>Priority support</li>
+            </ul>
+            <a class="btn btn-start" href="/signup"><i class="bi bi-stars"></i>Start Growth</a>
+          </article>
+
+          <article class="plan">
+            <h3>Enterprise</h3>
+            <p class="price" data-monthly="Custom" data-yearly="Custom">Custom <small>contact us</small></p>
+            <ul>
+              <li>Unlimited scale</li>
+              <li>SLA + compliance controls</li>
+              <li>Dedicated success manager</li>
+            </ul>
+            <a class="btn btn-ghost" href="mailto:sales@aivoicebot4u.com"><i class="bi bi-building"></i>Contact Sales</a>
+          </article>
+        </div>
+      </section>
+
+      <section id="faq" class="block reveal">
+        <div class="head">
+          <h2>Voice AI Frequently Asked Questions</h2>
+          <p>Quick answers about AI voice calls, lead capture, CRM integration, and getting started.</p>
+        </div>
+        <div class="faq">
+          <article class="faq-item open">
+            <button class="faq-q" type="button" aria-expanded="true"><strong>Can I start a live demo right away?</strong><i class="bi bi-chevron-down"></i></button>
+            <div class="faq-a"><p>Yes. Click Start/Stop on the landing page. It asks for microphone permission and starts the model immediately without redirect.</p></div>
+          </article>
+          <article class="faq-item">
+            <button class="faq-q" type="button" aria-expanded="false"><strong>Does the platform support custom call scripts and workflows?</strong><i class="bi bi-chevron-down"></i></button>
+            <div class="faq-a"><p>Yes. You can configure scripts, branching logic, escalation conditions, and response behavior based on your business requirements.</p></div>
+          </article>
+          <article class="faq-item">
+            <button class="faq-q" type="button" aria-expanded="false"><strong>Is this suitable for enterprise and high-volume usage?</strong><i class="bi bi-chevron-down"></i></button>
+            <div class="faq-a"><p>Yes. The architecture is built for scale with robust controls, analytics visibility, and support for high call volumes.</p></div>
+          </article>
+          <article class="faq-item">
+            <button class="faq-q" type="button" aria-expanded="false"><strong>Can we integrate with our CRM and internal systems?</strong><i class="bi bi-chevron-down"></i></button>
+            <div class="faq-a"><p>Yes. Ray supports CRM integration and workflow triggers so your team can automate handoffs and updates.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="final reveal">
+        <h2>Ready To Launch Your AI Voice Assistant?</h2>
+        <p>
+          Start a live demo now and see exactly how Ray captures lead details from real conversations.
+        </p>
+        <div class="hero-ctas" style="justify-content: center">
+          <button class="btn btn-start start-demo-link" type="button"><i class="bi bi-play-circle-fill"></i>Start/Stop</button>
+          <a class="btn btn-ghost" href="/signup"><i class="bi bi-rocket-takeoff-fill"></i>Create Account</a>
+        </div>
+      </section>
+
+      <footer>
+        <div class="foot-grid">
+          <div class="foot-col"><h4>Ray</h4><a href="#why">About</a><a href="#testimonials">Customers</a></div>
+          <div class="foot-col"><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a></div>
+          <div class="foot-col"><h4>Resources</h4><a href="#demo">Demo</a><a href="#faq">FAQ</a></div>
+          <div class="foot-col"><h4>Legal</h4><a href="#">Privacy</a><a href="#">Terms</a></div>
+        </div>
+        <p class="copyright">&copy; <span id="year"></span> Ray. All rights reserved.</p>
+      </footer>
+    </main>
+
+    <script>
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("show");
+            }
+          });
+        },
+        { threshold: 0.12 }
+      );
+      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+
+      const toggleButtons = document.querySelectorAll(".toggle-btn");
+      const prices = document.querySelectorAll(".price");
+
+      function setMode(mode) {
+        toggleButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.mode === mode));
+        prices.forEach((price) => {
+          const value = mode === "yearly" ? price.dataset.yearly : price.dataset.monthly;
+          if (!value) {
+            return;
+          }
+          if (value === "Custom") {
+            price.innerHTML = "Custom <small>contact us</small>";
+          } else {
+            price.innerHTML = `${value} <small>/${mode === "yearly" ? "mo (billed yearly)" : "mo"}</small>`;
+          }
+        });
+      }
+
+      toggleButtons.forEach((btn) => {
+        btn.addEventListener("click", () => setMode(btn.dataset.mode));
+      });
+
+      document.querySelectorAll(".faq-q").forEach((button) => {
+        button.addEventListener("click", () => {
+          const item = button.closest(".faq-item");
+          const isOpen = item.classList.contains("open");
+          document.querySelectorAll(".faq-item").forEach((node) => {
+            node.classList.remove("open");
+            const trigger = node.querySelector(".faq-q");
+            if (trigger) {
+              trigger.setAttribute("aria-expanded", "false");
+            }
+          });
+          if (!isOpen) {
+            item.classList.add("open");
+            button.setAttribute("aria-expanded", "true");
+          }
+        });
+      });
+
+      const startButtons = document.querySelectorAll(".start-demo-link");
+      const heroDemoStatus = document.getElementById("heroDemoStatus");
+      const demoProjectSelect = document.getElementById("demoProjectSelect");
+      const demoNameInput = document.getElementById("demoNameInput");
+      const demoPhoneInput = document.getElementById("demoPhoneInput");
+      const demoEmailInput = document.getElementById("demoEmailInput");
+      const demoHelperText = document.getElementById("demoHelperText");
+      const demoIntake = document.getElementById("demoIntake");
+      const INPUT_RATE = 16000;
+      const OUTPUT_RATE = 24000;
+
+      let demoRunning = false;
+      let demoBusy = false;
+      let demoSessionKey = "";
+      let demoClientId = "";
+      let demoProjects = [];
+      let demoWs = null;
+      let demoMicStream = null;
+      let demoMicContext = null;
+      let demoMicSource = null;
+      let demoMicProcessor = null;
+      let demoMicSink = null;
+      let demoPlaybackContext = null;
+      let demoPlaybackCursor = 0;
+      let leadSyncTimer = null;
+      let leadLastTurnIndex = 0;
+      let leadLastUserSnippet = "";
+      let leadLastContextSignature = "";
+      let livePreviewExtractBusy = false;
+      let livePreviewExtractSignature = "";
+      let livePreviewExtractAt = 0;
+      const GUEST_VISITOR_STORAGE_KEY = "aivoicebot4u_guest_visitor_id";
+
+      function setDemoStatus(message) {
+        if (heroDemoStatus) {
+          heroDemoStatus.innerHTML = `<i class="bi bi-lightning-charge-fill"></i>${message}`;
+        }
+      }
+
+      function getGuestVisitorId() {
+        try {
+          const storage = window.sessionStorage || window.localStorage;
+          let existing = storage.getItem(GUEST_VISITOR_STORAGE_KEY);
+          if (existing && /^[a-z0-9]{12,48}$/.test(existing)) {
+            return existing;
+          }
+          const fresh = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`.replace(/[^a-z0-9]/g, "").slice(0, 32);
+          storage.setItem(GUEST_VISITOR_STORAGE_KEY, fresh);
+          return fresh;
+        } catch (error) {
+          return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`.replace(/[^a-z0-9]/g, "").slice(0, 32);
+        }
+      }
+
+      function updateStartButtons() {
+        const text = demoBusy ? "Starting..." : (demoRunning ? "Stop" : "Start");
+        startButtons.forEach((button) => {
+          button.innerHTML = `<i class="bi bi-play-circle-fill"></i>${text}`;
+          button.disabled = demoBusy;
+        });
+      }
+
+      function selectedDemoProject() {
+        return demoProjects.find((project) => project.project_id === demoProjectSelect.value) || null;
+      }
+
+      function updateDemoHelper() {
+        const project = selectedDemoProject();
+        if (!demoHelperText) {
+          return;
+        }
+        if (!project) {
+          demoHelperText.textContent = "Choose one of the available scripts to tailor the live voice demo.";
+          return;
+        }
+        const language = String(project.demo_language || "english").trim();
+        const description = String(project.description || "").trim();
+        demoHelperText.textContent = `${project.name} • ${language.charAt(0).toUpperCase()}${language.slice(1)}${description ? ` • ${description}` : ""}`;
+      }
+
+      function populateDemoProjects(projects) {
+        demoProjects = Array.isArray(projects) ? projects.filter((project) => project && project.project_id) : [];
+        demoProjectSelect.innerHTML = "";
+        if (!demoProjects.length) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "No demo scripts available";
+          demoProjectSelect.appendChild(option);
+          updateDemoHelper();
+          return;
+        }
+        demoProjects.forEach((project) => {
+          const option = document.createElement("option");
+          const language = String(project.demo_language || "english").trim();
+          option.value = project.project_id;
+          option.textContent = `${project.name} (${language})`;
+          demoProjectSelect.appendChild(option);
+        });
+        const preferred =
+          demoProjects.find((project) => project.project_id === "led_arts_marathi_demo")
+          || demoProjects.find((project) => project.project_id === "aivoicebot4u_english_demo");
+        demoProjectSelect.value = (preferred || demoProjects[0]).project_id;
+        updateDemoHelper();
+      }
+
+      async function ensureDemoWorkspace() {
+        if (demoClientId && demoSessionKey && demoProjects.length) {
+          return;
+        }
+        const visitorId = getGuestVisitorId();
+        const response = await fetch("/api/demo/options", {
+          headers: { "x-guest-visitor-id": visitorId },
+          credentials: "same-origin",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.detail || "Failed to prepare demo scripts.");
+        }
+        demoSessionKey = String(data.workspace_session_key || "").trim();
+        demoClientId = String(data.workspace_client_id || "").trim();
+        populateDemoProjects(data.projects || []);
+      }
+
+      function normalizePhoneNumber(value) {
+        return String(value || "").replace(/[^\d+]/g, "");
+      }
+
+      function focusDemoField(field) {
+        scrollToDemoIntake();
+        window.setTimeout(() => {
+          try {
+            field.focus({ preventScroll: true });
+          } catch (error) {
+            field.focus();
+          }
+        }, 120);
+      }
+
+      function buildDemoPayload() {
+        const selectedProject = demoProjectSelect.value || (demoProjects[0] ? demoProjects[0].project_id : "");
+        if (!selectedProject) {
+          throw new Error("No demo scripts are available right now. Please refresh the page.");
+        }
+        const rawName = demoNameInput.value.trim();
+        const rawPhone = normalizePhoneNumber(demoPhoneInput.value);
+        const rawEmail = demoEmailInput.value.trim().toLowerCase();
+        if (rawName.length < 2) {
+          focusDemoField(demoNameInput);
+          throw new Error("Enter your full name before starting the demo.");
+        }
+        if (!/^\+?[0-9]{7,15}$/.test(rawPhone)) {
+          focusDemoField(demoPhoneInput);
+          throw new Error("Enter a valid phone number before starting the demo.");
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+          focusDemoField(demoEmailInput);
+          throw new Error("Enter a valid email address before starting the demo.");
+        }
+        return {
+          customer_name: rawName,
+          contact_phone: rawPhone,
+          contact_email: rawEmail,
+          project_id: selectedProject,
+        };
+      }
+
+      function scrollToDemoIntake() {
+        if (!demoIntake) {
+          return;
+        }
+        demoIntake.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+
+      function wsBaseUrl() {
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const host = String(window.location.host || "").trim();
+        if (!host || host.startsWith("0.0.0.0")) {
+          return `${scheme}://127.0.0.1:8000`;
+        }
+        return `${scheme}://${host}`;
+      }
+
+      function wsCandidates() {
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const candidates = [];
+        const primary = wsBaseUrl();
+        if (primary) candidates.push(primary);
+        const fallbackA = `${scheme}://127.0.0.1:8000`;
+        const fallbackB = `${scheme}://localhost:8000`;
+        if (!candidates.includes(fallbackA)) candidates.push(fallbackA);
+        if (!candidates.includes(fallbackB)) candidates.push(fallbackB);
+        return candidates;
+      }
+
+      async function openAudioSocketWithFallback(sessionKey) {
+        let lastError = null;
+        for (const base of wsCandidates()) {
+          const url = `${base}/ws/browser-audio/${encodeURIComponent(sessionKey)}`;
+          try {
+            const socket = await new Promise((resolve, reject) => {
+              const ws = new WebSocket(url);
+              const timer = window.setTimeout(() => {
+                try {
+                  ws.close();
+                } catch (error) {}
+                reject(new Error(`Timed out connecting audio channel (${base}).`));
+              }, 10000);
+              ws.onopen = () => {
+                window.clearTimeout(timer);
+                resolve(ws);
+              };
+              ws.onerror = () => {
+                window.clearTimeout(timer);
+                try {
+                  ws.close();
+                } catch (error) {}
+                reject(new Error(`Could not connect browser audio channel (${base}).`));
+              };
+            });
+            return socket;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("Could not connect browser audio channel.");
+      }
+
+      function floatToPcm16Bytes(samples) {
+        const out = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i += 1) {
+          const s = Math.max(-1, Math.min(1, samples[i]));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return new Uint8Array(out.buffer);
+      }
+
+      function base64FromBytes(bytes) {
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 1) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+      }
+
+      function bytesFromBase64(encoded) {
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+
+      function decodePcm16ToFloat32(bytes) {
+        const sampleCount = Math.floor(bytes.length / 2);
+        const out = new Float32Array(sampleCount);
+        for (let i = 0; i < sampleCount; i += 1) {
+          const lo = bytes[i * 2];
+          const hi = bytes[i * 2 + 1];
+          let value = (hi << 8) | lo;
+          if (value >= 0x8000) {
+            value -= 0x10000;
+          }
+          out[i] = value / 0x8000;
+        }
+        return out;
+      }
+
+      async function ensurePlaybackContext() {
+        if (demoPlaybackContext) {
+          if (demoPlaybackContext.state === "suspended") {
+            await demoPlaybackContext.resume();
+          }
+          return demoPlaybackContext;
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+          throw new Error("Web Audio API is unavailable in this browser.");
+        }
+        demoPlaybackContext = new AudioCtx();
+        demoPlaybackCursor = demoPlaybackContext.currentTime;
+        return demoPlaybackContext;
+      }
+
+      async function playAudioChunk(payload, sampleRate) {
+        const context = await ensurePlaybackContext();
+        const pcm = decodePcm16ToFloat32(bytesFromBase64(payload));
+        if (!pcm.length) {
+          return;
+        }
+        const buffer = context.createBuffer(1, pcm.length, Number(sampleRate) || OUTPUT_RATE);
+        buffer.copyToChannel(pcm, 0);
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        const now = context.currentTime + 0.01;
+        const when = Math.max(now, demoPlaybackCursor);
+        source.start(when);
+        demoPlaybackCursor = when + buffer.duration;
+      }
+
+      async function stopAudioTransport() {
+        try {
+          if (demoMicProcessor) {
+            demoMicProcessor.disconnect();
+            demoMicProcessor.onaudioprocess = null;
+          }
+        } catch (error) {}
+        try {
+          if (demoMicSource) {
+            demoMicSource.disconnect();
+          }
+        } catch (error) {}
+        try {
+          if (demoMicSink) {
+            demoMicSink.disconnect();
+          }
+        } catch (error) {}
+        if (demoMicStream) {
+          demoMicStream.getTracks().forEach((track) => track.stop());
+        }
+        try {
+          if (demoMicContext) {
+            await demoMicContext.close();
+          }
+        } catch (error) {}
+        try {
+          if (demoWs && demoWs.readyState === WebSocket.OPEN) {
+            demoWs.close();
+          }
+        } catch (error) {}
+        demoWs = null;
+        demoMicStream = null;
+        demoMicContext = null;
+        demoMicSource = null;
+        demoMicProcessor = null;
+        demoMicSink = null;
+      }
+
+      async function startAudioTransport() {
+        await ensureDemoWorkspace();
+        if (!demoSessionKey || !demoClientId) {
+          throw new Error("Demo workspace details are missing.");
+        }
+
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+          throw new Error("Browser microphone API is unavailable.");
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+          throw new Error("Web Audio API is unavailable in this browser.");
+        }
+
+        demoWs = await openAudioSocketWithFallback(demoSessionKey);
+
+        demoWs.onmessage = async (event) => {
+          let message;
+          try {
+            message = JSON.parse(event.data);
+          } catch (error) {
+            return;
+          }
+          if (message?.event === "audio_chunk" && typeof message.payload === "string") {
+            try {
+              await playAudioChunk(message.payload, message.sample_rate);
+            } catch (error) {}
+          }
+          if (message?.event === "flush" && demoPlaybackContext) {
+            demoPlaybackCursor = demoPlaybackContext.currentTime + 0.01;
+          }
+        };
+
+        demoMicStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+        demoMicContext = new AudioCtx({ sampleRate: INPUT_RATE });
+        if (demoMicContext.state === "suspended") {
+          await demoMicContext.resume();
+        }
+        demoMicSource = demoMicContext.createMediaStreamSource(demoMicStream);
+        demoMicProcessor = demoMicContext.createScriptProcessor(2048, 1, 1);
+        demoMicSink = demoMicContext.createGain();
+        demoMicSink.gain.value = 0;
+        demoMicSource.connect(demoMicProcessor);
+        demoMicProcessor.connect(demoMicSink);
+        demoMicSink.connect(demoMicContext.destination);
+        demoMicProcessor.onaudioprocess = (evt) => {
+          if (!demoWs || demoWs.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          const channel = evt.inputBuffer.getChannelData(0);
+          const payload = base64FromBytes(floatToPcm16Bytes(channel));
+          demoWs.send(
+            JSON.stringify({
+              event: "audio_chunk",
+              sample_rate: demoMicContext.sampleRate || INPUT_RATE,
+              payload,
+            })
+          );
+        };
+      }
+
+      function waitMs(ms) {
+        return new Promise((resolve) => window.setTimeout(resolve, ms));
+      }
+
+      async function waitForSessionIdle(retries = 8, delayMs = 350) {
+        const key = encodeURIComponent(demoSessionKey || "dashboard");
+        for (let i = 0; i < retries; i += 1) {
+          try {
+            const snapRes = await fetch(`/api/session?session_key=${key}`, { credentials: "same-origin" });
+            if (snapRes.ok) {
+              const snap = await snapRes.json().catch(() => ({}));
+              if (!snap.running) {
+                return true;
+              }
+            }
+          } catch (error) {}
+          await waitMs(delayMs);
+        }
+        return false;
+      }
+
+      async function startDemo() {
+        demoBusy = true;
+        updateStartButtons();
+        try {
+          await ensureDemoWorkspace();
+          await stopAudioTransport();
+          stopLeadSync();
+          await fetch(`/api/session/stop?session_key=${encodeURIComponent(demoSessionKey || "dashboard")}`, {
+            method: "POST",
+            credentials: "same-origin",
+          }).catch(() => {});
+          await waitForSessionIdle();
+          const payload = buildDemoPayload();
+          const project = selectedDemoProject();
+          setDemoStatus(`Requesting microphone permission and starting ${project ? project.name : "demo"}...`);
+          await startAudioTransport();
+          resetLeadState();
+          applyLeadSeed(payload);
+          renderHeroLeadDetails();
+          const startBody = {
+            client_id: demoClientId,
+            project_id: payload.project_id,
+            customer_name: payload.customer_name,
+            contact_phone: payload.contact_phone,
+            contact_email: payload.contact_email,
+            transport: "browser",
+            session_key: demoSessionKey,
+          };
+          let startRes = null;
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            startRes = await fetch("/api/session/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify(startBody),
+            });
+            if (startRes.ok) {
+              break;
+            }
+            if (startRes.status !== 409) {
+              break;
+            }
+            await fetch(`/api/session/stop?session_key=${encodeURIComponent(demoSessionKey || "dashboard")}`, {
+              method: "POST",
+              credentials: "same-origin",
+            }).catch(() => {});
+            await waitForSessionIdle(8, 300);
+            await waitMs(350);
+          }
+          const startData = await (startRes ? startRes.json().catch(() => ({})) : Promise.resolve({}));
+          if (!startRes.ok) {
+            throw new Error(startData.detail || "Failed to start demo.");
+          }
+          demoRunning = true;
+          startLeadSync();
+          setDemoStatus(`${project ? project.name : "Demo"} is running. Click Start/Stop again to stop.`);
+        } catch (error) {
+          await stopAudioTransport();
+          demoRunning = false;
+          scrollToDemoIntake();
+          stopLeadSync();
+          setDemoStatus(error instanceof Error ? error.message : "Unable to start demo.");
+        } finally {
+          demoBusy = false;
+          updateStartButtons();
+        }
+      }
+
+      async function stopDemo() {
+        demoBusy = true;
+        updateStartButtons();
+        try {
+          await fetch(`/api/session/stop?session_key=${encodeURIComponent(demoSessionKey || "dashboard")}`, {
+            method: "POST",
+            credentials: "same-origin",
+          });
+        } catch (error) {}
+        await syncLeadFromSession();
+        await stopAudioTransport();
+        stopLeadSync();
+        demoRunning = false;
+        demoBusy = false;
+        updateStartButtons();
+        setDemoStatus("Demo stopped. Click Start/Stop to run again.");
+      }
+
+      async function toggleDemo() {
+        if (demoBusy) return;
+        if (demoRunning) {
+          await stopDemo();
+          return;
+        }
+        await startDemo();
+      }
+
+      startButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+          await toggleDemo();
+        });
+      });
+
+      demoProjectSelect.addEventListener("change", updateDemoHelper);
+
+      window.addEventListener("load", () => {
+        ensureDemoWorkspace()
+          .then(() => {
+            updateDemoHelper();
+            setDemoStatus("New here? Pick a script and click Start/Stop to run your first Ray demo call.");
+          })
+          .catch((error) => {
+            setDemoStatus(error instanceof Error ? error.message : "Unable to load guest demo scripts.");
+          });
+      });
+
+      window.addEventListener("beforeunload", () => {
+        stopAudioTransport();
+        stopLeadSync();
+      });
+
+      updateStartButtons();
+
+      const heroLeadSummary = document.getElementById("heroLeadSummary");
+      const previewFieldElements = {
+        appointment: document.getElementById("previewAppointment"),
+        budget: document.getElementById("previewBudget"),
+        callback: document.getElementById("previewCallback"),
+        deadline: document.getElementById("previewDeadline"),
+        decision: document.getElementById("previewDecision"),
+        goal: document.getElementById("previewGoal"),
+        next_steps: document.getElementById("previewNextSteps"),
+        summary: document.getElementById("previewSummary"),
+      };
+      const manualPreviewEdits = {
+        appointment: false,
+        budget: false,
+        callback: false,
+        deadline: false,
+        decision: false,
+        goal: false,
+        next_steps: false,
+        summary: false,
+      };
+      const recentUserUtterances = [];
+      const LIVE_FIELDS = ["appointment", "budget", "callback", "deadline", "decision", "goal", "next_steps", "summary"];
+      const leadState = {
+        name: null,
+        email: null,
+        phone: null,
+        date: null,
+        budget: null,
+        vehicle: null,
+        intent: null,
+        appointment: null,
+        callback: null,
+        deadline: null,
+        decision: null,
+        goal: null,
+        next_steps: null,
+        keywords: [],
+        summary: null,
+      };
+
+      function formatIsoToReadable(isoDate) {
+        if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(isoDate))) {
+          return isoDate;
+        }
+        const date = new Date(`${isoDate}T00:00:00`);
+        if (Number.isNaN(date.getTime())) {
+          return isoDate;
+        }
+        return date.toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+        });
+      }
+
+      function parseNaturalTime(text) {
+        const source = String(text || "");
+        const lower = source.toLowerCase();
+        const time12 = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+        if (time12) {
+          let hour = Number(time12[1]);
+          const minutes = time12[2] ? Number(time12[2]) : 0;
+          const suffix = String(time12[3] || "").toUpperCase();
+          if (hour >= 1 && hour <= 12 && minutes >= 0 && minutes <= 59) {
+            return `${hour}:${String(minutes).padStart(2, "0")} ${suffix}`;
+          }
+        }
+        const time24 = lower.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+        if (time24) {
+          const hour24 = Number(time24[1]);
+          const minutes = Number(time24[2]);
+          const suffix = hour24 >= 12 ? "PM" : "AM";
+          const hour12 = hour24 % 12 || 12;
+          return `${hour12}:${String(minutes).padStart(2, "0")} ${suffix}`;
+        }
+        if (/\bmorning\b/.test(lower)) return "Morning";
+        if (/\bafternoon\b/.test(lower)) return "Afternoon";
+        if (/\bevening\b/.test(lower)) return "Evening";
+        if (/\btonight\b/.test(lower)) return "Tonight";
+        return null;
+      }
+
+      function renderHeroLeadDetails() {
+        if (heroLeadSummary) {
+          heroLeadSummary.textContent = leadState.summary
+            ? "Live preview updated from conversation."
+            : "Live preview updates automatically while the call is active.";
+        }
+        Object.entries(previewFieldElements).forEach(([field, element]) => {
+          if (!element || document.activeElement === element) {
+            return;
+          }
+          const value = String(leadState[field] || "").trim();
+          element.textContent = value;
+          if (!value) {
+            element.classList.add("is-empty");
+          } else {
+            element.classList.remove("is-empty");
+          }
+        });
+      }
+
+      function pushRecentUtterance(text) {
+        const clean = String(text || "").replace(/\s+/g, " ").trim();
+        if (!clean) {
+          return;
+        }
+        recentUserUtterances.push(clean);
+        if (recentUserUtterances.length > 14) {
+          recentUserUtterances.splice(0, recentUserUtterances.length - 14);
+        }
+      }
+
+      function hasExplicitCaptureRequest(text) {
+        const lower = String(text || "").toLowerCase();
+        return /(note this down|capture this|capture details|log this|save this|mark this|remember this|extract this|add this to notes)/.test(lower);
+      }
+
+      const EXTRACTION_KEYWORD_MAP = {
+        pricing: ["price", "pricing", "cost", "quote", "plan", "budget"],
+        demo: ["demo", "trial", "walkthrough", "test"],
+        callback: ["call back", "callback", "call me", "follow up"],
+        support: ["support", "issue", "problem", "bug", "help"],
+        buying: ["buy", "purchase", "subscribe", "sign up", "upgrade"],
+      };
+      const LIVE_PREVIEW_FIELD_CONFIG = [
+        {
+          key: "appointment",
+          label: "Appointment",
+          description: "Exact meeting date/time, site visit date, or scheduled booking time.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "not_mentioned",
+          output_format: "short_text",
+        },
+        {
+          key: "budget",
+          label: "Budget",
+          description: "Any money amount, range, or stated spending limit.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "not_mentioned",
+          output_format: "currency_or_range",
+        },
+        {
+          key: "callback",
+          label: "Callback",
+          description: "Any requested follow-up date/time.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "not_mentioned",
+          output_format: "short_text",
+        },
+        {
+          key: "deadline",
+          label: "Deadline",
+          description: "Target purchase window, urgency date, or closing timeline.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "not_mentioned",
+          output_format: "short_text",
+        },
+        {
+          key: "decision",
+          label: "Decision / Commitment",
+          description: "Any buying intent, approval condition, or commitment signal.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "not_mentioned",
+          output_format: "short_text",
+        },
+        {
+          key: "goal",
+          label: "Goal",
+          description: "What the customer wants to achieve or buy.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "not_mentioned",
+          output_format: "short_text",
+        },
+        {
+          key: "next_steps",
+          label: "Next Steps",
+          description: "Follow-up actions for either side.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "not_mentioned",
+          output_format: "action_text",
+        },
+        {
+          key: "summary",
+          label: "Running Summary",
+          description: "Short live summary of the conversation.",
+          required: false,
+          allow_inference: true,
+          fallback_behavior: "best_effort",
+          output_format: "short_sentence",
+        },
+      ];
+
+      function toIsoDate(dateObj) {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const d = String(dateObj.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+
+      function parseNaturalDate(text) {
+        const lower = text.toLowerCase();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const monthNames = {
+          january: 0,
+          february: 1,
+          march: 2,
+          april: 3,
+          may: 4,
+          june: 5,
+          july: 6,
+          august: 7,
+          september: 8,
+          october: 9,
+          november: 10,
+          december: 11,
+          jan: 0,
+          feb: 1,
+          mar: 2,
+          apr: 3,
+          jun: 5,
+          jul: 6,
+          aug: 7,
+          sep: 8,
+          sept: 8,
+          oct: 9,
+          nov: 10,
+          dec: 11,
+        };
+
+        const iso = lower.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+        if (iso) {
+          return `${iso[1]}-${iso[2]}-${iso[3]}`;
+        }
+
+        const dmy = lower.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b/);
+        if (dmy) {
+          const day = Number(dmy[1]);
+          const month = Number(dmy[2]);
+          const year = Number(dmy[3]);
+          if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+            return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          }
+        }
+
+        const mdy = lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:,\s*(20\d{2}))?\b/);
+        if (mdy) {
+          const monthIndex = monthNames[mdy[1]];
+          const day = Number(mdy[2]);
+          let year = Number(mdy[3] || today.getFullYear());
+          if (monthIndex !== undefined && day >= 1 && day <= 31) {
+            const dt = new Date(year, monthIndex, day);
+            dt.setHours(0, 0, 0, 0);
+            if (!mdy[3] && dt < today) {
+              year += 1;
+            }
+            return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          }
+        }
+
+        if (/\bday after tomorrow\b/.test(lower)) {
+          const dt = new Date(today);
+          dt.setDate(dt.getDate() + 2);
+          return toIsoDate(dt);
+        }
+        if (/\btomorrow\b/.test(lower)) {
+          const dt = new Date(today);
+          dt.setDate(dt.getDate() + 1);
+          return toIsoDate(dt);
+        }
+        if (/\btoday\b/.test(lower)) {
+          return toIsoDate(today);
+        }
+
+        const nextDay = lower.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+        if (nextDay) {
+          const names = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+          const target = names.indexOf(nextDay[1]);
+          if (target >= 0) {
+            const dt = new Date(today);
+            const current = dt.getDay();
+            let delta = (target - current + 7) % 7;
+            if (delta === 0) delta = 7;
+            dt.setDate(dt.getDate() + delta);
+            return toIsoDate(dt);
+          }
+        }
+        const anyDay = lower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+        if (anyDay) {
+          const names = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+          const target = names.indexOf(anyDay[1]);
+          if (target >= 0) {
+            const dt = new Date(today);
+            const current = dt.getDay();
+            let delta = (target - current + 7) % 7;
+            if (delta === 0) delta = 7;
+            dt.setDate(dt.getDate() + delta);
+            return toIsoDate(dt);
+          }
+        }
+        return null;
+      }
+
+      function detectIntent(text) {
+        const lower = text.toLowerCase();
+        if (/(price|pricing|cost|plan|quote)/.test(lower)) return "pricing inquiry";
+        if (/(demo|trial|walkthrough)/.test(lower)) return "demo request";
+        if (/(call me|callback|call back|follow up)/.test(lower)) return "callback request";
+        if (/(support|help|issue|problem|bug)/.test(lower)) return "support request";
+        if (/(buy|purchase|subscribe|sign up)/.test(lower)) return "purchase intent";
+        const want = lower.match(/\b(i want to|i need to|looking for)\s+([^.,!?]+)/);
+        if (want && want[2]) {
+          return want[2].trim().slice(0, 70);
+        }
+        return null;
+      }
+
+      function detectKeywords(text) {
+        const lower = text.toLowerCase();
+        const found = [];
+        Object.entries(EXTRACTION_KEYWORD_MAP).forEach(([label, terms]) => {
+          if (terms.some((term) => lower.includes(term))) {
+            found.push(label);
+          }
+        });
+        return found;
+      }
+
+      function mergeExtractedFields(extracted) {
+        LIVE_FIELDS.forEach((field) => {
+          const value = extracted && extracted[field] !== undefined ? extracted[field] : null;
+          if (value === null || value === "") {
+            return;
+          }
+          if (manualPreviewEdits[field]) {
+            return;
+          }
+          leadState[field] = String(value).trim();
+        });
+      }
+
+      function buildBestEffortSummary() {
+        if (manualPreviewEdits.summary && leadState.summary) {
+          return;
+        }
+        const parts = [];
+        if (leadState.appointment) parts.push(`Appointment ${leadState.appointment}`);
+        if (leadState.budget) parts.push(`budget ${leadState.budget}`);
+        if (leadState.callback) parts.push(`callback ${leadState.callback}`);
+        if (leadState.deadline) parts.push(`deadline ${leadState.deadline}`);
+        if (leadState.goal) parts.push(`goal ${leadState.goal}`);
+        if (leadState.next_steps) parts.push(`next step ${leadState.next_steps}`);
+        if (leadState.decision) parts.push(`decision ${leadState.decision}`);
+        if (parts.length) {
+          leadState.summary = `${parts.join("; ")}.`;
+        }
+      }
+
+      function parseBudget(text) {
+        const compact = String(text || "").toLowerCase();
+        const unitMatch = compact.match(/\b(?:budget|around|up to|under|max)\s*(?:is|of|about)?\s*(\$|usd|aed|inr|rs\.?|₹)?\s*([0-9]+(?:[.,][0-9]+)?)\s*(k|m|lakh|crore)?\b/);
+        if (unitMatch) {
+          const currency = (unitMatch[1] || "").replace("rs.", "inr").replace("rs", "inr").trim().toUpperCase();
+          const amount = unitMatch[2];
+          const unit = (unitMatch[3] || "").toLowerCase();
+          const unitLabel = unit ? ` ${unit}` : "";
+          return `${currency ? `${currency} ` : ""}${amount}${unitLabel}`.trim();
+        }
+        const moneyMatch = compact.match(/(\$|usd|aed|inr|rs\.?|₹)\s*([0-9]+(?:[.,][0-9]+)?)\s*(k|m|lakh|crore)?/);
+        if (moneyMatch) {
+          const currency = (moneyMatch[1] || "").replace("rs.", "inr").replace("rs", "inr").trim().toUpperCase();
+          const amount = moneyMatch[2];
+          const unit = (moneyMatch[3] || "").toLowerCase();
+          const unitLabel = unit ? ` ${unit}` : "";
+          return `${currency ? `${currency} ` : ""}${amount}${unitLabel}`.trim();
+        }
+        return null;
+      }
+
+      function parseTimelinePhrase(text) {
+        const source = String(text || "");
+        const lower = source.toLowerCase();
+        const withinMatch = lower.match(/\b(?:within|in|over|around)\s+(?:the\s+next\s+)?(\d{1,2})(?:\s*(?:to|-)\s*(\d{1,2}))?\s+(day|days|week|weeks|month|months)\b/);
+        if (withinMatch) {
+          const start = withinMatch[1];
+          const end = withinMatch[2];
+          const unit = withinMatch[3];
+          if (end) {
+            return `within ${start} to ${end} ${unit}`;
+          }
+          return `within ${start} ${unit}`;
+        }
+        const byMatch = lower.match(/\b(?:by|before)\s+([^.,;!?]+)/);
+        if (byMatch && byMatch[1]) {
+          return `before ${byMatch[1].trim()}`;
+        }
+        return null;
+      }
+
+      function parseVehicleInterest(text) {
+        const source = String(text || "").trim();
+        const lower = source.toLowerCase();
+        const patterns = [
+          /\b(?:car|vehicle|model)\s*(?:is|for|like|called)?\s*([a-z0-9][a-z0-9\s-]{1,28})\b/i,
+          /\b(?:i want|looking for|interested in)\s+([a-z0-9][a-z0-9\s-]{1,28})\b/i,
+        ];
+        for (const pattern of patterns) {
+          const match = source.match(pattern);
+          if (match && match[1]) {
+            const value = match[1].trim().replace(/\s+/g, " ");
+            if (!/^(a|an|the|car|vehicle)$/i.test(value)) {
+              return value;
+            }
+          }
+        }
+        if (/\bsuv\b/.test(lower)) return "SUV";
+        if (/\bsedan\b/.test(lower)) return "Sedan";
+        if (/\bhatchback\b/.test(lower)) return "Hatchback";
+        return null;
+      }
+
+      function normalizePhone(raw) {
+        const clean = String(raw || "").replace(/[^\d+]/g, "");
+        if (!clean) return null;
+        if (!/^\+?[0-9]{7,15}$/.test(clean)) return null;
+        return clean;
+      }
+
+      function isLikelyName(value) {
+        const candidate = String(value || "").trim().toLowerCase();
+        if (!candidate) return false;
+        const parts = candidate.split(/\s+/).filter(Boolean);
+        if (parts.length < 1 || parts.length > 4) return false;
+        const blocked = new Set([
+          "today",
+          "tomorrow",
+          "morning",
+          "afternoon",
+          "evening",
+          "night",
+          "next",
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+          "on",
+          "at",
+          "this",
+          "week",
+          "month",
+        ]);
+        for (const part of parts) {
+          if (part.length < 2 || blocked.has(part)) return false;
+        }
+        return true;
+      }
+
+      function extractLeadFields(text) {
+        const found = {
+          name: null,
+          email: null,
+          phone: null,
+          date: null,
+          budget: null,
+          vehicle: null,
+          intent: null,
+          appointment: null,
+          callback: null,
+          deadline: null,
+          decision: null,
+          goal: null,
+          next_steps: null,
+          keywords: [],
+          summary: null,
+        };
+
+        const namePatterns = [
+          /\bmy name is\s+([a-z][a-z\s'-]{1,60})/i,
+          /\bi am\s+([a-z][a-z\s'-]{1,60})/i,
+          /\bthis is\s+([a-z][a-z\s'-]{1,60})/i,
+          /\bcall me\s+([a-z][a-z\s'-]{1,60})/i,
+        ];
+        for (const pattern of namePatterns) {
+          const match = text.match(pattern);
+          if (match && match[1]) {
+            const candidateName = match[1].trim().replace(/\s+/g, " ");
+            if (isLikelyName(candidateName)) {
+              found.name = candidateName;
+              break;
+            }
+          }
+        }
+
+        const emailMatch = text.match(/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b/);
+        if (emailMatch) {
+          found.email = emailMatch[0].toLowerCase();
+        }
+
+        const phoneMatch = text.match(/(?:\+?\d[\d\s().-]{6,}\d)/);
+        if (phoneMatch) {
+          found.phone = normalizePhone(phoneMatch[0]);
+        }
+
+        found.date = parseNaturalDate(text);
+        found.budget = parseBudget(text);
+        found.vehicle = parseVehicleInterest(text);
+        found.intent = detectIntent(text);
+        found.keywords = detectKeywords(text);
+        const timeline = parseTimelinePhrase(text);
+        const timeText = parseNaturalTime(text);
+        const readableDate = found.date ? formatIsoToReadable(found.date) : null;
+        const dateTimeValue = readableDate && timeText ? `${readableDate}, ${timeText}` : (readableDate || timeText);
+
+        const lower = String(text || "").toLowerCase();
+        if (/(schedule|scheduled|book|appointment|meeting|demo|visit|site visit|property visit)\b/.test(lower) && dateTimeValue) {
+          found.appointment = dateTimeValue;
+        }
+        if (/(call back|callback|follow up|follow-up|call me back)/.test(lower) && dateTimeValue) {
+          found.callback = dateTimeValue;
+        }
+        if (/\b(deadline|by|before|due)\b/.test(lower) && dateTimeValue) {
+          found.deadline = dateTimeValue;
+        }
+        if (/(call back|callback|follow up|follow-up|call me back)/.test(lower) && timeline && !found.callback) {
+          found.callback = timeline;
+        }
+        if (/(deadline|target|close|finalize|purchase|buy|decide|decision|urgent|within)\b/.test(lower) && timeline && !found.deadline) {
+          found.deadline = timeline;
+        }
+        if (/(visit|site visit|meeting|appointment|demo|book|schedule)\b/.test(lower) && timeline && !found.appointment) {
+          found.appointment = timeline;
+        }
+
+        const goalMatch = text.match(/\b(?:we want to|we need to|our goal is to|main goal is to|mainly want to)\s+([^.!?]+)/i);
+        if (goalMatch && goalMatch[1]) {
+          found.goal = goalMatch[1].trim();
+        }
+        const purchaseGoalMatch = text.match(/\b(?:interested in|looking to|looking for|want to)\s+(?:purchase|buy|get|own)\s+([^.!?]+)/i);
+        if (!found.goal && purchaseGoalMatch && purchaseGoalMatch[1]) {
+          found.goal = `Purchase ${purchaseGoalMatch[1].trim()}`;
+        }
+        if (!found.goal && /(improve|increase|reduce|optimize)\b/.test(lower)) {
+          const improvement = text.match(/\b(?:want to|need to|looking to)\s+(improve|increase|reduce|optimize)\s+([^.!?]+)/i);
+          if (improvement && improvement[1] && improvement[2]) {
+            found.goal = `${improvement[1]} ${improvement[2].trim()}`;
+          }
+        }
+
+        const decisionMatch = text.match(/\b(?:we decided to|we will|we'll|i will|i'll|let's)\s+([^.!?]+)/i);
+        if (decisionMatch && decisionMatch[1]) {
+          found.decision = decisionMatch[1].trim();
+        }
+        const involveDecision = text.match(/\b(?:involve|including|with)\s+(?:my|our|the)?\s*(wife|husband|partner|family|team|manager|co-founder|cofounder)\b/i);
+        if (!found.decision && involveDecision && involveDecision[1]) {
+          found.decision = `${involveDecision[1].charAt(0).toUpperCase()}${involveDecision[1].slice(1)} will be involved in final decision`;
+        }
+        const conditionalDecision = text.match(/\bif\s+([^.!?]+?)\s*,?\s*(?:we|i)\s+will\s+([^.!?]+)/i);
+        if (!found.decision && conditionalDecision && conditionalDecision[1] && conditionalDecision[2]) {
+          found.decision = `Will ${conditionalDecision[2].trim()} if ${conditionalDecision[1].trim()}`;
+        }
+
+        const stepMatch = text.match(/\b(?:next step|next steps|action item|please|send|share|follow up on|follow-up on)\s*[:\-]?\s*([^.!?]+)/i);
+        if (stepMatch && stepMatch[1]) {
+          found.next_steps = stepMatch[1].trim();
+        }
+        if (!found.next_steps) {
+          const sendStep = text.match(/\b(send|share|confirm|schedule|arrange)\s+([^.!?]+)/i);
+          if (sendStep && sendStep[1] && sendStep[2]) {
+            found.next_steps = `${sendStep[1]} ${sendStep[2].trim()}`;
+          }
+        }
+
+        if (!found.appointment && dateTimeValue) {
+          found.appointment = dateTimeValue;
+        }
+        if (!found.appointment && timeline && /(visit|meeting|appointment|book|schedule|demo|property)/.test(lower)) {
+          found.appointment = timeline;
+        }
+        if (!found.next_steps) {
+          const inferStep = text.match(/\b(?:next|then|after that)\s+([^.!?]+)/i);
+          if (inferStep && inferStep[1]) {
+            found.next_steps = inferStep[1].trim();
+          }
+        }
+        if (!found.next_steps && found.goal && /(property|bungalow|home|house|real estate)/.test(lower)) {
+          found.next_steps = "Share suitable property options and schedule a visit";
+        }
+        if (!found.deadline && timeline && /(month|months|week|weeks|day|days)/.test(timeline)) {
+          found.deadline = timeline;
+        }
+
+        const compact = text.replace(/\s+/g, " ").trim();
+        if (compact) {
+          found.summary = compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
+        }
+        return found;
+      }
+
+      function isMeaningfulResponse(text) {
+        const compact = text.replace(/\s+/g, " ").trim();
+        if (compact.length < 6) return false;
+        try {
+          if (/\p{L}/u.test(compact) && compact.length >= 8) return true;
+        } catch (error) {
+          if (/[a-zA-Z]/.test(compact) && compact.length >= 8) return true;
+        }
+        if (/\d/.test(compact)) return true;
+        if (/@/.test(compact)) return true;
+        return false;
+      }
+
+      function resetLeadState() {
+        leadState.name = null;
+        leadState.email = null;
+        leadState.phone = null;
+        leadState.date = null;
+        leadState.budget = null;
+        leadState.vehicle = null;
+        leadState.intent = null;
+        leadState.appointment = null;
+        leadState.callback = null;
+        leadState.deadline = null;
+        leadState.decision = null;
+        leadState.goal = null;
+        leadState.next_steps = null;
+        leadState.keywords = [];
+        leadState.summary = null;
+        recentUserUtterances.length = 0;
+        leadLastUserSnippet = "";
+        leadLastContextSignature = "";
+        Object.keys(manualPreviewEdits).forEach((field) => {
+          manualPreviewEdits[field] = false;
+        });
+        renderHeroLeadDetails();
+        leadLastTurnIndex = 0;
+      }
+
+      function applyLeadSeed(payload) {
+        if (!payload || typeof payload !== "object") {
+          return;
+        }
+        const seededName = String(payload.customer_name || "").trim();
+        const seededEmail = String(payload.contact_email || "").trim().toLowerCase();
+        const seededPhone = normalizePhone(payload.contact_phone || "");
+        if (seededName) {
+          leadState.name = seededName;
+        }
+        if (seededEmail) {
+          leadState.email = seededEmail;
+        }
+        if (seededPhone) {
+          leadState.phone = seededPhone;
+        }
+      }
+
+      function processLeadText(response, contextTurns = []) {
+        if (!isMeaningfulResponse(response)) {
+          return;
+        }
+        pushRecentUtterance(response);
+        const extracted = extractLeadFields(response);
+        const captureRequested = hasExplicitCaptureRequest(response);
+        mergeExtractedFields(extracted);
+        if (Array.isArray(extracted.keywords) && extracted.keywords.length) {
+          leadState.keywords = Array.from(new Set([...(leadState.keywords || []), ...extracted.keywords]));
+        }
+        if (captureRequested) {
+          const allContext = [...recentUserUtterances, ...(Array.isArray(contextTurns) ? contextTurns : [])]
+            .map((item) => String(item || "").replace(/\s+/g, " ").trim())
+            .filter(Boolean)
+            .slice(-10)
+            .join(". ");
+          if (allContext) {
+            const forcedExtract = extractLeadFields(allContext);
+            mergeExtractedFields(forcedExtract);
+            if (Array.isArray(forcedExtract.keywords) && forcedExtract.keywords.length) {
+              leadState.keywords = Array.from(new Set([...(leadState.keywords || []), ...forcedExtract.keywords]));
+            }
+          }
+        }
+        buildBestEffortSummary();
+        renderHeroLeadDetails();
+      }
+
+      function isCustomerLikeSpeaker(turn) {
+        const speaker = String((turn && turn.speaker) || "").trim().toLowerCase();
+        return ["user", "customer", "caller", "client", "lead", "prospect", "human"].includes(speaker);
+      }
+
+      function applyContextExtraction(userTurns) {
+        if (!Array.isArray(userTurns) || !userTurns.length) {
+          return;
+        }
+        const windowTurns = userTurns.slice(-10).map((text) => String(text || "").trim()).filter(Boolean);
+        const signature = windowTurns.join("|");
+        if (!signature || signature === leadLastContextSignature) {
+          return;
+        }
+        leadLastContextSignature = signature;
+        const contextText = windowTurns.join(". ");
+        const contextual = extractLeadFields(contextText);
+        mergeExtractedFields(contextual);
+        if (Array.isArray(contextual.keywords) && contextual.keywords.length) {
+          leadState.keywords = Array.from(new Set([...(leadState.keywords || []), ...contextual.keywords]));
+        }
+        buildBestEffortSummary();
+      }
+
+      function applyMappedLivePreview(mappingResult) {
+        if (!mappingResult || typeof mappingResult !== "object") {
+          return;
+        }
+        const fields = mappingResult.fields && typeof mappingResult.fields === "object" ? mappingResult.fields : {};
+        LIVE_FIELDS.forEach((fieldKey) => {
+          if (manualPreviewEdits[fieldKey]) {
+            return;
+          }
+          const entry = fields[fieldKey];
+          if (!entry || typeof entry !== "object") {
+            return;
+          }
+          const status = String(entry.status || "").trim().toLowerCase();
+          const value = String(entry.value || "").trim();
+          if (status === "not_mentioned") {
+            if (!leadState[fieldKey]) {
+              leadState[fieldKey] = null;
+            }
+            return;
+          }
+          if (value) {
+            leadState[fieldKey] = value;
+          }
+        });
+        const runningSummary = String(mappingResult.running_summary || "").trim();
+        if (!manualPreviewEdits.summary && runningSummary && runningSummary.toLowerCase() !== "not mentioned yet") {
+          leadState.summary = runningSummary;
+        }
+      }
+
+      async function extractLivePreviewWithPipeline(turns, latestUserSnippet) {
+        if (livePreviewExtractBusy) {
+          return;
+        }
+        const customerTurns = (Array.isArray(turns) ? turns : [])
+          .filter((turn) => turn && isCustomerLikeSpeaker(turn))
+          .map((turn) => ({
+            speaker: String(turn.speaker || "user").toLowerCase(),
+            text: String(turn.text || "").trim(),
+          }))
+          .filter((turn) => turn.text)
+          .slice(-14);
+        const signature = `${customerTurns.map((turn) => `${turn.speaker}:${turn.text}`).join("|")}|${String(latestUserSnippet || "").trim()}`;
+        const now = Date.now();
+        if (!signature || (signature === livePreviewExtractSignature && now - livePreviewExtractAt < 1400)) {
+          return;
+        }
+        livePreviewExtractBusy = true;
+        livePreviewExtractSignature = signature;
+        livePreviewExtractAt = now;
+        try {
+          const response = await fetch("/api/live-preview/extract", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({
+              session_key: demoSessionKey || null,
+              turns: customerTurns,
+              field_config: LIVE_PREVIEW_FIELD_CONFIG,
+            }),
+          });
+          if (!response.ok) {
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          const mapping = data && typeof data === "object" ? data.mapping : null;
+          applyMappedLivePreview(mapping);
+          renderHeroLeadDetails();
+        } catch (error) {
+        } finally {
+          livePreviewExtractBusy = false;
+        }
+      }
+
+      async function syncLeadFromSession() {
+        try {
+          const key = encodeURIComponent(demoSessionKey || "dashboard");
+          const response = await fetch(`/api/session?session_key=${key}`, { credentials: "same-origin" });
+          if (!response.ok) {
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          const latestUserSnippet = String(data.latest_user_text || "").trim();
+          if (latestUserSnippet && latestUserSnippet !== leadLastUserSnippet) {
+            processLeadText(latestUserSnippet, recentUserUtterances.slice(-6));
+            leadLastUserSnippet = latestUserSnippet;
+          }
+          const snapshotName = String(data.customer_name || "").trim();
+          if (snapshotName && !leadState.name) {
+            leadState.name = snapshotName;
+          }
+          const intents = Array.isArray(data.latest_user_intents) ? data.latest_user_intents : [];
+          if (!leadState.intent && intents.length) {
+            leadState.intent = String(intents[0] || "").replace(/_/g, " ").trim() || null;
+          }
+          if (Array.isArray(intents) && intents.length) {
+            leadState.keywords = Array.from(new Set([...(leadState.keywords || []), ...intents.map((v) => String(v || "").trim()).filter(Boolean)]));
+          }
+          const finalSummary =
+            data.summary && typeof data.summary === "object" ? String(data.summary.summary || "").trim() : "";
+          const summaryContact =
+            data.summary && typeof data.summary === "object" && data.summary.contact_details && typeof data.summary.contact_details === "object"
+              ? data.summary.contact_details
+              : null;
+          if (summaryContact) {
+            const summaryPhone = normalizePhone(summaryContact.phone || summaryContact.contact_phone || "");
+            const summaryEmail = String(summaryContact.email || summaryContact.contact_email || "").trim().toLowerCase();
+            if (!leadState.phone && summaryPhone) {
+              leadState.phone = summaryPhone;
+            }
+            if (!leadState.email && summaryEmail) {
+              leadState.email = summaryEmail;
+            }
+          }
+          if (finalSummary) {
+            leadState.summary = finalSummary;
+          }
+          const turns = Array.isArray(data.turns) ? data.turns : [];
+          if (leadLastTurnIndex > turns.length) {
+            leadLastTurnIndex = 0;
+          }
+          const allCustomerTurns = turns
+            .filter((turn) => turn && isCustomerLikeSpeaker(turn))
+            .map((turn) => String(turn.text || "").trim())
+            .filter(Boolean);
+          applyContextExtraction(allCustomerTurns);
+          for (let idx = leadLastTurnIndex; idx < turns.length; idx += 1) {
+            const turn = turns[idx];
+            if (!turn || !isCustomerLikeSpeaker(turn)) {
+              continue;
+            }
+            const contextTurns = turns
+              .slice(Math.max(0, idx - 6), idx + 1)
+              .filter((item) => item && isCustomerLikeSpeaker(item))
+              .map((item) => String(item.text || "").trim())
+              .filter(Boolean);
+            processLeadText(String(turn.text || "").trim(), contextTurns);
+          }
+          if (!finalSummary) {
+            if (allCustomerTurns.length) {
+              const stitched = allCustomerTurns.slice(-3).join(" | ");
+              leadState.summary = stitched.length > 180 ? `${stitched.slice(0, 177)}...` : stitched;
+            }
+          }
+          await extractLivePreviewWithPipeline(turns, latestUserSnippet);
+          leadLastTurnIndex = turns.length;
+          renderHeroLeadDetails();
+        } catch (error) {}
+      }
+
+      function startLeadSync() {
+        if (leadSyncTimer) {
+          return;
+        }
+        syncLeadFromSession();
+        leadSyncTimer = window.setInterval(syncLeadFromSession, 1200);
+      }
+
+      function stopLeadSync() {
+        if (!leadSyncTimer) {
+          return;
+        }
+        window.clearInterval(leadSyncTimer);
+        leadSyncTimer = null;
+      }
+      Object.entries(previewFieldElements).forEach(([field, element]) => {
+        if (!element) {
+          return;
+        }
+        element.addEventListener("input", () => {
+          const value = String(element.textContent || "").trim();
+          manualPreviewEdits[field] = true;
+          leadState[field] = value || null;
+          if (!value) {
+            element.classList.add("is-empty");
+          } else {
+            element.classList.remove("is-empty");
+          }
+        });
+      });
+      resetLeadState();
+
+      document.getElementById("year").textContent = String(new Date().getFullYear());
+    </script>
+  </body>
+</html>

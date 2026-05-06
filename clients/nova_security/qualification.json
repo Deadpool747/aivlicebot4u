@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "role_fit": "Does the contact influence cloud security or compliance tooling decisions?",
+    "environment_complexity": "Do they manage multiple cloud accounts, teams, or compliance requirements?",
+    "pain_urgency": "Do they mention alert fatigue, visibility gaps, audit pressure, or limited analyst time?",
+    "timeline": "Is there an active initiative, audit window, or tooling review timeline?"
+  }
+}

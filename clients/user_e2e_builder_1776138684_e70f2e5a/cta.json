@@ -1,0 +1,9 @@
+{
+  "primary_cta": "Confirm the next business step with the customer",
+  "fallback_cta": "Capture contact details and the key requirement for follow-up",
+  "success_criteria": [
+    "The user's core need is captured",
+    "A follow-up path is identified",
+    "Important business or service details are recorded"
+  ]
+}

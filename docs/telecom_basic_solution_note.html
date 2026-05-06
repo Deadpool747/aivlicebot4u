@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Telecom Basic Solution Note</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; margin: 36px; line-height: 1.45; color: #111; }
+    h1, h2, h3, h4 { margin-top: 1.0em; margin-bottom: 0.4em; }
+    p { margin: 0.4em 0; }
+    ul, ol { margin: 0.3em 0 0.6em 1.2em; }
+    code { font-family: Menlo, Consolas, monospace; font-size: 0.9em; }
+    pre { background: #f6f8fa; border: 1px solid #e5e7eb; padding: 10px; overflow-x: auto; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 1.2em 0; }
+  </style>
+</head>
+<body>
+<h1>Basic Voice Agent Document for Telecom Partner</h1>
+<h2>1. Purpose</h2>
+<p>This document provides a very basic overview of the proposed voice agent setup and a sample conversational flow for telecom integration discussions.</p>
+<h2>2. Project Objective</h2>
+<ul>
+<li>Enable inbound and outbound call handling through telecom APIs.</li>
+<li>Use an AI voice agent to greet callers, collect key details, and route or close calls.</li>
+<li>Keep call handling simple, reliable, and easy to scale.</li>
+</ul>
+<h2>3. Basic Scope</h2>
+<ul>
+<li>Telecom platform provides phone numbers, call routing, and webhooks.</li>
+<li>Voice agent handles conversation in real time.</li>
+<li>Backend service stores call logs and lead details.</li>
+</ul>
+<h2>4. High-Level Integration (Simple)</h2>
+<ol>
+<li>Customer calls telecom number.</li>
+<li>Telecom provider sends webhook to our voice agent backend.</li>
+<li>Voice agent starts conversation and gathers required information.</li>
+<li>Backend stores call summary and outcome.</li>
+<li>If needed, call is transferred to a human agent.</li>
+</ol>
+<h2>5. Basic Conversational Flow (Sample)</h2>
+<h3>5.1 Main Call Flow</h3>
+<ol>
+<li><strong>Greeting</strong>: "Hello, thank you for calling. How may I help you today?"</li>
+<li><strong>Intent Capture</strong>: Agent identifies reason for call (new inquiry, support, follow-up).</li>
+<li><strong>Information Collection</strong>: Agent asks for name, phone number, and key requirement.</li>
+<li><strong>Qualification / Clarification</strong>: Agent confirms details and urgency.</li>
+<li><strong>Action Step</strong>:<br />
+- If request is simple: provide answer and confirm resolution.<br />
+- If request needs human support: transfer to available representative.</li>
+<li><strong>Closure</strong>: "Thank you. We have recorded your request. Have a great day."</li>
+</ol>
+<h3>5.2 Fallback Handling</h3>
+<ul>
+<li>If user is silent: prompt again up to 2 times.</li>
+<li>If speech is unclear: ask for repeat once in simpler wording.</li>
+<li>If transfer fails: collect callback time and create follow-up ticket.</li>
+</ul>
+<h2>6. Simple Flow Diagram</h2>
+<pre><code class="language-mermaid">flowchart TD
+    A[Incoming Call] --&gt; B[Greeting]
+    B --&gt; C[Capture Intent]
+    C --&gt; D[Collect Details]
+    D --&gt; E{Can Resolve Directly?}
+    E --&gt;|Yes| F[Provide Response]
+    E --&gt;|No| G[Transfer to Human Agent]
+    F --&gt; H[Close Call + Save Summary]
+    G --&gt; H
+</code></pre>
+<h2>7. Data Captured Per Call (Basic)</h2>
+<ul>
+<li>Caller number</li>
+<li>Caller name (if shared)</li>
+<li>Intent/category</li>
+<li>Key notes/requirements</li>
+<li>Call outcome (resolved/transferred/callback)</li>
+<li>Timestamp and duration</li>
+</ul>
+<h2>8. Expected Next Step with Telecom Partner</h2>
+<ul>
+<li>Confirm supported webhook format and event payload.</li>
+<li>Confirm transfer mechanism (SIP/PSTN/agent queue).</li>
+<li>Run a pilot with 1 number and test scenarios.</li>
+</ul>
+<h2>9. Ganpati Hospital Basic Flow with Dialogues</h2>
+<h3>9.1 Use Case</h3>
+<ul>
+<li>Outbound follow-up call for heart checkup enquiries.</li>
+<li>Brand name used on call: Ganpati Superspeciality Hospital.</li>
+</ul>
+<h3>9.2 Basic Conversational Flow (Ganpati)</h3>
+<ol>
+<li>Agent introduces hospital and confirms caller identity.</li>
+<li>Agent mentions heart checkup enquiry follow-up.</li>
+<li>Agent checks interest in booking.</li>
+<li>Agent collects preferred visit day/time and callback number.</li>
+<li>Agent confirms next action:<br />
+- If day/time confirmed: mark as booked request and share WhatsApp follow-up.<br />
+- If undecided: note enquiry and schedule callback.<br />
+- If emergency symptoms: stop routine flow and advise immediate emergency help.</li>
+</ol>
+<h3>9.3 Sample Dialogues</h3>
+<h4>A) Opening + Identity Check</h4>
+<ul>
+<li>Agent: "Hello, this is Roshni from Ganpati Superspeciality Hospital. Am I speaking with [Customer Name]?"</li>
+<li>Customer: "Yes."</li>
+<li>Agent: "Thank you. You had shown interest in our heart checkup service, so I am calling to assist with booking."</li>
+</ul>
+<h4>B) Interest Check + Qualification</h4>
+<ul>
+<li>Agent: "Would you like to schedule your heart checkup?"</li>
+<li>Customer: "Yes, maybe this week."</li>
+<li>Agent: "Sure. Which day is convenient for you, and what is your preferred time slot?"</li>
+</ul>
+<h4>C) Booking Confirmation Path</h4>
+<ul>
+<li>Customer: "Tomorrow morning."</li>
+<li>Agent: "Noted. I have recorded your request for tomorrow morning. Our hospital team will confirm the exact slot shortly."</li>
+<li>Agent: "I will also share the hospital address and pre-checkup instructions on WhatsApp."</li>
+</ul>
+<h4>D) Not Ready / Callback Path</h4>
+<ul>
+<li>Customer: "I need to decide later."</li>
+<li>Agent: "No problem. I will mark this enquiry for callback. Please share a suitable time for our team to call you again."</li>
+<li>Customer: "Call me in the evening."</li>
+<li>Agent: "Perfect, we will arrange a callback in the evening."</li>
+</ul>
+<h4>E) Pricing/Doctor Detail Query Path</h4>
+<ul>
+<li>Customer: "What is the exact fee and doctor timing?"</li>
+<li>Agent: "To avoid sharing incorrect information, our front desk will confirm current consultation charges and doctor availability on callback."</li>
+</ul>
+<h4>F) Emergency Symptom Path</h4>
+<ul>
+<li>Customer: "There is chest pain right now."</li>
+<li>Agent: "This may be urgent. Please contact emergency services or reach the nearest hospital immediately. We can continue routine booking later."</li>
+</ul>
+<h4>G) Closing</h4>
+<ul>
+<li>Agent: "Thank you for your time. Your request has been recorded with Ganpati Hospital. Have a good day."</li>
+</ul>
+<hr />
+<p>Prepared for telecom discussion (basic draft). This can be expanded into a full technical design after initial alignment.</p>
+</body>
+</html>

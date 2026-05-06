@@ -1,0 +1,22 @@
+[
+  {
+    "project_id": "sunrise_dental_appointment_booking_inbound",
+    "name": "Sunrise Dental Agent",
+    "project_type": "appointment_booking",
+    "status": "active",
+    "description": "Book inbound appointments and answer FAQs",
+    "prompt_instruction": "Run this workflow for Sunrise Dental. Business type: Dental clinic. Goal: Book inbound appointments and answer FAQs. Direction: inbound. Focus areas: dental consultation, root canal, teeth cleaning. Keep the conversation natural, short, and action-oriented.",
+    "runtime": {
+      "gemini_api_key": null,
+      "gemini_api_key_env": null,
+      "live_model": null,
+      "structured_model": null,
+      "tts_model": null,
+      "outreach_mode": "call_only",
+      "outbound_call_provider": null,
+      "whatsapp_consent_message": null,
+      "whatsapp_chat_opening_message": null
+    },
+    "intent_overrides": {}
+  }
+]

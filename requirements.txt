@@ -1,0 +1,14 @@
+google-genai>=1.16.0
+PyAudio>=0.2.14
+python-dotenv>=1.0.1
+python-multipart>=0.0.9
+pydantic>=2.8.2
+rich>=13.7.1
+fastapi>=0.115.0
+uvicorn>=0.32.0
+PyMySQL>=1.1.1
+openpyxl>=3.1.5
+redis>=5.0.0
+aiortc>=1.14.0
+faster-whisper>=1.0.3
+SpeechRecognition>=3.16.0

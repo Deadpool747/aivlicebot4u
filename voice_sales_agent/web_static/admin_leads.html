@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Guest Demo Leads | Admin</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --surface: rgba(255, 252, 246, 0.9);
+        --surface-strong: #fffdfa;
+        --line: rgba(55, 65, 81, 0.12);
+        --ink: #18212a;
+        --muted: #5f6b75;
+        --accent: #b45309;
+        --accent-2: #0f766e;
+        --good: #166534;
+        --warn: #92400e;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Manrope", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(180, 83, 9, 0.14), transparent 23%),
+          radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.12), transparent 22%),
+          linear-gradient(145deg, #faf4eb 0%, #ece3d3 100%);
+      }
+
+      main {
+        max-width: 1380px;
+        margin: 0 auto;
+        padding: 24px 18px 44px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero,
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        background: var(--surface);
+        box-shadow: 0 20px 60px rgba(58, 45, 27, 0.08);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero {
+        padding: 24px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero-top,
+      .toolbar,
+      .table-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .hero-copy {
+        display: grid;
+        gap: 8px;
+        max-width: 820px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        width: fit-content;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(180, 83, 9, 0.12);
+        color: var(--accent);
+      }
+
+      h1, h2 {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+      }
+
+      p { margin: 0; }
+
+      .muted {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .actions,
+      .stats {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .stat {
+        min-width: 160px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .stat span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .panel {
+        padding: 18px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: minmax(260px, 1.6fr) repeat(2, minmax(180px, 0.7fr)) auto;
+        gap: 12px;
+      }
+
+      input,
+      select,
+      button {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        padding: 12px 14px;
+        font: inherit;
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.88);
+      }
+
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: rgba(15, 118, 110, 0.4);
+        box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.1);
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 800;
+      }
+
+      .primary {
+        color: white;
+        background: linear-gradient(135deg, var(--accent), #ea580c);
+        border: 0;
+      }
+
+      .secondary {
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .ghost {
+        background: transparent;
+      }
+
+      .table-wrap {
+        overflow: auto;
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: var(--surface-strong);
+      }
+
+      table {
+        width: 100%;
+        min-width: 1180px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 14px 14px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+        text-align: left;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        background: #fff8ef;
+        z-index: 1;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      td small,
+      .tiny {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        background: rgba(15, 118, 110, 0.1);
+        color: var(--accent-2);
+      }
+
+      .chip.warn {
+        background: rgba(180, 83, 9, 0.12);
+        color: var(--warn);
+      }
+
+      .chip.good {
+        background: rgba(22, 101, 52, 0.12);
+        color: var(--good);
+      }
+
+      .qa-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .qa-list span {
+        display: block;
+        padding: 9px 10px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.04);
+      }
+
+      .empty,
+      .error {
+        padding: 16px;
+        border-radius: 18px;
+        border: 1px dashed var(--line);
+      }
+
+      .error {
+        color: #991b1b;
+        background: rgba(254, 242, 242, 0.75);
+      }
+
+      @media (max-width: 980px) {
+        .filters {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="stack">
+        <section class="hero">
+          <div class="hero-top">
+            <div class="hero-copy">
+              <span class="eyebrow">Admin Only</span>
+              <h1>Guest Demo Leads Dashboard</h1>
+              <p class="muted">Review who tested the bot, what they asked, which script they selected, and export the full lead list to Excel whenever you need an offline sheet.</p>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="refreshBtn" type="button">Refresh</button>
+              <button class="primary" id="downloadBtn" type="button">Download Excel</button>
+              <button class="ghost" id="logoutBtn" type="button">Logout</button>
+            </div>
+          </div>
+          <div class="stats" id="statsRow"></div>
+        </section>
+
+        <section class="panel">
+          <div class="toolbar">
+            <div>
+              <h2>Lead Filters</h2>
+              <p class="muted">Search by name, email, phone, project, testing summary, or end-user questions.</p>
+            </div>
+            <p class="tiny" id="resultMeta">Loading leads...</p>
+          </div>
+          <div class="filters">
+            <input id="searchInput" type="search" placeholder="Search name, phone, email, summary..." />
+            <select id="projectFilter">
+              <option value="">All scripts</option>
+            </select>
+            <select id="statusFilter">
+              <option value="">All statuses</option>
+              <option value="submitted">Submitted</option>
+              <option value="completed">Completed</option>
+            </select>
+            <button class="secondary" id="applyBtn" type="button">Apply Filters</button>
+          </div>
+          <div id="messageSlot"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lead</th>
+                  <th>Script</th>
+                  <th>Status</th>
+                  <th>Testing Summary</th>
+                  <th>User Questions Asked</th>
+                  <th>Session</th>
+                </tr>
+              </thead>
+              <tbody id="leadRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const statsRow = document.getElementById("statsRow");
+      const resultMeta = document.getElementById("resultMeta");
+      const messageSlot = document.getElementById("messageSlot");
+      const leadRows = document.getElementById("leadRows");
+      const searchInput = document.getElementById("searchInput");
+      const projectFilter = document.getElementById("projectFilter");
+      const statusFilter = document.getElementById("statusFilter");
+      const applyBtn = document.getElementById("applyBtn");
+      const refreshBtn = document.getElementById("refreshBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+      const logoutBtn = document.getElementById("logoutBtn");
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function buildParams() {
+        const params = new URLSearchParams();
+        const search = searchInput.value.trim();
+        const projectId = projectFilter.value.trim();
+        const status = statusFilter.value.trim();
+        if (search) params.set("search", search);
+        if (projectId) params.set("project_id", projectId);
+        if (status) params.set("status", status);
+        params.set("limit", "200");
+        return params;
+      }
+
+      async function ensureAdmin() {
+        const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.user || data.user.is_admin !== "1") {
+          window.location.href = "/admin/login";
+          throw new Error("Admin access required.");
+        }
+      }
+
+      function renderStats(items) {
+        const total = items.length;
+        const completed = items.filter((item) => item.status === "completed").length;
+        const sent = items.filter((item) => item.notification_status === "sent").length;
+        const withSummary = items.filter((item) => item.testing_summary).length;
+        statsRow.innerHTML = `
+          <div class="stat"><strong>${total}</strong><span>Visible leads</span></div>
+          <div class="stat"><strong>${completed}</strong><span>Completed sessions</span></div>
+          <div class="stat"><strong>${sent}</strong><span>Form notifications sent</span></div>
+          <div class="stat"><strong>${withSummary}</strong><span>Leads with summary</span></div>
+        `;
+      }
+
+      function notificationChip(status) {
+        const tone = status === "sent" ? "good" : status === "failed" ? "warn" : "";
+        return `<span class="chip ${tone}">${escapeHtml(status || "pending")}</span>`;
+      }
+
+      function statusChip(status) {
+        const tone = status === "completed" ? "good" : "warn";
+        return `<span class="chip ${tone}">${escapeHtml(status || "submitted")}</span>`;
+      }
+
+      function renderRows(items) {
+        if (!items.length) {
+          leadRows.innerHTML = `<tr><td colspan="6"><div class="empty">No leads found for the current filters.</div></td></tr>`;
+          return;
+        }
+        leadRows.innerHTML = items.map((item) => {
+          const questions = Array.isArray(item.asked_questions) ? item.asked_questions.filter(Boolean) : [];
+          return `
+            <tr>
+              <td>
+                <strong>${escapeHtml(item.full_name)}</strong><br />
+                <small>${escapeHtml(item.phone)}<br />${escapeHtml(item.email)}</small><br />
+                <small>${escapeHtml(item.created_at)}</small>
+              </td>
+              <td>
+                <strong>${escapeHtml(item.project_name || item.project_id || "Guest Demo")}</strong><br />
+                <span class="tiny">${escapeHtml(item.source || "")}</span>
+              </td>
+              <td>
+                ${statusChip(item.status)}
+                <div style="height:8px"></div>
+                ${notificationChip(item.notification_status)}
+              </td>
+              <td>${item.testing_summary ? escapeHtml(item.testing_summary) : '<span class="tiny">Summary not captured yet.</span>'}</td>
+              <td>${questions.length ? `<div class="qa-list">${questions.map((question) => `<span>${escapeHtml(question)}</span>`).join("")}</div>` : '<span class="tiny">No extracted user asks yet.</span>'}</td>
+              <td>
+                <strong>${escapeHtml(item.last_session_id || "-")}</strong><br />
+                <span class="tiny">Updated: ${escapeHtml(item.updated_at || "-")}</span>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      function renderProjectOptions(projects) {
+        const current = projectFilter.value;
+        projectFilter.innerHTML = '<option value="">All scripts</option>' + projects.map((project) => {
+          const value = project.project_id || "";
+          const label = `${project.project_name || value || "Unknown"} (${project.count || 0})`;
+          return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+        }).join("");
+        projectFilter.value = current;
+      }
+
+      function renderMessage(message, kind) {
+        if (!message) {
+          messageSlot.innerHTML = "";
+          return;
+        }
+        messageSlot.innerHTML = `<div class="${kind === "error" ? "error" : "empty"}">${escapeHtml(message)}</div>`;
+      }
+
+      async function loadLeads() {
+        renderMessage("", "");
+        resultMeta.textContent = "Loading leads...";
+        const params = buildParams();
+        try {
+          await ensureAdmin();
+          const response = await fetch(`/api/admin/leads?${params.toString()}`, { credentials: "same-origin" });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.detail || "Unable to load leads.");
+          }
+          renderProjectOptions(Array.isArray(data.projects) ? data.projects : []);
+          renderStats(Array.isArray(data.items) ? data.items : []);
+          renderRows(Array.isArray(data.items) ? data.items : []);
+          resultMeta.textContent = `${data.total || 0} lead${Number(data.total || 0) === 1 ? "" : "s"} found`;
+        } catch (error) {
+          renderStats([]);
+          renderRows([]);
+          renderMessage(error instanceof Error ? error.message : "Unable to load leads.", "error");
+          resultMeta.textContent = "Lead loading failed";
+        }
+      }
+
+      applyBtn.addEventListener("click", () => {
+        loadLeads();
+      });
+
+      refreshBtn.addEventListener("click", () => {
+        loadLeads();
+      });
+
+      downloadBtn.addEventListener("click", () => {
+        const params = buildParams();
+        params.delete("limit");
+        window.location.href = `/api/admin/leads/export?${params.toString()}`;
+      });
+
+      logoutBtn.addEventListener("click", async () => {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => null);
+        window.location.href = "/admin/login";
+      });
+
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loadLeads();
+        }
+      });
+
+      loadLeads();
+    </script>
+  </body>
+</html>

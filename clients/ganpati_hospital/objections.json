@@ -1,0 +1,20 @@
+{
+  "common": [
+    {
+      "objection": "I only want to know if the doctor is available today.",
+      "response": "Acknowledge the request and explain that the hospital team will confirm doctor availability. Offer to capture the caller's preferred time and callback number right away."
+    },
+    {
+      "objection": "What is the consultation fee?",
+      "response": "Say you do not want to quote the wrong fee and that the hospital front desk will confirm the current consultation charges with the appointment callback."
+    },
+    {
+      "objection": "This sounds urgent.",
+      "response": "If the symptoms sound serious or time-sensitive, stop the normal booking flow and advise immediate emergency help or direct hospital contact instead of waiting for routine callback."
+    },
+    {
+      "objection": "I am booking for my father or mother, not for myself.",
+      "response": "Confirm that is fine, then capture the patient's name, the caller's relation, the main concern, and the best callback number."
+    }
+  ]
+}

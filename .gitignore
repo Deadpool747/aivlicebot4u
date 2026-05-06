@@ -1,0 +1,22 @@
+# Secrets and local env
+.env
+.env.*
+!.env.example
+.aws/
+
+# Virtual env and python cache
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime outputs
+logs/
+sessions/
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# Local temp artifacts
+*.tmp
+*.swp

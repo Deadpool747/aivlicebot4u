@@ -1,0 +1,20 @@
+{
+  "common": [
+    {
+      "objection": "मला आधी रेट सांगा.",
+      "response": "उपलब्ध standard products चे approved rates सांगा आणि कस्टम size किंवा design साठी exact quotation requirement नोंदवल्यानंतर दिले जाईल असे सांगा."
+    },
+    {
+      "objection": "मला custom size board हवा आहे.",
+      "response": "त्यांची exact size, single किंवा double side, आणि location विचारा. Final rate टीम size आणि design नुसार देईल असे स्पष्ट करा."
+    },
+    {
+      "objection": "इन्स्टॉलेशन मिळेल का?",
+      "response": "छत्रपती संभाजीनगर आणि जवळच्या MIDC भागात installation support उपलब्ध असल्याचे सांगा आणि location confirm करा."
+    },
+    {
+      "objection": "मला फक्त WhatsApp वर details पाठवा.",
+      "response": "नक्की सांगा, पण त्याआधी बोर्डचा प्रकार आणि size नोंदवून घेतल्यास योग्य quote पाठवता येईल असे नम्रपणे विचारा."
+    }
+  ]
+}

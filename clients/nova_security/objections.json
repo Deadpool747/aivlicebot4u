@@ -1,0 +1,16 @@
+{
+  "common": [
+    {
+      "objection": "We already use several security tools.",
+      "response": "Acknowledge tool sprawl, then explore whether they still struggle with prioritization, visibility, or manual triage."
+    },
+    {
+      "objection": "We do not have budget right now.",
+      "response": "Probe whether timing is the issue, then offer a smaller discovery conversation to size fit before formal budgeting."
+    },
+    {
+      "objection": "Just email me information.",
+      "response": "Offer a concise follow-up and try to confirm the most relevant angle so the message is useful."
+    }
+  ]
+}

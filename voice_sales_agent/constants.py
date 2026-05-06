@@ -1,0 +1,18 @@
+"""Shared constants for audio and filesystem defaults."""
+
+from pathlib import Path
+
+PACKAGE_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = PACKAGE_ROOT.parent
+CLIENTS_DIR = PROJECT_ROOT / "clients"
+PROMPTS_DIR = PROJECT_ROOT / "prompts"
+DEFAULT_GLOBAL_PROMPT = PROMPTS_DIR / "global_system.txt"
+
+INPUT_SAMPLE_RATE = 16_000
+OUTPUT_SAMPLE_RATE = 24_000
+CHANNELS = 1
+INPUT_CHUNK_MS = 100
+INPUT_CHUNK_SIZE = int(INPUT_SAMPLE_RATE * INPUT_CHUNK_MS / 1000)
+OUTPUT_FRAMES_PER_BUFFER = 1024
+MIC_ENERGY_THRESHOLD = 0
+MIC_HANGOVER_CHUNKS = 4
