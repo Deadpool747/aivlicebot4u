@@ -103,6 +103,17 @@ class SessionCostTracker:
                     metadata={"call_status": telephony_context.get("call_status")},
                 )
             )
+        elif provider == "piopiy":
+            telephony_items.append(
+                self._build_duration_item(
+                    provider="piopiy",
+                    category="telephony",
+                    duration_seconds=stream_duration_seconds,
+                    rate_per_minute=self.settings.piopiy_cost_per_minute,
+                    currency=currency,
+                    metadata={"call_status": telephony_context.get("call_status")},
+                )
+            )
         elif provider == "meta_whatsapp":
             telephony_items.append(
                 self._build_duration_item(

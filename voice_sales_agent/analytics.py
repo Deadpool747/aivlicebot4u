@@ -400,13 +400,15 @@ def _resolve_provider(session: dict[str, Any], provider_usage: dict[str, Any]) -
         return provider
     if telephony_context.get("provider") in {"local", "browser"}:
         return str(telephony_context.get("provider"))
-    return "tata"
+    return "piopiy"
 
 
 def _resolve_source(provider: str, direction: str, provider_usage: dict[str, Any]) -> str:
     explicit = str(provider_usage.get("lead_source") or "").strip()
     if explicit:
         return explicit
+    if provider == "piopiy":
+        return "piopiy_inbound_stream" if direction == "inbound" else "piopiy_outbound"
     if provider == "tata":
         return "tata_inbound_stream" if direction == "inbound" else "tata_outbound"
     return "unknown"

@@ -38,7 +38,7 @@ class DashboardState:
             self.opening_language = None
             self.running = True
             self.status = "starting"
-            self.detail = "Opening audio and Gemini Live session..."
+            self.detail = "Opening browser audio and live session..."
             self.session_id = None
             self.session_dir = None
             self.last_error = None

@@ -123,6 +123,9 @@ def _editor_project_payload(project: ProjectConfig) -> dict[str, Any]:
             "outbound_call_provider": project.runtime.outbound_call_provider,
             "tata_agent_number": project.runtime.tata_agent_number,
             "tata_caller_id": project.runtime.tata_caller_id,
+            "piopiy_agent_id": project.runtime.piopiy_agent_id,
+            "piopiy_caller_id": project.runtime.piopiy_caller_id,
+            "piopiy_app_id": project.runtime.piopiy_app_id,
             "whatsapp_consent_message": project.runtime.whatsapp_consent_message,
             "whatsapp_chat_opening_message": project.runtime.whatsapp_chat_opening_message,
         },
@@ -325,7 +328,10 @@ class FileClientRepository:
             "qualification": payload["qualification"],
             "cta": payload["cta"],
         }
-        existing_projects = self.load_client(client_id).projects
+        try:
+            existing_projects = self.load_client(client_id).projects
+        except FileNotFoundError:
+            existing_projects = []
         projects_payload = payload.get("projects")
         validated_projects: list[dict[str, Any]] = []
         if projects_payload is not None:
@@ -711,6 +717,9 @@ def list_client_projects(
                 "outbound_call_provider": project.runtime.outbound_call_provider,
                 "tata_agent_number": project.runtime.tata_agent_number,
                 "tata_caller_id": project.runtime.tata_caller_id,
+                "piopiy_agent_id": project.runtime.piopiy_agent_id,
+                "piopiy_caller_id": project.runtime.piopiy_caller_id,
+                "piopiy_app_id": project.runtime.piopiy_app_id,
                 "whatsapp_consent_message": project.runtime.whatsapp_consent_message,
                 "whatsapp_chat_opening_message": project.runtime.whatsapp_chat_opening_message,
             },

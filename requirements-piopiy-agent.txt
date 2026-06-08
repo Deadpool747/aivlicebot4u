@@ -1,0 +1,5 @@
+piopiy-ai[google,openai,sarvam,silero]>=0.6.1
+python-dotenv>=1.0.1
+google-genai>=1.16.0
+rich>=13.7.1
+pydantic>=2.8.2

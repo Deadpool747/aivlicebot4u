@@ -27,7 +27,7 @@ class AppSettings:
     processing_ambience_enabled: bool
     processing_ambience_gain: float
     public_base_url: str | None
-    telephony_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "tata"]
+    telephony_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "tata", "piopiy"]
     twilio_account_sid: str | None
     twilio_auth_token: str | None
     twilio_from_number: str | None
@@ -85,11 +85,16 @@ class AppSettings:
     meta_whatsapp_app_secret: str | None
     meta_whatsapp_outbound_source_rate: int
     meta_whatsapp_outbound_preroll_ms: int
+    piopiy_api_token: str | None
+    piopiy_agent_id: str | None
+    piopiy_caller_id: str | None
+    piopiy_app_id: str | None
     cost_currency: str
     exotel_cost_per_minute: float
     twilio_cost_per_minute: float
     airtel_iq_cost_per_minute: float
     tata_cost_per_minute: float
+    piopiy_cost_per_minute: float
     meta_whatsapp_cost_per_minute: float
     gemini_live_input_cost_per_minute: float
     gemini_live_output_cost_per_minute: float
@@ -269,11 +274,16 @@ def load_settings() -> AppSettings:
         meta_whatsapp_outbound_preroll_ms=int(
             os.getenv("META_WHATSAPP_OUTBOUND_PREROLL_MS", "140").strip() or "140"
         ),
+        piopiy_api_token=(os.getenv("PIOPIY_API_TOKEN", "").strip() or None),
+        piopiy_agent_id=(os.getenv("PIOPIY_AGENT_ID", "").strip() or None),
+        piopiy_caller_id=(os.getenv("PIOPIY_CALLER_ID", "").strip() or None),
+        piopiy_app_id=(os.getenv("PIOPIY_APP_ID", "").strip() or None),
         cost_currency=os.getenv("COST_CURRENCY", "INR").strip().upper() or "INR",
         exotel_cost_per_minute=float(os.getenv("EXOTEL_COST_PER_MINUTE", "0").strip() or "0"),
         twilio_cost_per_minute=float(os.getenv("TWILIO_COST_PER_MINUTE", "0").strip() or "0"),
         airtel_iq_cost_per_minute=float(os.getenv("AIRTEL_IQ_COST_PER_MINUTE", "0").strip() or "0"),
         tata_cost_per_minute=float(os.getenv("TATA_COST_PER_MINUTE", "0").strip() or "0"),
+        piopiy_cost_per_minute=float(os.getenv("PIOPIY_COST_PER_MINUTE", "0").strip() or "0"),
         meta_whatsapp_cost_per_minute=float(os.getenv("META_WHATSAPP_COST_PER_MINUTE", "0").strip() or "0"),
         gemini_live_input_cost_per_minute=float(os.getenv("GEMINI_LIVE_INPUT_COST_PER_MINUTE", "0").strip() or "0"),
         gemini_live_output_cost_per_minute=float(os.getenv("GEMINI_LIVE_OUTPUT_COST_PER_MINUTE", "0").strip() or "0"),

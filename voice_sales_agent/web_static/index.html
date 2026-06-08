@@ -1097,6 +1097,7 @@
                 <p id="errorText" class="error"></p>
                 <p id="callStatus" class="helper"></p>
                 <p id="sessionPath" class="helper"></p>
+                <div id="browserAudioDiagnostics" class="helper" style="margin-top:10px; white-space:pre-line;"></div>
               </div>
             </aside>
 
@@ -1432,6 +1433,7 @@
                     <option value="exotel">exotel</option>
                     <option value="airtel_iq">airtel_iq</option>
                     <option value="tata">tata</option>
+                    <option value="piopiy">piopiy</option>
                     <option value="meta_whatsapp">meta_whatsapp</option>
                   </select>
                 </div>
@@ -1442,6 +1444,18 @@
                 <div>
                   <label for="projectTataCallerIdInput">Tata Caller ID (Override)</label>
                   <input id="projectTataCallerIdInput" type="text" placeholder="Optional project-specific caller id" />
+                </div>
+                <div>
+                  <label for="projectPiopiyAgentIdInput">Piopiy Agent ID (Override)</label>
+                  <input id="projectPiopiyAgentIdInput" type="text" placeholder="Optional project-specific Piopiy agent id" />
+                </div>
+                <div>
+                  <label for="projectPiopiyCallerIdInput">Piopiy Caller ID (Override)</label>
+                  <input id="projectPiopiyCallerIdInput" type="text" placeholder="Optional project-specific Piopiy caller id" />
+                </div>
+                <div>
+                  <label for="projectPiopiyAppIdInput">Piopiy App ID (Override)</label>
+                  <input id="projectPiopiyAppIdInput" type="text" placeholder="Optional project-specific Piopiy app id" />
                 </div>
                 <div>
                   <label for="projectMaxConcurrentCallsInput">Project Max Concurrent Calls</label>
@@ -1683,6 +1697,7 @@
       const detailText = document.getElementById("detailText");
       const errorText = document.getElementById("errorText");
       const sessionPath = document.getElementById("sessionPath");
+      const browserAudioDiagnostics = document.getElementById("browserAudioDiagnostics");
       const customerNameInput = document.getElementById("customerNameInput");
       const phoneNumberInput = document.getElementById("phoneNumberInput");
       const leadSourceButtons = document.getElementById("leadSourceButtons");
@@ -1729,6 +1744,9 @@
       const projectOutboundProviderInput = document.getElementById("projectOutboundProviderInput");
       const projectTataAgentNumberInput = document.getElementById("projectTataAgentNumberInput");
       const projectTataCallerIdInput = document.getElementById("projectTataCallerIdInput");
+      const projectPiopiyAgentIdInput = document.getElementById("projectPiopiyAgentIdInput");
+      const projectPiopiyCallerIdInput = document.getElementById("projectPiopiyCallerIdInput");
+      const projectPiopiyAppIdInput = document.getElementById("projectPiopiyAppIdInput");
       const projectMaxConcurrentCallsInput = document.getElementById("projectMaxConcurrentCallsInput");
       const projectDescriptionInput = document.getElementById("projectDescriptionInput");
       const projectPromptInstructionInput = document.getElementById("projectPromptInstructionInput");
@@ -1875,13 +1893,44 @@
       let browserMicContext = null;
       let browserMicSource = null;
       let browserMicProcessor = null;
+      let browserMicWorkletNode = null;
       let browserMicSink = null;
       let browserPlaybackContext = null;
       let browserPlaybackCursor = 0;
+      let browserMicCaptureMode = "unknown";
+      let browserMicChunksSent = 0;
+      let browserMicBytesSent = 0;
+      let browserServerAckedFirstChunk = false;
+      let browserWsOpen = false;
+      let browserMicPermissionState = "unknown";
+      let browserMicFallbackTimer = null;
+
+      function renderBrowserAudioDiagnostics() {
+        if (!browserAudioDiagnostics) {
+          return;
+        }
+        browserAudioDiagnostics.textContent = [
+          "Browser audio diagnostics",
+          `Mic permission: ${browserMicPermissionState}`,
+          `WebSocket: ${browserWsOpen ? "open" : "closed"}`,
+          `Capture mode: ${browserMicCaptureMode}`,
+          `Chunks sent: ${browserMicChunksSent}`,
+          `Bytes sent: ${browserMicBytesSent}`,
+          `Server saw first chunk: ${browserServerAckedFirstChunk ? "yes" : "no"}`,
+        ].join("\\n");
+      }
 
       function remoteLocalMicModeBlocked() {
         // Force browser-mic transport for all environments to avoid server-side mic capture issues.
         return true;
+      }
+
+      function browserMicSecurityHint() {
+        const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+        if (window.isSecureContext || isLocalhost) {
+          return "";
+        }
+        return "Open this page over HTTPS or on localhost to allow microphone permission.";
       }
 
       function applySessionModeGuard() {
@@ -1893,14 +1942,20 @@
           startBtn.textContent = "Start Demo (Browser Mic)";
           startBtn.title = "Uses your device microphone through browser permission.";
         }
-        callStatus.textContent = "Remote dashboard detected. Start uses this device mic permission and streams audio to the server.";
+        callStatus.textContent = "Remote dashboard detected. Start uses your browser microphone and streams audio to the server.";
       }
 
       async function ensureLocalMicPermission() {
+        const securityHint = browserMicSecurityHint();
+        if (securityHint) {
+          throw new Error(securityHint);
+        }
         if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
           throw new Error("Browser microphone permission API is unavailable in this browser.");
         }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        browserMicPermissionState = "granted";
+        renderBrowserAudioDiagnostics();
         stream.getTracks().forEach((track) => track.stop());
       }
 
@@ -1950,6 +2005,108 @@
         return out;
       }
 
+      async function createBrowserMicCaptureNode(context, onSamples) {
+        if (context.audioWorklet && typeof AudioWorkletNode === "function") {
+          const source = `
+            class CodexMicCaptureProcessor extends AudioWorkletProcessor {
+              process(inputs) {
+                const input = inputs[0];
+                const channel = input && input[0];
+                if (channel && channel.length) {
+                  this.port.postMessage(channel.slice(0));
+                }
+                return true;
+              }
+            }
+            registerProcessor("codex-mic-capture", CodexMicCaptureProcessor);
+          `;
+          const blob = new Blob([source], { type: "application/javascript" });
+          const moduleUrl = URL.createObjectURL(blob);
+          try {
+            await context.audioWorklet.addModule(moduleUrl);
+          } finally {
+            URL.revokeObjectURL(moduleUrl);
+          }
+          const node = new AudioWorkletNode(context, "codex-mic-capture");
+          node.port.onmessage = (event) => {
+            const channel = event?.data;
+            if (!(channel instanceof Float32Array) || !channel.length) {
+              return;
+            }
+            onSamples(channel);
+          };
+          browserMicCaptureMode = "audio worklet";
+          return node;
+        }
+        const processor = context.createScriptProcessor(2048, 1, 1);
+        processor.onaudioprocess = (evt) => {
+          const channel = evt.inputBuffer.getChannelData(0);
+          if (!channel || !channel.length) {
+            return;
+          }
+          onSamples(channel);
+        };
+        browserMicCaptureMode = "script processor";
+        return processor;
+      }
+
+      function clearBrowserMicFallbackTimer() {
+        if (browserMicFallbackTimer) {
+          window.clearTimeout(browserMicFallbackTimer);
+          browserMicFallbackTimer = null;
+        }
+      }
+
+      function disconnectBrowserMicCaptureNode(node) {
+        if (!node) {
+          return;
+        }
+        if (node instanceof AudioWorkletNode) {
+          node.port.onmessage = null;
+          withNoThrow(() => node.disconnect());
+          if (browserMicWorkletNode === node) {
+            browserMicWorkletNode = null;
+          }
+          return;
+        }
+        node.onaudioprocess = null;
+        withNoThrow(() => node.disconnect());
+        if (browserMicProcessor === node) {
+          browserMicProcessor = null;
+        }
+      }
+
+      async function attachBrowserMicCaptureNode(context, onSamples, mode = "auto") {
+        const originalAudioWorklet = context.audioWorklet;
+        const originalWorkletCtor = window.AudioWorkletNode;
+        if (mode === "script" || mode === "script processor") {
+          try {
+            Object.defineProperty(context, "audioWorklet", { value: null, configurable: true });
+          } catch (error) {
+            context.audioWorklet = null;
+          }
+          try {
+            window.AudioWorkletNode = undefined;
+          } catch (error) {
+            // ignore
+          }
+        }
+        try {
+          return await createBrowserMicCaptureNode(context, onSamples);
+        } finally {
+          try {
+            Object.defineProperty(context, "audioWorklet", { value: originalAudioWorklet, configurable: true });
+          } catch (error) {
+            context.audioWorklet = originalAudioWorklet;
+          }
+          try {
+            window.AudioWorkletNode = originalWorkletCtor;
+          } catch (error) {
+            // ignore
+          }
+        }
+      }
+
       async function ensureBrowserPlaybackContext() {
         if (browserPlaybackContext) {
           if (browserPlaybackContext.state === "suspended") {
@@ -1984,6 +2141,10 @@
       }
 
       async function startBrowserAudioTransport() {
+        const securityHint = browserMicSecurityHint();
+        if (securityHint) {
+          throw new Error(securityHint);
+        }
         if (browserAudioWs && browserAudioWs.readyState === WebSocket.OPEN) {
           return;
         }
@@ -2008,8 +2169,15 @@
           };
         });
         browserAudioWs = ws;
+        browserWsOpen = true;
+        browserServerAckedFirstChunk = false;
+        browserMicChunksSent = 0;
+        browserMicBytesSent = 0;
+        renderBrowserAudioDiagnostics();
         browserAudioWs.onclose = () => {
           browserAudioWs = null;
+          browserWsOpen = false;
+          renderBrowserAudioDiagnostics();
         };
         browserAudioWs.onmessage = async (event) => {
           let message;
@@ -2032,6 +2200,11 @@
             }
             return;
           }
+          if (message.event === "mic_chunk_received") {
+            browserServerAckedFirstChunk = true;
+            renderBrowserAudioDiagnostics();
+            return;
+          }
           if (message.event === "flush" && browserPlaybackContext) {
             browserPlaybackCursor = browserPlaybackContext.currentTime + 0.01;
           }
@@ -2044,23 +2217,20 @@
             autoGainControl: true,
           },
         });
+        browserMicPermissionState = "granted";
         browserMicContext = new AudioCtx({ sampleRate: BROWSER_INPUT_SAMPLE_RATE });
         if (browserMicContext.state === "suspended") {
           await browserMicContext.resume();
         }
         browserMicSource = browserMicContext.createMediaStreamSource(browserMicStream);
-        browserMicProcessor = browserMicContext.createScriptProcessor(2048, 1, 1);
-        browserMicSink = browserMicContext.createGain();
-        browserMicSink.gain.value = 0;
-        browserMicSource.connect(browserMicProcessor);
-        browserMicProcessor.connect(browserMicSink);
-        browserMicSink.connect(browserMicContext.destination);
-        browserMicProcessor.onaudioprocess = (evt) => {
+        const sendBrowserMicChunk = (channel) => {
           if (!browserAudioWs || browserAudioWs.readyState !== WebSocket.OPEN) {
             return;
           }
-          const channel = evt.inputBuffer.getChannelData(0);
           const payload = base64FromBytes(floatToPcm16Bytes(channel));
+          browserMicChunksSent += 1;
+          browserMicBytesSent += channel.length * 2;
+          renderBrowserAudioDiagnostics();
           browserAudioWs.send(
             JSON.stringify({
               event: "audio_chunk",
@@ -2069,13 +2239,50 @@
             })
           );
         };
+        const captureNode = await attachBrowserMicCaptureNode(browserMicContext, sendBrowserMicChunk, "auto");
+        if (captureNode instanceof AudioWorkletNode) {
+          browserMicWorkletNode = captureNode;
+          browserMicProcessor = null;
+        } else {
+          browserMicProcessor = captureNode;
+          browserMicWorkletNode = null;
+        }
+        browserMicSink = browserMicContext.createGain();
+        browserMicSink.gain.value = 0.00001;
+        browserMicSource.connect(captureNode);
+        captureNode.connect(browserMicSink);
+        browserMicSink.connect(browserMicContext.destination);
+        callStatus.textContent = `Microphone connected. Using ${browserMicCaptureMode} capture...`;
+        renderBrowserAudioDiagnostics();
+        clearBrowserMicFallbackTimer();
+        browserMicFallbackTimer = window.setTimeout(async () => {
+          if (browserMicChunksSent > 0 || !browserMicContext || !browserMicSource || !browserMicSink) {
+            return;
+          }
+          const activeNode = browserMicWorkletNode || browserMicProcessor;
+          disconnectBrowserMicCaptureNode(activeNode);
+          const fallbackNode = await attachBrowserMicCaptureNode(browserMicContext, sendBrowserMicChunk, "script");
+          browserMicProcessor = fallbackNode;
+          browserMicWorkletNode = null;
+          browserMicSource.connect(fallbackNode);
+          fallbackNode.connect(browserMicSink);
+          browserMicCaptureMode = "script processor (fallback)";
+          callStatus.textContent = "Audio worklet sent no mic chunks. Switched to script processor fallback.";
+          renderBrowserAudioDiagnostics();
+        }, 2000);
       }
 
       async function stopBrowserAudioTransport(sendStop = true) {
+        clearBrowserMicFallbackTimer();
         if (browserMicProcessor) {
           browserMicProcessor.onaudioprocess = null;
           withNoThrow(() => browserMicProcessor.disconnect());
           browserMicProcessor = null;
+        }
+        if (browserMicWorkletNode) {
+          browserMicWorkletNode.port.onmessage = null;
+          withNoThrow(() => browserMicWorkletNode.disconnect());
+          browserMicWorkletNode = null;
         }
         if (browserMicSource) {
           withNoThrow(() => browserMicSource.disconnect());
@@ -2107,6 +2314,8 @@
           }
           browserAudioWs = null;
         }
+        browserWsOpen = false;
+        renderBrowserAudioDiagnostics();
       }
 
       function withNoThrow(fn) {
@@ -2338,9 +2547,12 @@
             structured_model: "",
             tts_model: "",
             outreach_mode: "call_only",
-            outbound_call_provider: "",
+            outbound_call_provider: "piopiy",
             tata_agent_number: "",
             tata_caller_id: "",
+            piopiy_agent_id: "",
+            piopiy_caller_id: "",
+            piopiy_app_id: "",
             max_concurrent_calls: null,
             whatsapp_consent_message: "",
             whatsapp_chat_opening_message: "",
@@ -2379,6 +2591,9 @@
           outbound_call_provider: projectOutboundProviderInput.value || null,
           tata_agent_number: projectTataAgentNumberInput.value.trim() || null,
           tata_caller_id: projectTataCallerIdInput.value.trim() || null,
+          piopiy_agent_id: projectPiopiyAgentIdInput.value.trim() || null,
+          piopiy_caller_id: projectPiopiyCallerIdInput.value.trim() || null,
+          piopiy_app_id: projectPiopiyAppIdInput.value.trim() || null,
           max_concurrent_calls: (() => {
             const value = Number.parseInt(projectMaxConcurrentCallsInput.value || "", 10);
             return Number.isFinite(value) && value > 0 ? value : null;
@@ -2437,6 +2652,9 @@
         projectOutboundProviderInput.value = project.runtime?.outbound_call_provider || "";
         projectTataAgentNumberInput.value = project.runtime?.tata_agent_number || "";
         projectTataCallerIdInput.value = project.runtime?.tata_caller_id || "";
+        projectPiopiyAgentIdInput.value = project.runtime?.piopiy_agent_id || "";
+        projectPiopiyCallerIdInput.value = project.runtime?.piopiy_caller_id || "";
+        projectPiopiyAppIdInput.value = project.runtime?.piopiy_app_id || "";
         projectMaxConcurrentCallsInput.value = project.runtime?.max_concurrent_calls
           ? String(project.runtime.max_concurrent_calls)
           : "";

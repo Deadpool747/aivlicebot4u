@@ -59,6 +59,8 @@ FAST_TURN_PARTIAL_COMMIT_SILENCE_SECONDS = 0.16
 FAST_TURN_SHORT_REPLY_PARTIAL_COMMIT_SILENCE_SECONDS = 0.08
 GENERIC_BINARY_CONFIRMATION_AUDIO_THRESHOLD = 90.0
 GENERIC_BINARY_CONFIRMATION_SILENCE_SECONDS = 0.45
+BROWSER_EXPLICIT_VAD_AUDIO_THRESHOLD = 140.0
+BROWSER_EXPLICIT_VAD_END_SECONDS = 0.45
 TWILIO_SHORT_RESPONSE_COMMIT_SECONDS = 0.18
 TWILIO_PARTIAL_COMMIT_SILENCE_SECONDS = 0.14
 TWILIO_SHORT_REPLY_PARTIAL_COMMIT_SILENCE_SECONDS = 0.08
@@ -352,6 +354,8 @@ class VoiceSalesSession:
 
     async def _send_loop(self) -> None:
         self._set_status("listening", "Speak naturally. Press Ctrl+C to end the demo.")
+        browser_activity_open = False
+        browser_silence_started_at: float | None = None
         async for chunk in self.audio.mic_chunks():
             if not self._running:
                 return
@@ -366,6 +370,20 @@ class VoiceSalesSession:
             self._capture_parallel_stt_chunk(chunk)
             self.cost_tracker.record_live_input_audio(chunk)
             await self.live.send_audio(chunk)
+            if self._is_browser_session() and self._should_use_explicit_vad():
+                avg = self._chunk_average_amplitude(chunk)
+                if avg >= BROWSER_EXPLICIT_VAD_AUDIO_THRESHOLD:
+                    browser_activity_open = True
+                    browser_silence_started_at = None
+                elif browser_activity_open:
+                    if browser_silence_started_at is None:
+                        browser_silence_started_at = monotonic()
+                    elif (monotonic() - browser_silence_started_at) >= BROWSER_EXPLICIT_VAD_END_SECONDS:
+                        await self._signal_live_activity_end()
+                        browser_activity_open = False
+                        browser_silence_started_at = None
+        if browser_activity_open and self._is_browser_session() and self._should_use_explicit_vad():
+            await self._signal_live_activity_end()
         self._running = False
 
     async def _receive_loop(self) -> None:
@@ -789,19 +807,31 @@ class VoiceSalesSession:
             return
         self._input_audio_capture.extend(chunk)
         self._conversation_audio_capture.extend(chunk)
-        samples = array("h")
-        samples.frombytes(chunk)
-        if not samples:
+        avg, peak, sample_count = self._chunk_amplitude_stats(chunk)
+        if peak <= 0 or sample_count <= 0:
             return
-        peak = max(abs(sample) for sample in samples)
-        avg = sum(abs(sample) for sample in samples) / len(samples)
         self._input_audio_peak = max(self._input_audio_peak, peak)
-        self._input_audio_avg_total += avg * len(samples)
-        self._input_audio_avg_samples += len(samples)
+        self._input_audio_avg_total += avg * sample_count
+        self._input_audio_avg_samples += sample_count
         if avg >= self._binary_confirmation_audio_threshold():
             self._last_user_audio_activity_at = monotonic()
         if self._is_partial_commit_session() and avg >= self.settings.exotel_low_confidence_audio_threshold:
             self._last_user_audio_activity_at = monotonic()
+
+    @staticmethod
+    def _chunk_amplitude_stats(chunk: bytes) -> tuple[float, int, int]:
+        samples = array("h")
+        samples.frombytes(chunk)
+        if not samples:
+            return 0.0, 0, 0
+        peak = max(abs(sample) for sample in samples)
+        avg = sum(abs(sample) for sample in samples) / len(samples)
+        return avg, peak, len(samples)
+
+    @classmethod
+    def _chunk_average_amplitude(cls, chunk: bytes) -> float:
+        avg, _peak, _count = cls._chunk_amplitude_stats(chunk)
+        return avg
 
     def _resample_pcm16_mono(self, pcm: bytes, source_sample_rate: int, target_sample_rate: int) -> bytes:
         if not pcm:
@@ -1578,9 +1608,13 @@ class VoiceSalesSession:
     async def _deliver_deterministic_followup_after_delay(self, text: str) -> None:
         try:
             delay_seconds = (
-                APPOINTMENT_DETERMINISTIC_FOLLOWUP_DELAY_SECONDS
-                if self.client.config.conversation_mode == "appointment_booking"
-                else DEFAULT_DETERMINISTIC_FOLLOWUP_DELAY_SECONDS
+                0.25
+                if self._is_piopiy_session()
+                else (
+                    APPOINTMENT_DETERMINISTIC_FOLLOWUP_DELAY_SECONDS
+                    if self.client.config.conversation_mode == "appointment_booking"
+                    else DEFAULT_DETERMINISTIC_FOLLOWUP_DELAY_SECONDS
+                )
             )
             await asyncio.sleep(delay_seconds)
             if not self._running:
@@ -1626,18 +1660,31 @@ class VoiceSalesSession:
     def _is_meta_whatsapp_session(self) -> bool:
         return isinstance(self.telephony_context, dict) and self.telephony_context.get("provider") == "meta_whatsapp"
 
+    def _is_piopiy_session(self) -> bool:
+        return isinstance(self.telephony_context, dict) and self.telephony_context.get("provider") == "piopiy"
+
+    def _is_browser_session(self) -> bool:
+        return isinstance(self.telephony_context, dict) and self.telephony_context.get("provider") == "browser"
+
     def _is_partial_commit_session(self) -> bool:
         return (
             self._is_exotel_session()
             or self._is_tata_session()
             or self._is_meta_whatsapp_session()
             or self._is_twilio_session()
+            or self._is_piopiy_session()
+            or self._is_browser_session()
         )
 
     def _should_use_explicit_vad(self) -> bool:
         if self._is_exotel_session() or self._is_tata_session():
             return self.settings.exotel_use_explicit_vad
-        return self._is_twilio_session() or self._is_meta_whatsapp_session()
+        return (
+            self._is_twilio_session()
+            or self._is_meta_whatsapp_session()
+            or self._is_piopiy_session()
+            or self._is_browser_session()
+        )
 
     def _plan_deterministic_followup(self, user_text: str, intents: tuple[str, ...]) -> str | None:
         if not self._is_fast_turn_mode():
@@ -2149,6 +2196,10 @@ class VoiceSalesSession:
         return GENERIC_BINARY_CONFIRMATION_AUDIO_THRESHOLD
 
     def _partial_commit_silence_seconds(self, pending: str) -> float:
+        if self._is_browser_session():
+            if self._is_short_response_candidate(pending):
+                return min(self.settings.exotel_short_reply_partial_commit_silence_seconds, 0.18)
+            return min(self.settings.exotel_partial_commit_silence_seconds, 0.35)
         if self._is_twilio_session():
             if self._is_short_response_candidate(pending):
                 return TWILIO_SHORT_REPLY_PARTIAL_COMMIT_SILENCE_SECONDS
@@ -2182,6 +2233,8 @@ class VoiceSalesSession:
     def _is_fast_turn_mode(self) -> bool:
         if self._is_guest_demo_workspace():
             return False
+        if self._is_piopiy_session():
+            return True
         project_type = self.project.project_type if self.project is not None else "custom"
         return self.client.config.conversation_mode == "appointment_booking" or project_type in {
             "appointment_booking",
@@ -3349,7 +3402,7 @@ class VoiceSalesSession:
             if project_id == "real_estate_english_demo":
                 return (
                     f"Hello {self.customer_name}, welcome to our Real Estate Demo. "
-                    "Please let me know, are you checking for a flat, villa, or commercial space?"
+                    "How may I help you with your property search today?"
                 )
             if project_id == "magnum_hospital_marathi_demo":
                 return (

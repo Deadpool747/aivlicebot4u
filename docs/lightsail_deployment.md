@@ -6,6 +6,21 @@ This guide deploys the FastAPI dashboard and telephony webhooks on a single Ligh
 - Nginx as reverse proxy
 - Certbot TLS certificates
 
+It also supports a separate Piopiy worker service for inbound voice-agent calls.
+
+## Security baseline
+
+Before you expose the app to the internet, lock down the AWS account and the instance:
+
+- Turn on MFA for the AWS root user and never use root access keys.
+- Use a separate IAM admin user or role with least-privilege permissions for deployment work.
+- Keep the Lightsail firewall open only for `22`, `80`, and `443`.
+- Restrict SSH port `22` to your own IP address instead of leaving it open to the world.
+- Use a static IP and a real domain name for HTTPS.
+- Keep the Python app bound to `127.0.0.1` so only Nginx can reach it.
+- Set `PUBLIC_BASE_URL=https://voice.yourdomain.com`, `SESSION_COOKIE_SECURE=1`, and `TRUSTED_HOSTS=voice.yourdomain.com,localhost,127.0.0.1` in production.
+- If you do not need multiple workers, keep shared state in memory to avoid extra Redis cost.
+
 ## 1. Create the Lightsail instance
 
 - Platform: Linux/Unix
@@ -13,6 +28,12 @@ This guide deploys the FastAPI dashboard and telephony webhooks on a single Ligh
 - Plan: at least 1 GB RAM (2 GB recommended for call load)
 - Open networking ports: `22`, `80`, `443`
 - Attach and map a static IP
+
+In the Lightsail console, tighten the firewall rules after creation:
+
+- `22/tcp` from your current IP only
+- `80/tcp` from all IPs for HTTP-to-HTTPS redirect and ACME
+- `443/tcp` from all IPs for the public site
 
 Point your DNS `A` record (for example `voice.yourdomain.com`) to the Lightsail static IP.
 
@@ -42,6 +63,8 @@ cp .env.example .env
 Update `.env`:
 
 - Set `PUBLIC_BASE_URL=https://voice.yourdomain.com`
+- Set `SESSION_COOKIE_SECURE=1`
+- Set `TRUSTED_HOSTS=voice.yourdomain.com,localhost,127.0.0.1`
 - Set your telephony provider credentials (`EXOTEL_*`, `TWILIO_*`, `AIRTEL_IQ_*`, `META_WHATSAPP_*`)
 - Optional but recommended for scale:
   - `SHARED_STATE_BACKEND=redis`
@@ -63,6 +86,15 @@ sudo systemctl daemon-reload
 sudo systemctl enable voice-sales-agent
 sudo systemctl start voice-sales-agent
 sudo systemctl status voice-sales-agent
+
+If you are running the Piopiy agent worker, install and enable it as a second service:
+
+```bash
+sudo cp deploy/lightsail/piopiy-agent.service /etc/systemd/system/piopiy-agent.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now piopiy-agent.service
+sudo systemctl status piopiy-agent.service
+```
 ```
 
 ## 5. Configure Nginx reverse proxy
@@ -114,6 +146,9 @@ sudo journalctl -u voice-sales-agent -f
 # restart app after code or env update
 sudo systemctl restart voice-sales-agent
 
+# restart Piopiy worker after code or env update
+sudo systemctl restart piopiy-agent
+
 # nginx logs
 sudo tail -f /var/log/nginx/error.log /var/log/nginx/access.log
 ```
@@ -139,9 +174,11 @@ This command:
 - excludes runtime/local-only data from [`deploy/lightsail/rsync-excludes.txt`](/Users/idriskhan/Documents/new_voice_agent/deploy/lightsail/rsync-excludes.txt)
 - installs requirements on the server
 - restarts and verifies `voice-sales-agent.service`
+- keeps the app bound to localhost so Nginx remains the only public entry point
 
 ## Notes
 
 - Keep `.env` private and never commit it.
+- Keep the AWS root user disabled for day-to-day work and rotate any exposed API keys immediately.
 - If you run multiple app workers, use shared state (`RedisCallStateStore`) as documented in [`docs/redis_scaling.md`](/Users/idriskhan/Documents/new_voice_agent/docs/redis_scaling.md).
 - Lightsail has DNS/firewall propagation delay; allow a few minutes after changes.

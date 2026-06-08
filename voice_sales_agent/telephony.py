@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import os
+import re
 import socket
 import ssl
 import struct
@@ -31,6 +32,10 @@ try:
 except Exception:  # pragma: no cover - optional dependency path
     av = None  # type: ignore[assignment]
     MediaStreamTrack = object  # type: ignore[assignment]
+try:  # pragma: no cover - optional dependency path
+    from piopiy_voice import RestClient as PiopiyRestClient
+except Exception:  # pragma: no cover - optional dependency path
+    PiopiyRestClient = None  # type: ignore[assignment]
 
 from .config import AppSettings
 
@@ -190,6 +195,11 @@ def twilio_mulaw_to_pcm16k(payload: bytes) -> bytes:
 def pcm24k_to_twilio_mulaw(payload: bytes) -> bytes:
     pcm_8k = _resample_linear(payload, 24_000, TWILIO_SAMPLE_RATE)
     return pcm16_to_mulaw_bytes(pcm_8k)
+
+
+def _normalize_pio_dial_number(value: str) -> str:
+    """Normalize phone input for Piopiy's digits-only caller validation."""
+    return "".join(ch for ch in str(value or "").strip() if ch.isdigit())
 
 
 class TwilioMediaBridge:
@@ -1594,6 +1604,158 @@ class TataCallClient:
             self._build_headers(),
         )
         return _normalize_provider_response(parsed)
+
+
+class PiopiyCallClient:
+    """Create outbound calls through Piopiy's AI call API."""
+
+    def __init__(self, settings: AppSettings) -> None:
+        self.settings = settings
+
+    def ensure_configured(
+        self,
+        *,
+        agent_id: str | None = None,
+        caller_id: str | None = None,
+        app_id: str | None = None,
+    ) -> None:
+        resolved_caller_id = (caller_id or self.settings.piopiy_caller_id or "").strip()
+        resolved_app_id = (app_id or self.settings.piopiy_app_id or "").strip()
+        missing = [
+            name
+            for name, value in (
+                ("PIOPIY_API_TOKEN", self.settings.piopiy_api_token),
+                ("PIOPIY_CALLER_ID", resolved_caller_id),
+                ("PIOPIY_APP_ID", resolved_app_id),
+            )
+            if not value
+        ]
+        if missing:
+            raise RuntimeError(f"Missing telephony settings: {', '.join(missing)}")
+        if PiopiyRestClient is None:
+            raise RuntimeError(
+                "Piopiy support is not installed in this environment. Install the `piopiy` package first."
+            )
+
+    async def create_call(
+        self,
+        *,
+        to_number: str,
+        agent_id: str | None = None,
+        caller_id: str | None = None,
+        app_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.ensure_configured(agent_id=agent_id, caller_id=caller_id, app_id=app_id)
+        return await asyncio.to_thread(
+            self._create_call_sync,
+            to_number,
+            agent_id,
+            caller_id,
+            app_id,
+        )
+
+    def _create_call_sync(
+        self,
+        to_number: str,
+        agent_id: str | None,
+        caller_id: str | None,
+        app_id: str | None,
+    ) -> dict[str, Any]:
+        client = PiopiyRestClient(token=self.settings.piopiy_api_token)
+        resolved_caller_id = (caller_id or self.settings.piopiy_caller_id or "").strip()
+        resolved_app_id = (app_id or self.settings.piopiy_app_id or "").strip()
+        normalized_to_number = _normalize_pio_dial_number(to_number)
+        if not re.fullmatch(r"[1-9][0-9]{6,15}", normalized_to_number):
+            raise RuntimeError(
+                "Piopiy requires a digits-only destination number with 7 to 16 digits, for example 919876543210."
+            )
+        response = client.voice.call(
+            caller_id=resolved_caller_id,
+            to_number=normalized_to_number,
+            app_id=resolved_app_id,
+        )
+        normalized = response if isinstance(response, dict) else {"raw_response": response}
+        sid = str(
+            normalized.get("sid")
+            or normalized.get("call_sid")
+            or normalized.get("callSid")
+            or normalized.get("id")
+            or normalized.get("call_id")
+            or ""
+        ).strip()
+        status = str(normalized.get("status") or normalized.get("state") or "queued").strip() or "queued"
+        normalized["sid"] = sid
+        normalized["status"] = status
+        return normalized
+
+
+class PiopiyMediaBridge:
+    """Expose Piopiy binary stream audio through the session audio transport interface."""
+
+    def __init__(self, websocket: WebSocket) -> None:
+        self.websocket = websocket
+        self._incoming_audio: asyncio.Queue[bytes | None] = asyncio.Queue()
+        self._send_lock = asyncio.Lock()
+        self._closed = False
+        self.stream_sid: str | None = None
+        self.call_sid: str | None = None
+
+    def open(self) -> None:
+        """The websocket is already open when Piopiy streaming begins."""
+
+    async def handle_ws_message(self, message: dict[str, Any]) -> None:
+        event = str(message.get("event") or message.get("status") or "").strip().lower()
+        if event in {"start", "connected", "stream_connected"}:
+            self.stream_sid = str(message.get("cmiuuid") or message.get("callSid") or "").strip() or self.stream_sid
+            self.call_sid = str(message.get("callSid") or message.get("cmiuuid") or "").strip() or self.call_sid
+            return
+        if event in {"stop", "hangup", "stream_disconnected", "stream_error"}:
+            await self._incoming_audio.put(None)
+            self._closed = True
+
+    async def push_binary(self, payload: bytes) -> None:
+        if self._closed or not payload:
+            return
+        await self._incoming_audio.put(payload)
+
+    async def mic_chunks(self):
+        while True:
+            chunk = await self._incoming_audio.get()
+            if chunk is None:
+                return
+            yield chunk
+
+    async def play(self, audio_bytes: bytes) -> None:
+        if self._closed or not audio_bytes:
+            return
+        async with self._send_lock:
+            try:
+                await self.websocket.send_bytes(audio_bytes)
+            except Exception:
+                logger.debug("Piopiy outbound audio send failed.", exc_info=True)
+
+    async def flush_playback(self) -> None:
+        # Piopiy does not require explicit clear frames for the current bridge path.
+        return
+
+    def is_playing(self) -> bool:
+        return False
+
+    def should_drop_input_while_playing(self) -> bool:
+        return False
+
+    async def wait_for_playback_idle(self) -> None:
+        return
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        await self._incoming_audio.put(None)
+        try:
+            await self.websocket.close()
+        except Exception:
+            pass
 
 
 class _MetaOutgoingAudioTrack(MediaStreamTrack):

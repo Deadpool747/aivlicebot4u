@@ -106,7 +106,7 @@ cp .env.example .env
 - Optionally `GEMINI_LIVE_MODEL`
 - Optionally `GEMINI_STRUCTURED_MODEL`
 - Optionally `DEFAULT_CLIENT_ID`
-- For phone calls: `PUBLIC_BASE_URL`, `TELEPHONY_PROVIDER`
+- For phone calls: `PUBLIC_BASE_URL`, `TELEPHONY_PROVIDER` (default: `piopiy`)
 - For Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`
 - For Exotel: `EXOTEL_ACCOUNT_SID`, `EXOTEL_API_KEY`, `EXOTEL_API_TOKEN`, `EXOTEL_CALLER_ID`, `EXOTEL_SUBDOMAIN`, `EXOTEL_APP_ID`
 - For Airtel IQ: `AIRTEL_IQ_API_URL`, `AIRTEL_IQ_API_KEY`, `AIRTEL_IQ_API_SECRET`, `AIRTEL_IQ_APPLICATION_ID`, `AIRTEL_IQ_CALLER_ID`, `AIRTEL_IQ_HEADERS_JSON`, `AIRTEL_IQ_REQUEST_TEMPLATE_JSON`
@@ -145,11 +145,22 @@ Then open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ## Calling a mobile phone
 
-The app can now place an outbound phone call through Twilio or Exotel and run the same Gemini session over the call audio instead of the local microphone and speakers.
+The app can now place an outbound phone call through Piopiy, Twilio, Exotel, Airtel IQ, or Meta WhatsApp and run the same Gemini session over the call audio instead of the local microphone and speakers.
 
 To use it:
 
 1. Add the telephony settings in `.env`.
+
+For Piopiy:
+
+```bash
+TELEPHONY_PROVIDER=piopiy
+PUBLIC_BASE_URL=https://your-public-url.example.com
+PIOPIY_API_TOKEN=your_piopiy_api_token
+PIOPIY_AGENT_ID=your_piopiy_agent_id
+PIOPIY_CALLER_ID=your_piopiy_caller_id
+PIOPIY_APP_ID=your_piopiy_app_id
+```
 
 For Exotel:
 

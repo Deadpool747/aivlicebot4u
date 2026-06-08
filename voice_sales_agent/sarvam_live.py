@@ -1,4 +1,4 @@
-"""Sarvam live adapter using turn-based STT + LLM + TTS behind the live client interface."""
+"""Sarvam-backed live adapters using turn-based STT/LLM/TTS behind the live client interface."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import tempfile
 import wave
 
 from .constants import INPUT_SAMPLE_RATE
-from .gemini_api import LiveEvent
+from .gemini_api import GeminiStructuredClient, LiveEvent
 from .sarvam_api import SarvamRecordingTranscriber, SarvamSpeechClient, SarvamStructuredClient
 
 logger = logging.getLogger(__name__)
@@ -195,3 +195,44 @@ class SarvamLiveVoiceClient:
             if event is None:
                 return
             yield event
+
+
+class SarvamGeminiHybridLiveClient(SarvamLiveVoiceClient):
+    """Sarvam STT/TTS with Gemini handling text reasoning between turns."""
+
+    def __init__(
+        self,
+        *,
+        sarvam_api_key: str,
+        sarvam_base_url: str,
+        tts_model: str,
+        tts_speaker: str,
+        tts_target_language_code: str,
+        stt_model: str,
+        stt_mode: str,
+        stt_language_code: str,
+        gemini_api_key: str,
+        gemini_model: str,
+    ) -> None:
+        self._structured = GeminiStructuredClient(gemini_api_key, gemini_model)
+        self._speech = SarvamSpeechClient(
+            sarvam_api_key,
+            base_url=sarvam_base_url,
+            model=tts_model,
+            speaker=tts_speaker,
+            target_language_code=tts_target_language_code,
+        )
+        self._stt = SarvamRecordingTranscriber(
+            sarvam_api_key,
+            base_url=sarvam_base_url,
+            model=stt_model,
+            mode=stt_mode,
+            language_code=stt_language_code,
+        )
+        self._queue: asyncio.Queue[LiveEvent | None] = asyncio.Queue()
+        self._audio_buffer = bytearray()
+        self._system_prompt = ""
+        self._voice_name = ""
+        self._history: list[dict[str, str]] = []
+        self._response_mode = "live_audio"
+        self._connected = False

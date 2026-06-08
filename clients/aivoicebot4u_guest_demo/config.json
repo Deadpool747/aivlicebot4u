@@ -42,9 +42,9 @@
     "workflow_mode": "model_led",
     "closure_mode": "default",
     "opening_script": {
-      "english": "Hello {customer_name}, welcome to the {project_name} demo on AI Voice Bot 4 U. How may I help you today?",
-      "marathi": "नमस्कार {customer_name}, AI Voice Bot 4 U वरील {project_name} डेमोमध्ये तुमचं स्वागत आहे. मी कशी मदत करू?",
-      "hindi": "नमस्कार {customer_name}, AI Voice Bot 4 U पर {project_name} डेमो में आपका स्वागत है। मैं आपकी कैसे मदद कर सकती हूँ?"
+      "english": "Hello {customer_name}, welcome to the {project_name} demo. How can I help today?",
+      "marathi": "नमस्कार {customer_name}, {project_name} डेमोमध्ये तुमचं स्वागत आहे. मी कशी मदत करू?",
+      "hindi": "नमस्कार {customer_name}, {project_name} डेमो में आपका स्वागत है। मैं कैसे मदद कर सकती हूँ?"
     },
     "closure_examples": {
       "positive": [
@@ -54,7 +54,7 @@
       ],
       "negative": [],
       "non_closing_questions": [],
-      "guidance": "End by confirming the need that was captured and that the pre-shared contact details can be used for follow-up."
+      "guidance": "End with one short recap and confirm that the team can follow up using the shared contact details."
     },
     "disallowed_claims": [
       "Do not promise exact prices, inventory, property availability, medical outcomes, or financing approval unless explicitly provided in approved knowledge.",
@@ -77,10 +77,10 @@
   },
   "model_routing": {
     "live_generation": {
-      "temperature": 0.7,
+      "temperature": 0.45,
       "top_p": 0.9,
-      "top_k": 32,
-      "max_output_tokens": 2000
+      "top_k": 24,
+      "max_output_tokens": 512
     },
     "structured_generation": {
       "temperature": 0.2,

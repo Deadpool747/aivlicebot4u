@@ -1,5 +1,5 @@
 [Unit]
-Description=Voice Sales Agent FastAPI Service
+Description=Piopiy Voice Agent Worker
 After=network.target
 
 [Service]
@@ -9,10 +9,7 @@ Group=ubuntu
 WorkingDirectory=/opt/new_voice_agent
 EnvironmentFile=/opt/new_voice_agent/.env
 Environment=PYTHONUNBUFFERED=1
-Environment=DASHBOARD_HOST=127.0.0.1
-Environment=DASHBOARD_PORT=8000
-Environment=SESSION_COOKIE_SECURE=1
-ExecStart=/opt/new_voice_agent/.venv/bin/python /opt/new_voice_agent/scripts/run_dashboard.py
+ExecStart=/opt/new_voice_agent-piopiy/.venv/bin/python /opt/new_voice_agent/scripts/run_piopiy_agent.py
 Restart=always
 RestartSec=5
 UMask=0027
@@ -20,7 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/opt/new_voice_agent
+ReadWritePaths=/opt/new_voice_agent /opt/new_voice_agent-piopiy
 CapabilityBoundingSet=
 AmbientCapabilities=
 LockPersonality=true
@@ -33,3 +30,4 @@ RestrictRealtime=true
 
 [Install]
 WantedBy=multi-user.target
+

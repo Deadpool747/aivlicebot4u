@@ -11,7 +11,7 @@ from .faster_stt import FasterWhisperTranscriber
 from .gemini_api import GeminiLiveVoiceClient, GeminiSpeechClient, GeminiStructuredClient
 from .recording_stt import RecordingSpeechRecognitionTranscriber
 from .sarvam_api import SarvamRecordingTranscriber, SarvamSpeechClient, SarvamStructuredClient
-from .sarvam_live import SarvamLiveVoiceClient
+from .sarvam_live import SarvamGeminiHybridLiveClient, SarvamLiveVoiceClient
 
 
 class StructuredClientProtocol(Protocol):
@@ -57,7 +57,10 @@ class ProviderRuntime:
 
 
 def _normalize_provider(value: str | None, default: str) -> str:
-    normalized = str(value or "").strip().lower()
+    normalized = str(value or "").strip()
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {"'", '"'}:
+        normalized = normalized[1:-1].strip()
+    normalized = normalized.lower()
     return normalized or default
 
 
@@ -91,11 +94,26 @@ def build_provider_runtime(
             stt_mode=settings.sarvam_stt_mode,
             stt_language_code=settings.sarvam_stt_language_code,
         )
+    elif live_provider == "hybrid":
+        if not settings.sarvam_api_key:
+            raise RuntimeError("LIVE_PROVIDER=hybrid requires SARVAM_API_KEY.")
+        live = SarvamGeminiHybridLiveClient(
+            sarvam_api_key=settings.sarvam_api_key,
+            sarvam_base_url=settings.sarvam_base_url,
+            tts_model=settings.sarvam_tts_model,
+            tts_speaker=settings.sarvam_tts_speaker,
+            tts_target_language_code=settings.sarvam_tts_target_language_code,
+            stt_model=settings.sarvam_stt_model,
+            stt_mode=settings.sarvam_stt_mode,
+            stt_language_code=settings.sarvam_stt_language_code,
+            gemini_api_key=runtime_structured_api_key,
+            gemini_model=runtime_structured_model,
+        )
     elif live_provider == "gemini":
         live = GeminiLiveVoiceClient(runtime_api_key, runtime_live_model)
     else:
         raise RuntimeError(
-            f"LIVE_PROVIDER='{live_provider}' is unsupported. Use one of: gemini, sarvam."
+            f"LIVE_PROVIDER='{live_provider}' is unsupported. Use one of: gemini, sarvam, hybrid."
         )
 
     if structured_provider == "sarvam":

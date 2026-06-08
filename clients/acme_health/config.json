@@ -34,7 +34,7 @@
   },
   "conversation": {
     "conversation_mode": "sales_discovery",
-    "default_opening_language": null,
+    "default_opening_language": "english",
     "workflow_mode": "model_led",
     "closure_mode": "default",
     "opening_script": {},
