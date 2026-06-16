@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -73,6 +74,7 @@ from .telephony import (
     build_ws_url,
     validate_public_base_url,
 )
+from .piopiy_direct_gemini_bridge import PiopiyDirectGeminiBridgeSession
 from .constants import INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE, PROJECT_ROOT
 from .models import SessionArtifacts
 from .web_state import DashboardState
@@ -674,6 +676,81 @@ def _payload_value(payload: dict[str, str], *keys: str) -> str:
     return ""
 
 
+def _iter_nested_dicts(value: Any) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        nodes.append(value)
+        for nested in value.values():
+            nodes.extend(_iter_nested_dicts(nested))
+    elif isinstance(value, list):
+        for nested in value:
+            nodes.extend(_iter_nested_dicts(nested))
+    return nodes
+
+
+def _extract_piopiy_recording_url(payload: dict[str, Any]) -> str:
+    candidate_keys = (
+        "file_url",
+        "fileUrl",
+        "recording_file_url",
+        "recordingFileUrl",
+        "recording_url",
+        "recordingUrl",
+        "RecordingUrl",
+        "RecordingURL",
+        "recordingURL",
+        "recording_file",
+        "recordingFile",
+        "recording",
+        "audio_url",
+        "audioUrl",
+        "media_url",
+        "mediaUrl",
+        "call_recording_url",
+        "callRecordingUrl",
+    )
+    for node in _iter_nested_dicts(payload):
+        for key in candidate_keys:
+            value = node.get(key)
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if cleaned:
+                    return cleaned
+    return ""
+
+
+def _extract_piopiy_call_identity(payload: dict[str, Any]) -> tuple[str, str, str]:
+    provider_call_sid = str(
+        payload.get("cmiuuid")
+        or payload.get("callSid")
+        or payload.get("call_id")
+        or payload.get("conversation_id")
+        or ""
+    ).strip()
+    call_id = str(payload.get("call_id") or "").strip()
+    conversation_id = str(payload.get("conversation_id") or "").strip()
+    return provider_call_sid, call_id, conversation_id
+
+
+def _sanitize_filename(value: str, fallback: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "").strip())
+    cleaned = cleaned.strip("._-")
+    return cleaned or fallback
+
+
+def _build_piopiy_recording_filename(recording_url: str, pending_id: str, content_type: str | None = None) -> str:
+    parsed = urllib.parse.urlparse(recording_url)
+    candidate_name = Path(parsed.path).name.strip()
+    candidate_name = _sanitize_filename(candidate_name, fallback="")
+    if candidate_name:
+        return candidate_name
+    suffix = Path(parsed.path).suffix
+    if not suffix and content_type:
+        suffix = mimetypes.guess_extension(content_type.split(";", 1)[0].strip().lower()) or ""
+    suffix = suffix if suffix and len(suffix) <= 8 else ".bin"
+    return f"piopiy_recording_{pending_id}{suffix}"
+
+
 def _resolve_tata_from_number(payload: dict[str, str]) -> str:
     return _payload_value(
         payload,
@@ -914,7 +991,11 @@ def _builder_opening_script(display_name: str, primary_language: str | None, goa
     return scripts
 
 
-def _build_client_builder_payload(request: ClientBuilderRequest, workspace_client_id: str) -> dict[str, Any]:
+def _build_client_builder_payload(
+    request: ClientBuilderRequest,
+    workspace_client_id: str,
+    telephony_provider: str,
+) -> dict[str, Any]:
     business_name = request.business_name.strip() or "New Business"
     project_name = request.project_name.strip() or f"{business_name} Agent"
     languages = _builder_supported_languages(request.preferred_languages) or ["marathi", "hindi", "english"]
@@ -1122,7 +1203,7 @@ def _build_client_builder_payload(request: ClientBuilderRequest, workspace_clien
                     "structured_model": None,
                     "tts_model": None,
                     "outreach_mode": "call_only",
-                    "outbound_call_provider": settings.telephony_provider,
+                    "outbound_call_provider": telephony_provider,
                     "whatsapp_consent_message": None,
                     "whatsapp_chat_opening_message": None,
                 },
@@ -1798,6 +1879,20 @@ class SessionController:
                 merged[str(key)] = value
             session.telephony_context = merged
             session.artifacts.telephony_context = dict(merged)
+
+    async def merge_session_artifacts(self, session_key: str, updates: dict[str, Any] | None) -> None:
+        if not updates:
+            return
+        async with self._lock:
+            primary_key = self._resolve_session_key(session_key)
+            session = self._sessions.get(primary_key)
+            if session is None:
+                return
+            for key, value in updates.items():
+                if value is None:
+                    continue
+                if hasattr(session.artifacts, key):
+                    setattr(session.artifacts, key, value)
 
     async def snapshot(self, session_key: str = "dashboard") -> dict:
         async with self._lock:
@@ -2768,7 +2863,197 @@ def create_app() -> FastAPI:
         "updated_at": None,
         "history": [],
     }
+    piopiy_recording_tasks: dict[str, asyncio.Task[None]] = {}
+    piopiy_recording_tasks_lock = asyncio.Lock()
     browser_audio_bridges: dict[str, BrowserAudioBridge] = {}
+
+    def _piopiy_session_dir(pending_id: str, context: dict[str, Any] | None) -> Path:
+        client_id = str((context or {}).get("client_id") or settings.default_client_id or "piopiy").strip() or "piopiy"
+        return settings.session_output_dir / client_id / pending_id
+
+    def _piopiy_recording_metadata_path(session_dir: Path) -> Path:
+        return session_dir / "piopiy_recording.json"
+
+    def _upsert_json_file(path: Path, updates: dict[str, Any]) -> None:
+        existing: dict[str, Any] = {}
+        if path.exists():
+            try:
+                raw = path.read_text(encoding="utf-8")
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    existing = parsed
+            except Exception:
+                existing = {}
+        existing.update(updates)
+        path.write_text(json.dumps(existing, ensure_ascii=True, default=str, indent=2), encoding="utf-8")
+
+    async def _persist_piopiy_recording_artifacts(
+        pending_id: str,
+        recording_url: str,
+        recording_path: Path,
+        *,
+        content_type: str | None = None,
+        size_bytes: int | None = None,
+        downloaded_at: datetime | None = None,
+    ) -> None:
+        downloaded_at_dt = downloaded_at or datetime.now(timezone.utc)
+        timestamp = downloaded_at_dt.isoformat()
+        context_updates: dict[str, Any] = {
+            "piopiy_recording_url": recording_url,
+            "piopiy_recording_path": str(recording_path),
+            "piopiy_recording_filename": recording_path.name,
+            "piopiy_recording_content_type": content_type,
+            "piopiy_recording_downloaded_at": timestamp,
+            "piopiy_recording_size_bytes": size_bytes,
+        }
+        artifact_updates: dict[str, Any] = {
+            "piopiy_recording_url": recording_url,
+            "piopiy_recording_path": str(recording_path),
+            "piopiy_recording_filename": recording_path.name,
+            "piopiy_recording_content_type": content_type,
+            "piopiy_recording_downloaded_at": downloaded_at_dt,
+            "piopiy_recording_size_bytes": size_bytes,
+        }
+        await telephony.update_call_context(pending_id, context_updates)
+        await controller.merge_telephony_context(pending_id, context_updates)
+        await controller.merge_session_artifacts(pending_id, artifact_updates)
+        context = await telephony.get_call_context(pending_id) or {}
+        session_dir = _piopiy_session_dir(pending_id, context)
+        session_dir.mkdir(parents=True, exist_ok=True)
+        _upsert_json_file(
+            _piopiy_recording_metadata_path(session_dir),
+            {
+                "pending_id": pending_id,
+                "client_id": context.get("client_id"),
+                "project_id": context.get("project_id"),
+                "recording_url": recording_url,
+                "recording_path": str(recording_path),
+                "recording_filename": recording_path.name,
+                "recording_content_type": content_type,
+                "recording_size_bytes": size_bytes,
+                "downloaded_at": timestamp,
+            },
+        )
+        artifacts_path = session_dir / "artifacts.json"
+        if artifacts_path.exists():
+            _upsert_json_file(
+                artifacts_path,
+                {
+                    "piopiy_recording_url": recording_url,
+                    "piopiy_recording_path": str(recording_path),
+                    "piopiy_recording_filename": recording_path.name,
+                    "piopiy_recording_content_type": content_type,
+                    "piopiy_recording_downloaded_at": timestamp,
+                    "piopiy_recording_size_bytes": size_bytes,
+                },
+            )
+
+    async def _download_piopiy_recording(pending_id: str, payload: dict[str, Any], recording_url: str) -> None:
+        context = await telephony.get_call_context(pending_id) or {}
+        session_dir = _piopiy_session_dir(pending_id, context)
+        session_dir.mkdir(parents=True, exist_ok=True)
+        existing_path = str(context.get("piopiy_recording_path") or "").strip()
+        if existing_path and Path(existing_path).exists():
+            logger.info("Piopiy recording already saved for pending_id=%s path=%s", pending_id, existing_path)
+            return
+        guessed_name = _build_piopiy_recording_filename(recording_url, pending_id)
+        target_path = session_dir / guessed_name
+        if target_path.exists() and target_path.stat().st_size > 0:
+            logger.info("Piopiy recording file already exists for pending_id=%s path=%s", pending_id, target_path)
+            await _persist_piopiy_recording_artifacts(
+                pending_id,
+                recording_url,
+                target_path,
+                content_type=str(context.get("piopiy_recording_content_type") or "").strip() or None,
+                size_bytes=target_path.stat().st_size,
+                downloaded_at=datetime.now(timezone.utc),
+            )
+            return
+        temp_path = target_path.with_name(f"{target_path.name}.part")
+        if temp_path.exists():
+            temp_path.unlink()
+        auth_headers = []
+        if settings.piopiy_api_token:
+            auth_headers = ["-H", f"Authorization: Bearer {settings.piopiy_api_token}"]
+        download_cmd = ["curl", "-sSfL", "--max-time", "120", *auth_headers, "-o", str(temp_path), recording_url]
+        completed = await asyncio.to_thread(
+            subprocess.run,
+            download_cmd,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"Piopiy recording download failed ({completed.returncode}): {completed.stderr.strip() or completed.stdout.strip()}"
+            )
+        content_type = "audio/mpeg" if str(recording_url).lower().endswith(".mp3") else None
+        if not target_path.suffix and content_type:
+            guessed_name = _build_piopiy_recording_filename(recording_url, pending_id, content_type=content_type)
+            target_path = session_dir / guessed_name
+            temp_path = target_path.with_name(f"{target_path.name}.part")
+            if temp_path.exists():
+                temp_path.unlink()
+            temp_path = target_path
+        size_bytes = temp_path.stat().st_size
+        temp_path.replace(target_path)
+        await _persist_piopiy_recording_artifacts(
+            pending_id,
+            recording_url,
+            target_path,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            downloaded_at=datetime.now(timezone.utc),
+        )
+        logger.info(
+            "Saved Piopiy recording for pending_id=%s path=%s url=%s",
+            pending_id,
+            target_path,
+            recording_url,
+        )
+
+    async def _schedule_piopiy_recording_download(
+        pending_id: str,
+        payload: dict[str, Any],
+        recording_url: str,
+    ) -> None:
+        async with piopiy_recording_tasks_lock:
+            existing_task = piopiy_recording_tasks.get(pending_id)
+            if existing_task is not None and not existing_task.done():
+                return
+            task = asyncio.create_task(_download_piopiy_recording(pending_id, payload, recording_url))
+            piopiy_recording_tasks[pending_id] = task
+
+            def _cleanup(completed_task: asyncio.Task[None], key: str = pending_id) -> None:
+                piopiy_recording_tasks.pop(key, None)
+                try:
+                    completed_task.result()
+                except asyncio.CancelledError:
+                    return
+                except Exception:
+                    logger.exception("Piopiy recording download failed pending_id=%s", key)
+
+            task.add_done_callback(_cleanup)
+
+    async def _maybe_save_piopiy_recording(
+        pending_id: str,
+        payload: dict[str, Any],
+        *,
+        status: str = "",
+        event_type: str = "",
+    ) -> None:
+        recording_url = _extract_piopiy_recording_url(payload)
+        if not recording_url:
+            return
+        normalized_status = (status or payload.get("status") or "").strip().lower()
+        normalized_event = (event_type or payload.get("event") or "").strip().lower()
+        if normalized_status or normalized_event:
+            if not (
+                _is_terminal_call_status(normalized_status)
+                or _is_terminal_event(normalized_event)
+                or normalized_status in {"answered"}
+            ):
+                return
+        await _schedule_piopiy_recording_download(pending_id, payload, recording_url)
 
     async def _capture_piopiy_request(request: Request) -> dict[str, Any]:
         raw_body = await request.body()
@@ -3045,6 +3330,70 @@ def create_app() -> FastAPI:
             return configured_direction
         return "inbound"
 
+    def _resolve_inbound_piopiy_target(to_number: str | None = None) -> tuple[str, str | None]:
+        # Piopiy inbound calls should land in the Piopiy default client/project
+        # unless a dedicated routing map overrides a specific DID.
+        force_numbers_raw = (os.getenv("FORCE_PIOPIY_ROUTE_NUMBERS", "").strip() or "")
+        force_client_id = (os.getenv("FORCE_PIOPIY_ROUTE_CLIENT_ID", "").strip() or "")
+        force_project_id = (os.getenv("FORCE_PIOPIY_ROUTE_PROJECT_ID", "").strip() or None)
+        target_digits = _normalize_phone_digits(to_number)
+        if force_numbers_raw and force_client_id and target_digits:
+            forced_numbers: set[str] = set()
+            for token in force_numbers_raw.split(","):
+                forced_numbers.update(_build_tata_number_variants(token))
+            if target_digits in forced_numbers:
+                logger.info(
+                    "Resolved Piopiy inbound target via code-level forced route: to_number=%s client_id=%s project_id=%s",
+                    to_number or "",
+                    force_client_id,
+                    force_project_id or "",
+                )
+                return force_client_id, force_project_id
+
+        mapping_json = (os.getenv("INBOUND_PIOPIY_NUMBER_ROUTING_JSON", "").strip() or None)
+        if mapping_json and target_digits:
+            try:
+                parsed = json.loads(mapping_json)
+            except json.JSONDecodeError:
+                parsed = None
+                logger.warning("INBOUND_PIOPIY_NUMBER_ROUTING_JSON is not valid JSON. Falling back to default Piopiy routing.")
+            if isinstance(parsed, dict):
+                for key, value in parsed.items():
+                    key_variants = _build_tata_number_variants(str(key))
+                    if target_digits not in key_variants:
+                        continue
+                    if not isinstance(value, dict):
+                        continue
+                    mapped_client_id = str(value.get("client_id") or "").strip()
+                    mapped_project_id = str(value.get("project_id") or "").strip() or None
+                    if mapped_client_id:
+                        logger.info(
+                            "Resolved Piopiy inbound target via number map: to_number=%s client_id=%s project_id=%s",
+                            to_number or "",
+                            mapped_client_id,
+                            mapped_project_id or "",
+                        )
+                        return mapped_client_id, mapped_project_id
+
+        configured_client_id = (os.getenv("PIOPIY_DEFAULT_CLIENT_ID", "").strip() or None)
+        configured_project_id = (os.getenv("PIOPIY_DEFAULT_PROJECT_ID", "").strip() or None)
+        if configured_client_id:
+            logger.info(
+                "Resolved Piopiy inbound target via defaults: to_number=%s client_id=%s project_id=%s",
+                to_number or "",
+                configured_client_id,
+                configured_project_id or "",
+            )
+            return configured_client_id, configured_project_id
+        fallback_client_id, fallback_project_id = _resolve_inbound_twilio_target()
+        logger.info(
+            "Resolved Piopiy inbound target via Twilio fallback: to_number=%s client_id=%s project_id=%s",
+            to_number or "",
+            fallback_client_id,
+            fallback_project_id or "",
+        )
+        return fallback_client_id, fallback_project_id
+
     def _ensure_user_workspace_client(user: dict[str, str]) -> tuple[str, bool]:
         workspace_client_id = _workspace_client_id_for_user(user)
         existing_ids = list_client_ids()
@@ -3090,6 +3439,7 @@ def create_app() -> FastAPI:
                     agent_type="sales",
                 ),
                 workspace_client_id=workspace_client_id,
+                telephony_provider=settings.telephony_provider,
             )
         config = dict(payload.get("config") or {})
         config["display_name"] = f"{user.get('name', 'User')} Workflow"
@@ -3651,7 +4001,11 @@ def create_app() -> FastAPI:
         if user is None:
             raise HTTPException(status_code=401, detail="Authentication required.")
         workspace_client_id, _ = _ensure_user_workspace_client(user)
-        return _build_client_builder_payload(request, workspace_client_id=workspace_client_id)
+        return _build_client_builder_payload(
+            request,
+            workspace_client_id=workspace_client_id,
+            telephony_provider=settings.telephony_provider,
+        )
 
     @app.get("/api/settings")
     async def app_settings() -> dict[str, str | int]:
@@ -4133,9 +4487,17 @@ def create_app() -> FastAPI:
     async def browser_audio(session_key: str, websocket: WebSocket) -> None:
         user = auth_manager.current_user_from_cookie_header(websocket.headers.get("cookie", ""))
         if user is None:
+            logger.warning("Browser audio websocket denied: missing auth cookie session_key=%s", session_key)
             await websocket.close(code=4401)
             return
-        if session_key != _workspace_session_key_for_user(user):
+        expected_session_key = _workspace_session_key_for_user(user)
+        if session_key != expected_session_key:
+            logger.warning(
+                "Browser audio websocket denied: session mismatch session_key=%s expected=%s user_id=%s",
+                session_key,
+                expected_session_key,
+                user.get("id") or "",
+            )
             await websocket.close(code=4403)
             return
         logger.info("Browser audio websocket connected session_key=%s", session_key)
@@ -4873,17 +5235,17 @@ def create_app() -> FastAPI:
             ws_url = build_ws_url(settings.public_base_url or "", f"/tata/media/{pending_id}")
             return _build_tata_ws_response("ok", ws_url)
 
-        target_client_id, target_project_id = _resolve_inbound_tata_target(to_number=to_number)
+        target_client_id, target_project_id = _resolve_inbound_piopiy_target(to_number=to_number)
         try:
             pending_id, _ = await telephony.create_inbound_call(
-                provider="tata",
+                provider="piopiy",
                 client_id=target_client_id,
                 customer_name="Inbound Caller",
                 from_number=from_number,
                 to_number=to_number,
                 project_id=target_project_id,
                 provider_call_sid=call_sid or None,
-                lead_source="tata_inbound_stream",
+                lead_source="piopiy_inbound_stream",
                 context_metadata={
                     "call_direction": direction or "inbound",
                     "stream_status": status or None,
@@ -4894,11 +5256,11 @@ def create_app() -> FastAPI:
                     "recording_url": recording_url or None,
                     "cdr_duration_seconds": duration_seconds or None,
                     "status_callback_payload": json.dumps(payload, ensure_ascii=True),
-                    "auto_created_from_tata_inbound_webhook": True,
+                    "auto_created_from_piopiy_inbound_webhook": True,
                 },
             )
             logger.info(
-                "Processed Tata inbound webhook by creating pending_id=%s payload=%s",
+                "Processed Piopiy inbound webhook by creating pending_id=%s payload=%s",
                 pending_id,
                 payload,
             )
@@ -4929,7 +5291,7 @@ def create_app() -> FastAPI:
                     "duration_seconds": duration_seconds,
                 },
             )
-            logger.info("Processed Tata inbound webhook without pending match payload=%s", payload)
+            logger.info("Processed Piopiy inbound webhook without pending match payload=%s", payload)
         return {"status": "ok"}
 
     @app.api_route("/tata/voice/endpoint", methods=["GET", "POST"])
@@ -4971,16 +5333,16 @@ def create_app() -> FastAPI:
             ws_url = build_ws_url(settings.public_base_url or "", f"/tata/media/{existing_pending_id}")
             return _build_tata_endpoint_response(ws_url)
 
-        target_client_id, target_project_id = _resolve_inbound_tata_target(to_number=to_number)
+        target_client_id, target_project_id = _resolve_inbound_piopiy_target(to_number=to_number)
         pending_id, _ = await telephony.create_inbound_call(
-            provider="tata",
+            provider="piopiy",
             client_id=target_client_id,
             customer_name="Inbound Caller",
             from_number=from_number,
             to_number=to_number,
             project_id=target_project_id,
             provider_call_sid=call_sid or None,
-            lead_source="tata_inbound_stream",
+            lead_source="piopiy_inbound_stream",
             context_metadata={
                 "call_direction": direction,
                 "stream_status": status or None,
@@ -5742,20 +6104,20 @@ def create_app() -> FastAPI:
                         # auto-created pending calls for the same call.
                         if event == "connected" and not (call_sid or from_number or to_number):
                             continue
-                        target_client_id, target_project_id = _resolve_inbound_tata_target(to_number=to_number)
+                        target_client_id, target_project_id = _resolve_inbound_piopiy_target(to_number=to_number)
                         auto_pending_id, auto_pending_call = await telephony.create_inbound_call(
-                            provider="tata",
+                            provider="piopiy",
                             client_id=target_client_id,
                             customer_name="Inbound Caller",
                             from_number=from_number,
                             to_number=to_number,
                             project_id=target_project_id,
                             provider_call_sid=call_sid or None,
-                            lead_source="tata_inbound_stream",
+                            lead_source="piopiy_inbound_stream",
                             context_metadata={
                                 "call_direction": direction,
                                 "called_via_number": to_number or None,
-                                "auto_created_from_tata_ws": True,
+                                "auto_created_from_piopiy_ws": True,
                             },
                         )
                         pending_call = auto_pending_call
@@ -5777,7 +6139,7 @@ def create_app() -> FastAPI:
                         break
 
                 if not session_started and event in {"connected", "start", "media"}:
-                    target_client_id, target_project_id = _resolve_inbound_tata_target(
+                    target_client_id, target_project_id = _resolve_inbound_piopiy_target(
                         to_number=(
                             str((pending_call.metadata or {}).get("called_via_number") or "")
                             or str((pending_call.metadata or {}).get("to_number") or "")
@@ -5786,7 +6148,7 @@ def create_app() -> FastAPI:
                     )
                     selected_project_id = target_project_id or (pending_call.metadata or {}).get("project_id")
                     logger.info(
-                        "Tata session start selection: pending_id=%s provider_call_sid=%s pending_client_id=%s selected_client_id=%s selected_project_id=%s",
+                        "Piopiy session start selection: pending_id=%s provider_call_sid=%s pending_client_id=%s selected_client_id=%s selected_project_id=%s",
                         active_session_key,
                         str((pending_call.metadata or {}).get("provider_call_sid") or ""),
                         pending_call.client_id,
@@ -5811,9 +6173,9 @@ def create_app() -> FastAPI:
                 if session_started and event == "media":
                     await controller.release_initial_prompt(session_key=active_session_key)
         except WebSocketDisconnect:
-            logger.info("Tata media websocket disconnected pending_id=%s", pending_id or "<fallback>")
+            logger.info("Piopiy media websocket disconnected pending_id=%s", pending_id or "<fallback>")
         except RuntimeError:
-            logger.exception("Tata media session failed pending_id=%s", pending_id or "<fallback>")
+            logger.exception("Piopiy media session failed pending_id=%s", pending_id or "<fallback>")
             await bridge.close()
         finally:
             if session_started and active_session_key:
@@ -5943,14 +6305,23 @@ def create_app() -> FastAPI:
             payload = {}
         if not isinstance(payload, dict):
             payload = {}
+        provider_call_sid, call_id, conversation_id = _extract_piopiy_call_identity(payload)
         await telephony.update_call_context(
             pending_id,
             {
                 "piopiy_last_event_json": json.dumps(payload, ensure_ascii=True),
                 "piopiy_last_event_at_epoch": time.time(),
                 "piopiy_event_status": str(payload.get("status") or payload.get("event") or "").strip() or None,
-                "provider_call_sid": str(payload.get("cmiuuid") or payload.get("callSid") or "").strip() or None,
+                "provider_call_sid": provider_call_sid or None,
+                "piopiy_call_id": call_id or None,
+                "piopiy_conversation_id": conversation_id or None,
             },
+        )
+        await _maybe_save_piopiy_recording(
+            pending_id,
+            payload,
+            status=str(payload.get("status") or ""),
+            event_type=str(payload.get("event") or ""),
         )
         return {"ok": True}
 
@@ -5976,20 +6347,68 @@ def create_app() -> FastAPI:
         if not _looks_like_piopiy_payload(payload):
             logger.info("Ignoring malformed Piopiy payload on /piopiy/events")
             return {"ok": True}
-        provider_call_sid = str(payload.get("cmiuuid") or payload.get("callSid") or "").strip()
+        provider_call_sid, call_id, conversation_id = _extract_piopiy_call_identity(payload)
         pending_id = await telephony.find_pending_id_by_provider_sid("piopiy", provider_call_sid) if provider_call_sid else None
         if pending_id is None:
-            logger.info("Piopiy event webhook received without matching pending call sid=%s", provider_call_sid or "<missing>")
-            piopiy_capture["last_events"] = {"request": captured, "matched_pending_id": None}
-            return {"ok": True}
+            caller_id = str(payload.get("caller_id") or payload.get("from") or payload.get("caller") or "").strip()
+            to_number = str(payload.get("to") or payload.get("did") or payload.get("piopiy_number") or "").strip()
+            if caller_id or to_number:
+                client_id = (os.getenv("PIOPIY_DEFAULT_CLIENT_ID") or "aivoicebot4u_guest_demo" or settings.default_client_id or "").strip()
+                project_id = (os.getenv("PIOPIY_DEFAULT_PROJECT_ID") or "real_estate_english_demo").strip() or None
+                pending_id, _ = await telephony.create_inbound_call(
+                    provider="piopiy",
+                    client_id=client_id,
+                    customer_name="Inbound Caller",
+                    from_number=caller_id or "Unknown",
+                    to_number=to_number or settings.piopiy_caller_id or "",
+                    provider_call_sid=provider_call_sid or call_id or conversation_id or None,
+                    lead_source="piopiy_inbound",
+                    context_metadata={
+                        "call_direction": str(payload.get("direction") or "inbound").strip() or "inbound",
+                        "client_id": client_id,
+                        "project_id": project_id,
+                        "provider": "piopiy",
+                        "piopiy_call_id": call_id or None,
+                        "piopiy_conversation_id": conversation_id or None,
+                    },
+                )
+                await telephony.update_call_context(
+                    pending_id,
+                    {
+                        "client_id": client_id,
+                        "project_id": project_id,
+                        "project_name": "Janjal Ward 22 Inbound" if project_id == "janjal_ward22_inbound_918065254654" else None,
+                    },
+                )
+                logger.info(
+                    "Piopiy event webhook created pending call pending_id=%s call_id=%s conversation_id=%s",
+                    pending_id,
+                    call_id or "<missing>",
+                    conversation_id or "<missing>",
+                )
+            else:
+                logger.info(
+                    "Piopiy event webhook received without matching pending call sid=%s",
+                    provider_call_sid or "<missing>",
+                )
+                piopiy_capture["last_events"] = {"request": captured, "matched_pending_id": None}
+                return {"ok": True}
         await telephony.update_call_context(
             pending_id,
             {
                 "piopiy_last_event_json": json.dumps(payload, ensure_ascii=True),
                 "piopiy_last_event_at_epoch": time.time(),
                 "piopiy_event_status": str(payload.get("status") or payload.get("event") or "").strip() or None,
-                "provider_call_sid": provider_call_sid or None,
+                "provider_call_sid": provider_call_sid or call_id or conversation_id or None,
+                "piopiy_call_id": call_id or None,
+                "piopiy_conversation_id": conversation_id or None,
             },
+        )
+        await _maybe_save_piopiy_recording(
+            pending_id,
+            payload,
+            status=str(payload.get("status") or ""),
+            event_type=str(payload.get("event") or ""),
         )
         piopiy_capture["last_events"] = {"request": captured, "matched_pending_id": pending_id}
         return {"ok": True}
@@ -6002,14 +6421,23 @@ def create_app() -> FastAPI:
             payload = {}
         if not isinstance(payload, dict):
             payload = {}
+        provider_call_sid, call_id, conversation_id = _extract_piopiy_call_identity(payload)
         await telephony.update_call_context(
             pending_id,
             {
                 "piopiy_last_cdr_json": json.dumps(payload, ensure_ascii=True),
                 "piopiy_last_cdr_at_epoch": time.time(),
                 "piopiy_cdr_status": str(payload.get("status") or payload.get("event") or "").strip() or None,
-                "provider_call_sid": str(payload.get("cmiuuid") or payload.get("callSid") or "").strip() or None,
+                "provider_call_sid": provider_call_sid or call_id or conversation_id or None,
+                "piopiy_call_id": call_id or None,
+                "piopiy_conversation_id": conversation_id or None,
             },
+        )
+        await _maybe_save_piopiy_recording(
+            pending_id,
+            payload,
+            status=str(payload.get("status") or ""),
+            event_type=str(payload.get("event") or ""),
         )
         return {"ok": True}
 
@@ -6035,21 +6463,68 @@ def create_app() -> FastAPI:
         if not _looks_like_piopiy_payload(payload):
             logger.info("Ignoring malformed Piopiy payload on /piopiy/cdr")
             return {"ok": True}
-        provider_call_sid = str(payload.get("cmiuuid") or payload.get("callSid") or "").strip()
+        provider_call_sid, call_id, conversation_id = _extract_piopiy_call_identity(payload)
         pending_id = await telephony.find_pending_id_by_provider_sid("piopiy", provider_call_sid) if provider_call_sid else None
         if pending_id is None:
-            logger.info("Piopiy CDR webhook received without matching pending call sid=%s", provider_call_sid or "<missing>")
-            piopiy_capture["last_cdr"] = {"request": captured, "matched_pending_id": None}
-            return {"ok": True}
+            caller_id = str(payload.get("caller_id") or payload.get("from") or payload.get("caller") or "").strip()
+            to_number = str(payload.get("to") or payload.get("did") or payload.get("piopiy_number") or "").strip()
+            if caller_id or to_number:
+                client_id = (os.getenv("PIOPIY_DEFAULT_CLIENT_ID") or "aivoicebot4u_guest_demo" or settings.default_client_id or "").strip()
+                project_id = (os.getenv("PIOPIY_DEFAULT_PROJECT_ID") or "real_estate_english_demo").strip() or None
+                pending_id, _ = await telephony.create_inbound_call(
+                    provider="piopiy",
+                    client_id=client_id,
+                    customer_name="Inbound Caller",
+                    from_number=caller_id or "Unknown",
+                    to_number=to_number or settings.piopiy_caller_id or "",
+                    provider_call_sid=provider_call_sid or call_id or conversation_id or None,
+                    lead_source="piopiy_inbound",
+                    context_metadata={
+                        "call_direction": str(payload.get("direction") or "inbound").strip() or "inbound",
+                        "client_id": client_id,
+                        "project_id": project_id,
+                        "provider": "piopiy",
+                        "piopiy_call_id": call_id or None,
+                        "piopiy_conversation_id": conversation_id or None,
+                    },
+                )
+                await telephony.update_call_context(
+                    pending_id,
+                    {
+                        "client_id": client_id,
+                        "project_id": project_id,
+                        "project_name": "Janjal Ward 22 Inbound" if project_id == "janjal_ward22_inbound_918065254654" else None,
+                    },
+                )
+                logger.info(
+                    "Piopiy CDR webhook created pending call pending_id=%s call_id=%s conversation_id=%s",
+                    pending_id,
+                    call_id or "<missing>",
+                    conversation_id or "<missing>",
+                )
+            else:
+                logger.info("Piopiy CDR webhook received without matching pending call sid=%s", provider_call_sid or "<missing>")
+                piopiy_capture["last_cdr"] = {"request": captured, "matched_pending_id": None}
+                return {"ok": True}
         await telephony.update_call_context(
             pending_id,
             {
                 "piopiy_last_cdr_json": json.dumps(payload, ensure_ascii=True),
                 "piopiy_last_cdr_at_epoch": time.time(),
                 "piopiy_cdr_status": str(payload.get("status") or payload.get("event") or "").strip() or None,
-                "provider_call_sid": provider_call_sid or None,
+                "provider_call_sid": provider_call_sid or call_id or conversation_id or None,
+                "piopiy_call_id": call_id or None,
+                "piopiy_conversation_id": conversation_id or None,
             },
         )
+        await _maybe_save_piopiy_recording(
+            pending_id,
+            payload,
+            status=str(payload.get("status") or ""),
+            event_type=str(payload.get("event") or ""),
+        )
+        await telephony.consume_pending_call(pending_id)
+        await _safe_stop_session(session_key=pending_id)
         piopiy_capture["last_cdr"] = {"request": captured, "matched_pending_id": pending_id}
         return {"ok": True}
 
@@ -6149,27 +6624,65 @@ def create_app() -> FastAPI:
 
         bridge = PiopiyMediaBridge(websocket)
         session_started = False
+        bridge_task: asyncio.Task[None] | None = None
         try:
-            logger.info("Pre-initializing Piopiy voice session pending_id=%s", pending_id)
+            stream_runtime = (
+                str(os.getenv("PIOPIY_STREAM_RUNTIME") or "session_controller").strip().lower()
+            )
             _record_piopiy_stage(
-                "stream_session_starting",
+                "stream_runtime_selected",
                 pending_id=pending_id,
+                runtime=stream_runtime,
                 client_id=pending_call.client_id,
                 project_id=(pending_call.metadata or {}).get("project_id"),
             )
-            await controller.start_with_audio(
-                client_id=pending_call.client_id,
-                customer_name=pending_call.customer_name,
-                project_id=(pending_call.metadata or {}).get("project_id"),
-                audio=bridge,
-                telephony_context=pending_call.metadata,
-                session_key=pending_id,
-                defer_initial_prompt=False,
-            )
-            session_started = True
-            _record_piopiy_stage("stream_session_started", pending_id=pending_id)
+            if stream_runtime in {"direct_gemini_bridge", "direct_gemini", "gemini_bridge"}:
+                logger.info("Starting direct Gemini bridge for Piopiy pending_id=%s", pending_id)
+                direct_session = PiopiyDirectGeminiBridgeSession(
+                    settings=settings,
+                    pending_call=pending_call,
+                    audio=bridge,
+                    trace_hook=lambda message: _append_piopiy_trace(
+                        "direct_gemini_trace",
+                        pending_id=pending_id,
+                        message=message,
+                    ),
+                    stage_hook=lambda stage: _record_piopiy_stage(
+                        stage,
+                        pending_id=pending_id,
+                    ),
+                )
+                session_started = True
+                _record_piopiy_stage("stream_session_started", pending_id=pending_id, runtime=stream_runtime)
+                bridge_task = asyncio.create_task(direct_session.run(), name=f"piopiy_direct_gemini_{pending_id}")
+            else:
+                logger.info("Pre-initializing Piopiy voice session pending_id=%s", pending_id)
+                _record_piopiy_stage(
+                    "stream_session_starting",
+                    pending_id=pending_id,
+                    client_id=pending_call.client_id,
+                    project_id=(pending_call.metadata or {}).get("project_id"),
+                )
+                await controller.start_with_audio(
+                    client_id=pending_call.client_id,
+                    customer_name=pending_call.customer_name,
+                    project_id=(pending_call.metadata or {}).get("project_id"),
+                    audio=bridge,
+                    telephony_context=pending_call.metadata,
+                    session_key=pending_id,
+                    defer_initial_prompt=False,
+                )
+                session_started = True
+                _record_piopiy_stage("stream_session_started", pending_id=pending_id, runtime=stream_runtime)
             while True:
-                if session_started and not await controller.is_busy(session_key=pending_id):
+                if bridge_task is not None and bridge_task.done():
+                    exc = bridge_task.exception()
+                    if exc is not None:
+                        raise exc
+                    _record_piopiy_stage("stream_session_finished", pending_id=pending_id)
+                    logger.info("Direct Gemini bridge finished; closing Piopiy stream pending_id=%s", pending_id)
+                    break
+                if bridge_task is None and session_started and not await controller.is_busy(session_key=pending_id):
                     _record_piopiy_stage("stream_session_finished", pending_id=pending_id)
                     logger.info("Voice session finished; closing Piopiy stream pending_id=%s", pending_id)
                     break
@@ -6184,7 +6697,7 @@ def create_app() -> FastAPI:
                         pending_id=pending_id,
                         byte_length=len(message["bytes"]),
                     )
-                    if session_started:
+                    if session_started and bridge_task is None:
                         await controller.release_initial_prompt(session_key=pending_id)
                     continue
                 text_payload = message.get("text")
@@ -6212,7 +6725,11 @@ def create_app() -> FastAPI:
             await bridge.close()
         finally:
             _record_piopiy_stage("stream_websocket_closed", pending_id=pending_id)
-            if session_started:
+            if bridge_task is not None and not bridge_task.done():
+                bridge_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await bridge_task
+            if session_started and bridge_task is None:
                 await _safe_stop_session(session_key=pending_id)
             await bridge.close()
 

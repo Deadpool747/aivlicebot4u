@@ -385,17 +385,33 @@ def _resolve_call_direction(session: dict[str, Any], provider_usage: dict[str, A
     return "unknown"
 
 
+def _normalize_provider_name(provider: str) -> str:
+    provider = str(provider or "").strip().lower()
+    if provider == "tata":
+        return "piopiy"
+    return provider
+
+
+def _normalize_source_name(source: str) -> str:
+    source = str(source or "").strip().lower()
+    if source.startswith("tata_"):
+        return source.replace("tata_", "piopiy_", 1)
+    return source
+
+
 def _resolve_provider(session: dict[str, Any], provider_usage: dict[str, Any]) -> str:
     actual_cost = session.get("actual_cost") or {}
     telephony_context = session.get("telephony_context") or {}
     metadata = telephony_context.get("metadata") if isinstance(telephony_context.get("metadata"), dict) else {}
-    provider = str(
+    provider = _normalize_provider_name(
+        str(
         actual_cost.get("telephony_provider")
         or provider_usage.get("provider")
         or telephony_context.get("provider")
         or metadata.get("provider")
         or ""
-    ).strip().lower()
+        ).strip().lower()
+    )
     if provider:
         return provider
     if telephony_context.get("provider") in {"local", "browser"}:
@@ -406,11 +422,10 @@ def _resolve_provider(session: dict[str, Any], provider_usage: dict[str, Any]) -
 def _resolve_source(provider: str, direction: str, provider_usage: dict[str, Any]) -> str:
     explicit = str(provider_usage.get("lead_source") or "").strip()
     if explicit:
-        return explicit
+        return _normalize_source_name(explicit)
+    provider = _normalize_provider_name(provider)
     if provider == "piopiy":
         return "piopiy_inbound_stream" if direction == "inbound" else "piopiy_outbound"
-    if provider == "tata":
-        return "tata_inbound_stream" if direction == "inbound" else "tata_outbound"
     return "unknown"
 
 

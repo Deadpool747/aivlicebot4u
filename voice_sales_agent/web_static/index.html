@@ -1432,17 +1432,16 @@
                     <option value="twilio">twilio</option>
                     <option value="exotel">exotel</option>
                     <option value="airtel_iq">airtel_iq</option>
-                    <option value="tata">tata</option>
                     <option value="piopiy">piopiy</option>
                     <option value="meta_whatsapp">meta_whatsapp</option>
                   </select>
                 </div>
                 <div>
-                  <label for="projectTataAgentNumberInput">Tata Agent Number (Override)</label>
+                  <label for="projectTataAgentNumberInput">Agent Number Override</label>
                   <input id="projectTataAgentNumberInput" type="text" placeholder="Optional project-specific agent number" />
                 </div>
                 <div>
-                  <label for="projectTataCallerIdInput">Tata Caller ID (Override)</label>
+                  <label for="projectTataCallerIdInput">Caller ID Override</label>
                   <input id="projectTataCallerIdInput" type="text" placeholder="Optional project-specific caller id" />
                 </div>
                 <div>
@@ -2165,7 +2164,11 @@
           };
           ws.onerror = () => {
             window.clearTimeout(timer);
-            reject(new Error("Could not connect browser audio channel."));
+            const host = String(window.location.host || "").trim();
+            const hint = host && !["localhost", "127.0.0.1", "::1"].includes(String(window.location.hostname || "").trim().toLowerCase())
+              ? " Refresh the page and sign in again."
+              : "";
+            reject(new Error(`Could not connect browser audio channel.${hint}`));
           };
         });
         browserAudioWs = ws;

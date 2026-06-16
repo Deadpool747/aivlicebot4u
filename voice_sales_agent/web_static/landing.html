@@ -1842,14 +1842,16 @@
       }
 
       function wsCandidates() {
-        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-        const candidates = [];
-        const primary = wsBaseUrl();
-        if (primary) candidates.push(primary);
-        const fallbackA = `${scheme}://127.0.0.1:8000`;
-        const fallbackB = `${scheme}://localhost:8000`;
-        if (!candidates.includes(fallbackA)) candidates.push(fallbackA);
-        if (!candidates.includes(fallbackB)) candidates.push(fallbackB);
+        const candidates = [wsBaseUrl()];
+        const hostname = String(window.location.hostname || "").trim().toLowerCase();
+        const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+        if (isLocalhost) {
+          const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+          const fallbackA = `${scheme}://127.0.0.1:8000`;
+          const fallbackB = `${scheme}://localhost:8000`;
+          if (!candidates.includes(fallbackA)) candidates.push(fallbackA);
+          if (!candidates.includes(fallbackB)) candidates.push(fallbackB);
+        }
         return candidates;
       }
 
@@ -1883,7 +1885,11 @@
             lastError = error;
           }
         }
-        throw lastError || new Error("Could not connect browser audio channel.");
+        const host = String(window.location.host || "").trim();
+        const hint = host && !["localhost", "127.0.0.1", "::1"].includes(String(window.location.hostname || "").trim().toLowerCase())
+          ? " Refresh the page and make sure you are signed in."
+          : "";
+        throw lastError || new Error(`Could not connect browser audio channel.${hint}`);
       }
 
       function floatToPcm16Bytes(samples) {

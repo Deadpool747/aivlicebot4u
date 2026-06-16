@@ -440,6 +440,12 @@ class SessionArtifacts(BaseModel):
     recording_stt_corpus: str | None = None
     recording_stt_full_corpus: str | None = None
     recording_llm_details: CriticalCallDetails | None = None
+    piopiy_recording_url: str | None = None
+    piopiy_recording_path: str | None = None
+    piopiy_recording_filename: str | None = None
+    piopiy_recording_content_type: str | None = None
+    piopiy_recording_downloaded_at: datetime | None = None
+    piopiy_recording_size_bytes: int | None = None
     telephony_context: dict[str, Any] | None = None
     memory: SessionMemory = Field(default_factory=SessionMemory)
     summary: PostCallSummary | None = None

@@ -107,6 +107,29 @@ class SessionLogger:
                     *[f"- {key}: {value}" for key, value in sorted(artifacts.metrics.items())],
                 ]
             )
+        recording_lines = [
+            f"- URL: {artifacts.piopiy_recording_url}" if artifacts.piopiy_recording_url else "",
+            f"- Path: {artifacts.piopiy_recording_path}" if artifacts.piopiy_recording_path else "",
+            f"- File: {artifacts.piopiy_recording_filename}" if artifacts.piopiy_recording_filename else "",
+            (
+                f"- Content Type: {artifacts.piopiy_recording_content_type}"
+                if artifacts.piopiy_recording_content_type
+                else ""
+            ),
+            (
+                f"- Downloaded At: {artifacts.piopiy_recording_downloaded_at.isoformat()}"
+                if artifacts.piopiy_recording_downloaded_at
+                else ""
+            ),
+            (
+                f"- Size Bytes: {artifacts.piopiy_recording_size_bytes}"
+                if artifacts.piopiy_recording_size_bytes is not None
+                else ""
+            ),
+        ]
+        recording_lines = [line for line in recording_lines if line]
+        if recording_lines:
+            summary_lines.extend(["", "## Piopiy Recording", *recording_lines])
         if artifacts.actual_cost and artifacts.actual_cost.raw_provider_usage:
             summary_lines.extend(
                 [

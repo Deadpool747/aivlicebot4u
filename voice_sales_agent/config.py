@@ -174,7 +174,7 @@ def load_settings() -> AppSettings:
         ),
         processing_ambience_gain=float(os.getenv("PROCESSING_AMBIENCE_GAIN", "0.08").strip() or "0.08"),
         public_base_url=(os.getenv("PUBLIC_BASE_URL", "").strip() or None),
-        telephony_provider=os.getenv("TELEPHONY_PROVIDER", "tata").strip().lower() or "tata",
+        telephony_provider=os.getenv("TELEPHONY_PROVIDER", "piopiy").strip().lower() or "piopiy",
         twilio_account_sid=(os.getenv("TWILIO_ACCOUNT_SID", "").strip() or None),
         twilio_auth_token=(os.getenv("TWILIO_AUTH_TOKEN", "").strip() or None),
         twilio_from_number=(os.getenv("TWILIO_FROM_NUMBER", "").strip() or None),
