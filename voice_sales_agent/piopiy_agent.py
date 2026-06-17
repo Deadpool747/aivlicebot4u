@@ -16,7 +16,6 @@ import importlib
 import inspect
 import logging
 import os
-import aiohttp
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
@@ -181,34 +180,6 @@ def _resolve_sarvam_openai_base_url() -> str | None:
     return f"{base_url.rstrip('/')}/v1"
 
 
-def _build_sarvam_stt_kwargs() -> dict[str, Any]:
-    return {
-        "api_key": _resolve_sarvam_api_key(),
-        "model": os.getenv("PIOPIY_STT_MODEL") or os.getenv("SARVAM_STT_MODEL") or "saarika:v2.5",
-    }
-
-
-def _build_sarvam_tts_settings(tts_factory: Any) -> Any:
-    if not _env_bool("PIOPIY_TTS_USE_SETTINGS", False):
-        return None
-    pitch = float(os.getenv("PIOPIY_TTS_PITCH") or os.getenv("SARVAM_TTS_PITCH") or "0")
-    language_code = (
-        os.getenv("PIOPIY_TTS_LANGUAGE_CODE")
-        or os.getenv("SARVAM_TTS_TARGET_LANGUAGE_CODE")
-        or "en-IN"
-    ).strip() or "en-IN"
-    settings_cls = getattr(tts_factory, "Settings", None)
-    if settings_cls is None:
-        return None
-    return settings_cls(
-        language=language_code,
-        pitch=pitch,
-        enable_preprocessing=_env_bool("PIOPIY_TTS_ENABLE_PREPROCESSING", False),
-        voice=os.getenv("PIOPIY_TTS_VOICE_ID") or os.getenv("SARVAM_TTS_SPEAKER") or "anushka",
-        model=os.getenv("PIOPIY_TTS_MODEL") or os.getenv("SARVAM_TTS_MODEL") or "bulbul:v2",
-    )
-
-
 def _append_trace(event: str, **fields: Any) -> None:
     try:
         TRACE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -241,155 +212,71 @@ async def run_piopiy_agent() -> None:
 
     project_id = (os.getenv("PIOPIY_PROJECT_ID") or "real_estate_english_demo").strip() or None
 
-    llm_factory = _load_factory(
+    pipeline_mode = _pipeline_mode()
+    use_gemini_native = pipeline_mode in {
+        "gemini_live",
+        "speech_to_speech",
+        "speech",
+        "realtime",
+        "live",
+        "gemini_native_simple",
+        "native_simple",
+        "gemini_native",
+    }
+    gemini_live_factory = _load_factory(
         os.getenv(
-            "PIOPIY_LLM_FACTORY",
+            "PIOPIY_GEMINI_LIVE_FACTORY",
             "piopiy.services.google.gemini_live.llm:GeminiLiveLLMService",
         ).strip()
     )
-    stt_factory = _load_factory(
+    gemini_tts_factory = _load_factory(
         os.getenv(
-            "PIOPIY_STT_FACTORY",
-            "piopiy.services.sarvam.stt:SarvamSTTService",
+            "PIOPIY_GEMINI_TTS_FACTORY",
+            "piopiy.services.google.tts:GeminiTTSService",
         ).strip()
     )
-    tts_factory = _load_factory(
-        os.getenv(
-            "PIOPIY_TTS_FACTORY",
-            "piopiy.services.sarvam.tts:SarvamHttpTTSService",
-        ).strip()
-    )
-
-    llm_config = PiopiyProviderConfig(
-        factory=os.getenv("PIOPIY_LLM_FACTORY", "piopiy.services.google.gemini_live.llm:GeminiLiveLLMService").strip(),
+    gemini_input_params = _load_factory("piopiy.services.google.gemini_live.llm:InputParams")
+    gemini_modalities = _load_factory("piopiy.services.google.gemini_live.llm:GeminiModalities")
+    gemini_live_config = PiopiyProviderConfig(
+        factory=os.getenv(
+            "PIOPIY_GEMINI_LIVE_FACTORY",
+            "piopiy.services.google.gemini_live.llm:GeminiLiveLLMService",
+        ).strip(),
         api_key=(
-            os.getenv("PIOPIY_LLM_API_KEY")
-            or _resolve_sarvam_api_key()
+            os.getenv("PIOPIY_GEMINI_API_KEY")
             or os.getenv("GEMINI_API_KEY")
             or os.getenv("GOOGLE_API_KEY")
             or ""
         ).strip() or None,
         model=(
-            os.getenv("PIOPIY_LLM_MODEL")
-            or os.getenv("SARVAM_CHAT_MODEL")
-            or os.getenv("GEMINI_MODEL")
+            os.getenv("PIOPIY_GEMINI_LIVE_MODEL")
             or os.getenv("GEMINI_LIVE_MODEL")
-            or "sarvam-m"
+            or "models/gemini-2.5-flash-native-audio-preview-12-2025"
         ).strip() or None,
-        base_url=(
-            os.getenv("PIOPIY_LLM_BASE_URL")
-            or _resolve_sarvam_openai_base_url()
+    )
+    gemini_tts_config = PiopiyProviderConfig(
+        factory=os.getenv(
+            "PIOPIY_GEMINI_TTS_FACTORY",
+            "piopiy.services.google.tts:GeminiTTSService",
+        ).strip(),
+        api_key=(
+            os.getenv("PIOPIY_GEMINI_API_KEY")
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
             or ""
         ).strip() or None,
+        model=(
+            os.getenv("PIOPIY_GEMINI_TTS_MODEL")
+            or os.getenv("GEMINI_TTS_MODEL")
+            or "gemini-2.5-flash-tts"
+        ).strip() or None,
+        voice_name=(
+            os.getenv("PIOPIY_GEMINI_TTS_VOICE_ID")
+            or os.getenv("PIOPIY_TTS_VOICE_NAME")
+            or os.getenv("PIOPIY_TTS_VOICE_ID")
+            or "Kore"
+        ).strip() or None,
     )
-    stt_config = PiopiyProviderConfig(
-        factory=os.getenv("PIOPIY_STT_FACTORY", "piopiy.services.sarvam.stt:SarvamSTTService").strip(),
-        api_key=_resolve_sarvam_api_key(),
-        model=(os.getenv("PIOPIY_STT_MODEL") or os.getenv("SARVAM_STT_MODEL") or "saarika:v2.5").strip() or None,
-        language_code=(os.getenv("PIOPIY_STT_LANGUAGE_CODE") or "en-US").strip() or None,
-        base_url=(os.getenv("PIOPIY_STT_BASE_URL") or "").strip() or None,
-    )
-    tts_config = PiopiyProviderConfig(
-        factory=os.getenv("PIOPIY_TTS_FACTORY", "piopiy.services.sarvam.tts:SarvamHttpTTSService").strip(),
-        api_key=_resolve_sarvam_api_key(),
-        model=(os.getenv("PIOPIY_TTS_MODEL") or os.getenv("SARVAM_TTS_MODEL") or "bulbul:v2").strip() or None,
-        voice_name=(os.getenv("PIOPIY_TTS_VOICE_ID") or os.getenv("PIOPIY_TTS_VOICE_NAME") or os.getenv("SARVAM_TTS_SPEAKER") or "anushka").strip() or None,
-        language_code=(os.getenv("PIOPIY_TTS_LANGUAGE_CODE") or "en-US").strip() or None,
-        base_url=(os.getenv("PIOPIY_TTS_BASE_URL") or os.getenv("SARVAM_BASE_URL") or "https://api.sarvam.ai").strip() or None,
-    )
-
-    pipeline_mode = _pipeline_mode()
-    use_gemini_live = pipeline_mode in {"gemini_live", "speech_to_speech", "speech", "realtime", "live"}
-    use_gemini_native_simple = pipeline_mode in {"gemini_native_simple", "native_simple", "gemini_native"}
-    if use_gemini_live:
-        gemini_live_factory = _load_factory(
-            os.getenv(
-                "PIOPIY_GEMINI_LIVE_FACTORY",
-                "piopiy.services.google.gemini_live.llm:GeminiLiveLLMService",
-            ).strip()
-        )
-        gemini_modalities = _load_factory(
-            "piopiy.services.google.gemini_live.llm:GeminiModalities"
-        )
-        gemini_input_params = _load_factory(
-            "piopiy.services.google.gemini_live.llm:InputParams"
-        )
-        gemini_live_config = PiopiyProviderConfig(
-            factory=os.getenv(
-                "PIOPIY_GEMINI_LIVE_FACTORY",
-                "piopiy.services.google.gemini_live.llm:GeminiLiveLLMService",
-            ).strip(),
-            api_key=(
-                os.getenv("PIOPIY_GEMINI_API_KEY")
-                or os.getenv("GEMINI_API_KEY")
-                or os.getenv("GOOGLE_API_KEY")
-                or ""
-            ).strip() or None,
-            model=(
-                os.getenv("PIOPIY_GEMINI_LIVE_MODEL")
-                or os.getenv("GEMINI_LIVE_MODEL")
-                or "models/gemini-2.0-flash-exp"
-            ).strip() or None,
-        )
-    if use_gemini_native_simple:
-        gemini_live_factory = _load_factory(
-            os.getenv(
-                "PIOPIY_GEMINI_LIVE_FACTORY",
-                "piopiy.services.google.gemini_live.llm:GeminiLiveLLMService",
-            ).strip()
-        )
-        gemini_tts_factory = _load_factory(
-            os.getenv(
-                "PIOPIY_GEMINI_TTS_FACTORY",
-                "piopiy.services.google.tts:GeminiTTSService",
-            ).strip()
-        )
-        gemini_input_params = _load_factory(
-            "piopiy.services.google.gemini_live.llm:InputParams"
-        )
-        gemini_modalities = _load_factory(
-            "piopiy.services.google.gemini_live.llm:GeminiModalities"
-        )
-        gemini_live_config = PiopiyProviderConfig(
-            factory=os.getenv(
-                "PIOPIY_GEMINI_LIVE_FACTORY",
-                "piopiy.services.google.gemini_live.llm:GeminiLiveLLMService",
-            ).strip(),
-            api_key=(
-                os.getenv("PIOPIY_GEMINI_API_KEY")
-                or os.getenv("GEMINI_API_KEY")
-                or os.getenv("GOOGLE_API_KEY")
-                or ""
-            ).strip() or None,
-            model=(
-                os.getenv("PIOPIY_GEMINI_LIVE_MODEL")
-                or os.getenv("GEMINI_LIVE_MODEL")
-                or "models/gemini-2.5-flash-native-audio-preview-12-2025"
-            ).strip() or None,
-        )
-        gemini_tts_config = PiopiyProviderConfig(
-            factory=os.getenv(
-                "PIOPIY_GEMINI_TTS_FACTORY",
-                "piopiy.services.google.tts:GeminiTTSService",
-            ).strip(),
-            api_key=(
-                os.getenv("PIOPIY_GEMINI_API_KEY")
-                or os.getenv("GEMINI_API_KEY")
-                or os.getenv("GOOGLE_API_KEY")
-                or ""
-            ).strip() or None,
-            model=(
-                os.getenv("PIOPIY_GEMINI_TTS_MODEL")
-                or os.getenv("GEMINI_TTS_MODEL")
-                or "gemini-2.5-flash-tts"
-            ).strip() or None,
-            voice_name=(
-                os.getenv("PIOPIY_GEMINI_TTS_VOICE_ID")
-                or os.getenv("PIOPIY_TTS_VOICE_NAME")
-                or os.getenv("PIOPIY_TTS_VOICE_ID")
-                or "Kore"
-            ).strip() or None,
-        )
 
     async def create_session(
         agent_id: str,
@@ -429,7 +316,7 @@ async def run_piopiy_agent() -> None:
             )
 
             client_voice_name = (client.config.voice.voice_name or "").strip() or None
-            if use_gemini_native_simple:
+            if use_gemini_native:
                 from piopiy.speech_agent import SpeechAgent
 
                 speech_agent = SpeechAgent(
@@ -454,76 +341,21 @@ async def run_piopiy_agent() -> None:
                 await speech_agent.Action(
                     omni=omni,
                     tts=tts,
-                    vad=_env_bool("PIOPIY_ENABLE_VAD", True),
                     allow_interruptions=_env_bool("PIOPIY_ALLOW_INTERRUPTIONS", True),
                 )
-                _append_trace("session_configured", call_id=call_id, mode="gemini_native_simple")
+                _append_trace("session_configured", call_id=call_id, mode="gemini_native_no_stt")
                 await speech_agent.start()
                 _append_trace("session_started", call_id=call_id)
-                logger.info("Piopiy native-simple session started for call_id=%s", call_id)
+                logger.info("Piopiy Gemini-native no-STT session started for call_id=%s", call_id)
                 return
 
-            from piopiy.voice_agent import VoiceAgent
-
-            voice_agent = VoiceAgent(
-                instructions=instructions,
-                greeting=greeting,
+            raise RuntimeError(
+                f"PIOPIY_PIPELINE_MODE={pipeline_mode!r} is not supported by the no-STT worker. "
+                "Use gemini_live or gemini_native_simple."
             )
-            stt = _instantiate(stt_factory, **_build_sarvam_stt_kwargs())
-            audio_session = aiohttp.ClientSession()
-            tts_kwargs = {
-                "api_key": _resolve_sarvam_api_key(),
-                "aiohttp_session": audio_session,
-                "voice_id": os.getenv("PIOPIY_TTS_VOICE_ID") or os.getenv("PIOPIY_TTS_VOICE_NAME") or client_voice_name or os.getenv("SARVAM_TTS_SPEAKER") or "anushka",
-                "model": os.getenv("PIOPIY_TTS_MODEL") or os.getenv("SARVAM_TTS_MODEL") or "bulbul:v2",
-                "base_url": os.getenv("PIOPIY_TTS_BASE_URL") or os.getenv("SARVAM_BASE_URL") or "https://api.sarvam.ai",
-            }
-            tts_settings = _build_sarvam_tts_settings(tts_factory)
-            if tts_settings is not None:
-                tts_kwargs["settings"] = tts_settings
-            tts = _instantiate(tts_factory, **tts_kwargs)
-            if use_gemini_live:
-                llm = _instantiate(
-                    gemini_live_factory,
-                    api_key=gemini_live_config.api_key,
-                    model=gemini_live_config.model,
-                    params=gemini_input_params(
-                        modalities=gemini_modalities.AUDIO,
-                    ),
-                )
-                config_kwargs = {
-                    "stt": stt,
-                    "llm": llm,
-                    "tts": tts,
-                    "allow_interruptions": _env_bool("PIOPIY_ALLOW_INTERRUPTIONS", True),
-                }
-                _append_trace("session_configured", call_id=call_id, mode="gemini_live_speech_to_speech")
-            else:
-                llm = _instantiate(llm_factory, **_build_provider_kwargs(llm_config))
-                config_kwargs = {
-                    "stt": stt,
-                    "llm": llm,
-                    "tts": tts,
-                    "vad": _env_bool("PIOPIY_ENABLE_VAD", True),
-                    "allow_interruptions": _env_bool("PIOPIY_ALLOW_INTERRUPTIONS", True),
-                }
-                _append_trace("session_configured", call_id=call_id, mode="cascaded")
-
-            if hasattr(voice_agent, "configure"):
-                await voice_agent.configure(**config_kwargs)
-            elif hasattr(voice_agent, "Action"):
-                await voice_agent.Action(**config_kwargs)
-            else:
-                raise AttributeError("VoiceAgent exposes neither configure() nor Action().")
-            await voice_agent.start()
-            _append_trace("session_started", call_id=call_id)
-            logger.info("Piopiy session started for call_id=%s", call_id)
         except Exception as exc:
             _append_trace("create_session_error", call_id=call_id, error=repr(exc))
             raise
-        finally:
-            if "audio_session" in locals():
-                await audio_session.close()
 
     from piopiy.agent import Agent
 
