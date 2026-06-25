@@ -11,5 +11,3 @@ This checkpoint switches the Piopiy inbound worker into a minimal Gemini-native 
 This mode is intended as a lightweight trial path for Piopiy + Gemini native audio handling.
 
 Rollback target:
-
-- [PIOPIY_FULL_SARVAM_CHECKPOINT.md](/Users/idriskhan/Documents/new_voice_agent/docs/PIOPIY_FULL_SARVAM_CHECKPOINT.md)

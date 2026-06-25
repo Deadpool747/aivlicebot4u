@@ -116,22 +116,6 @@ sudo systemctl status voice-sales-agent-staging.service
 sudo systemctl status piopiy-agent-staging.service
 ```
 
-If you want the older Piopiy Gemini worker for a specific test project, deploy the extra unit template too:
-
-- [`deploy/lightsail/piopiy-agent-old-sdk.service`](/Users/idriskhan/Documents/new_voice_agent/deploy/lightsail/piopiy-agent-old-sdk.service)
-
-Recommended pattern:
-
-- keep the website and normal staging Piopiy worker on `voice-sales-agent-staging.service` and `piopiy-agent-staging.service`
-- run the old-SDK Gemini worker as a separate service with its own Piopiy conversational agent id
-- in the website project editor, set:
-  - `Outbound Call Provider = piopiy`
-  - `Piopiy Agent ID` to the old-SDK test agent
-  - `Piopiy App ID` to the inbound Piopiy app mapped to that agent
-  - `Piopiy Stream Runtime = old_sdk_gemini_live_s2s`
-
-That way the website stores the correct test routing, while production remains on the existing runtime.
-
 On production, confirm the live services were not restarted:
 
 ```bash

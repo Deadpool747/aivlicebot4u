@@ -26,7 +26,6 @@ from typing import Any
 from dotenv import load_dotenv
 
 from piopiy.agent import Agent, ROOM_CTX, TOKEN_CTX, URL_CTX
-from piopiy.services.google.tts import GeminiTTSService
 from piopiy.services.google.gemini_live.llm import (
     GeminiLiveLLMService,
     GeminiModalities,
@@ -34,6 +33,8 @@ from piopiy.services.google.gemini_live.llm import (
 )
 from piopiy.speech_agent import SpeechAgent
 from piopiy.voice_agent import VoiceAgent
+
+from voice_sales_agent.piopiy_tts import GeminiApiKeyTTSService
 
 load_dotenv()
 
@@ -88,11 +89,11 @@ def build_speech_agent() -> SpeechAgent:
     )
 
 
-def build_gemini_tts() -> GeminiTTSService:
+def build_gemini_tts() -> GeminiApiKeyTTSService:
     api_key = (os.getenv("GOOGLE_API_KEY") or "").strip()
     if not api_key:
         raise RuntimeError("Missing GOOGLE_API_KEY.")
-    return GeminiTTSService(
+    return GeminiApiKeyTTSService(
         api_key=api_key,
         model=os.getenv("VOICE_AGENT_TTS_MODEL", "gemini-2.5-flash-tts").strip(),
         voice_id=os.getenv("VOICE_AGENT_TTS_VOICE", "Kore").strip(),
@@ -117,8 +118,13 @@ async def create_session(
     gemini_live = build_gemini_live()
     voice_agent = build_voice_agent()
 
-    # This is the real SDK API in Piopiy AI 0.6.1.
-    await voice_agent.Action(
+    configure = getattr(voice_agent, "configure", None)
+    if not callable(configure):
+        raise RuntimeError(
+            "Installed Piopiy SDK does not expose VoiceAgent.configure(llm=...). "
+            "This SDK cannot run the no-STT/no-TTS Gemini Live native audio path."
+        )
+    await configure(
         llm=gemini_live,
         allow_interruptions=True,
     )

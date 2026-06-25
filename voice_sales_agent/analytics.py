@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import contextlib
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ DEFAULT_RESULTS_COLUMNS: list[tuple[str, str]] = [
     ("duration_seconds", "Duration"),
     ("follow_up", "Follow-Up"),
 ]
+LEGACY_PROVIDER_HINTS = ("tata", "sarvam", "savaram", "telecmi")
 
 
 def _utc_now() -> str:
@@ -211,14 +213,35 @@ def _coerce_duration(session: dict[str, Any]) -> float:
     duration = provider_usage.get("stream_duration_seconds")
     if duration not in (None, ""):
         try:
-            return float(duration)
+            parsed = float(duration)
+            if parsed > 0:
+                return parsed
         except (TypeError, ValueError):
             pass
     metrics = session.get("metrics") or {}
     try:
-        return float(metrics.get("caller_audio_seconds") or 0.0)
+        parsed = float(metrics.get("caller_audio_seconds") or 0.0)
+        if parsed > 0:
+            return parsed
     except (TypeError, ValueError):
-        return 0.0
+        parsed = 0.0
+    started_at = _parse_iso_datetime(str(session.get("started_at") or ""))
+    ended_at = _parse_iso_datetime(str(session.get("ended_at") or ""))
+    if started_at and ended_at and ended_at >= started_at:
+        return max((ended_at - started_at).total_seconds(), 0.0)
+    telephony_context = session.get("telephony_context") or {}
+    for candidate in (
+        telephony_context.get("cdr_duration_seconds"),
+        telephony_context.get("duration_seconds"),
+        telephony_context.get("call_duration_seconds"),
+    ):
+        try:
+            parsed = float(candidate)
+            if parsed > 0:
+                return parsed
+        except (TypeError, ValueError):
+            continue
+    return 0.0
 
 
 def _resolve_provider_usage(session: dict[str, Any]) -> dict[str, Any]:
@@ -240,6 +263,7 @@ def _resolve_lead_name(session: dict[str, Any], provider_usage: dict[str, Any]) 
     recording_details = session.get("recording_llm_details") or {}
     telephony_context = session.get("telephony_context") or {}
     transcript = session.get("transcript") or []
+    direction = _resolve_call_direction(session, provider_usage)
     recording_name = _normalize_candidate_lead_name(str(recording_details.get("name") or ""))
     if recording_name:
         return recording_name
@@ -336,7 +360,12 @@ def _resolve_lead_name(session: dict[str, Any], provider_usage: dict[str, Any]) 
     fallback = _normalize_candidate_lead_name(
         str(provider_usage.get("customer_name") or telephony_context.get("customer_name") or "")
     )
-    return fallback or "Unknown"
+    if fallback:
+        return fallback
+    caller_number = _resolve_from_number(session, provider_usage)
+    if caller_number and caller_number != "-":
+        return "Inbound Caller"
+    return "Unknown"
 
 
 def _resolve_call_direction(session: dict[str, Any], provider_usage: dict[str, Any]) -> str:
@@ -386,17 +415,16 @@ def _resolve_call_direction(session: dict[str, Any], provider_usage: dict[str, A
 
 
 def _normalize_provider_name(provider: str) -> str:
-    provider = str(provider or "").strip().lower()
-    if provider == "tata":
-        return "piopiy"
-    return provider
+    return str(provider or "").strip().lower()
 
 
 def _normalize_source_name(source: str) -> str:
-    source = str(source or "").strip().lower()
-    if source.startswith("tata_"):
-        return source.replace("tata_", "piopiy_", 1)
-    return source
+    return str(source or "").strip().lower()
+
+
+def _is_legacy_provider(provider: str) -> bool:
+    normalized = _normalize_provider_name(provider)
+    return any(hint in normalized for hint in LEGACY_PROVIDER_HINTS)
 
 
 def _resolve_provider(session: dict[str, Any], provider_usage: dict[str, Any]) -> str:
@@ -442,6 +470,8 @@ def _resolve_to_number(session: dict[str, Any], provider_usage: dict[str, Any]) 
         provider_usage.get("customer_number_with_prefix"),
         provider_usage.get("caller_id_number"),
         telephony_context.get("caller_id_number"),
+        telephony_context.get("caller_id"),
+        provider_usage.get("caller_id"),
         telephony_context.get("customer_no_with_prefix"),
         telephony_context.get("customer_number_with_prefix"),
         telephony_context.get("from"),
@@ -496,6 +526,32 @@ def _resolve_to_number(session: dict[str, Any], provider_usage: dict[str, Any]) 
         metadata.get("stream_endpoint_payload"),
     ):
         normalized = _extract_phone_from_payload_blob(blob, direction=direction)
+        if normalized:
+            return normalized
+    return "-"
+
+
+def _resolve_from_number(session: dict[str, Any], provider_usage: dict[str, Any]) -> str:
+    telephony_context = session.get("telephony_context") or {}
+    metadata = telephony_context.get("metadata") if isinstance(telephony_context.get("metadata"), dict) else {}
+    candidates = [
+        provider_usage.get("from_number"),
+        telephony_context.get("from_number"),
+        provider_usage.get("caller_id_number"),
+        telephony_context.get("caller_id_number"),
+        telephony_context.get("caller_id"),
+        provider_usage.get("caller_id"),
+        telephony_context.get("caller_number"),
+        telephony_context.get("from"),
+        telephony_context.get("fromNumber"),
+        metadata.get("from_number"),
+        metadata.get("caller_id_number"),
+        metadata.get("caller_number"),
+        provider_usage.get("customer_number"),
+        provider_usage.get("customer_no"),
+    ]
+    for candidate in candidates:
+        normalized = _normalize_phone(str(candidate or ""))
         if normalized:
             return normalized
     return "-"
@@ -911,6 +967,77 @@ def _resolve_path_value(session: dict[str, Any], field_key: str) -> str:
     return str(current)
 
 
+def _load_call_outcome_rows(session_output_dir: Path, scoped_client_ids: set[str]) -> list[dict[str, Any]]:
+    db_path = session_output_dir / "call_outcomes.db"
+    if not db_path.exists():
+        return []
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT session_id, client_id, project_id, project_name, started_at, ended_at,
+                   call_date, call_time, lead_name, to_number, appointment_date, appointment_time,
+                   appointment_details, follow_up, summary, suggested_next_action,
+                   qualification_status, result, provider, lead_source, duration_seconds,
+                   raw_json
+            FROM call_outcomes
+            ORDER BY started_at DESC
+            """
+        ).fetchall()
+    except Exception:
+        return []
+    finally:
+        with contextlib.suppress(Exception):
+            conn.close()
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        client_id = str(row["client_id"] or "").strip()
+        if scoped_client_ids and client_id not in scoped_client_ids:
+            continue
+        session_payload = json.loads(row["raw_json"] or "{}") if row["raw_json"] else {}
+        provider_usage = _resolve_provider_usage(session_payload) if isinstance(session_payload, dict) else {}
+        from_number = _resolve_from_number(session_payload, provider_usage) if isinstance(session_payload, dict) else "-"
+        items.append(
+            {
+                "session_id": row["session_id"],
+                "client_id": client_id,
+                "project_id": row["project_id"],
+                "project_name": row["project_name"],
+                "started_at": row["started_at"],
+                "ended_at": row["ended_at"],
+                "lead_name": row["lead_name"],
+                "to_number": row["to_number"],
+                "from_number": from_number,
+                "appointment_details": row["appointment_details"],
+                "appointment_date": row["appointment_date"],
+                "appointment_time": row["appointment_time"],
+                "important_questions_asked": [],
+                "gemini_status": "unknown",
+                "call_date": row["call_date"],
+                "call_time": row["call_time"],
+                "provider": row["provider"],
+                "lead_source": row["lead_source"],
+                "result": row["result"],
+                "duration_seconds": float(row["duration_seconds"] or 0.0),
+                "qualification": row["qualification_status"] or "unknown",
+                "follow_up": row["follow_up"],
+                "critical_fields_complete": False,
+                "started_at": row["started_at"],
+                "summary": {
+                    "summary": row["summary"] or "",
+                    "suggested_next_action": row["suggested_next_action"] or "",
+                },
+                "memory": {},
+                "metrics": {},
+                "telephony_context": {},
+                "raw_json": row["raw_json"],
+            }
+        )
+    return items
+
+
 def build_dashboard_analytics(
     session_output_dir: Path,
     client_ids: set[str] | None = None,
@@ -933,6 +1060,14 @@ def build_dashboard_analytics(
             if scoped_client_ids and payload_client_id not in scoped_client_ids:
                 continue
             sessions.append(payload)
+    fallback_rows = _load_call_outcome_rows(session_output_dir, scoped_client_ids)
+    seen_session_ids = {str(session.get("session_id") or "").strip() for session in sessions}
+    for fallback in fallback_rows:
+        session_id = str(fallback.get("session_id") or "").strip()
+        if not session_id or session_id in seen_session_ids:
+            continue
+        sessions.append(fallback)
+        seen_session_ids.add(session_id)
 
     def started_at(session: dict[str, Any]) -> str:
         return str(session.get("started_at") or "")
@@ -958,6 +1093,10 @@ def build_dashboard_analytics(
 
     for session in sessions:
         result = _session_result(session)
+        provider_usage = _resolve_provider_usage(session)
+        provider = _resolve_provider(session, provider_usage)
+        if _is_legacy_provider(provider):
+            continue
         if result == "successful":
             successful_calls += 1
         else:
@@ -969,9 +1108,7 @@ def build_dashboard_analytics(
         if next_step:
             follow_up_required += 1
 
-        provider_usage = _resolve_provider_usage(session)
         direction = _resolve_call_direction(session, provider_usage)
-        provider = _resolve_provider(session, provider_usage)
         source = _resolve_source(provider, direction, provider_usage)
         source_breakdown[source] = source_breakdown.get(source, 0) + 1
         provider_breakdown[provider] = provider_breakdown.get(provider, 0) + 1
@@ -998,6 +1135,7 @@ def build_dashboard_analytics(
             "client_id": session.get("client_id"),
             "lead_name": lead_name,
             "to_number": to_number or "-",
+            "from_number": _resolve_from_number(session, provider_usage),
             "appointment_details": appointment_details,
             "appointment_date": appointment_date,
             "appointment_time": appointment_time,

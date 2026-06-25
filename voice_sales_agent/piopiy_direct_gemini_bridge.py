@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -99,6 +100,12 @@ class PiopiyDirectGeminiBridgeSession:
         self.prompt_builder = PromptBuilder()
         self.live = GeminiLiveVoiceClient(self.runtime_api_key, self.runtime_live_model)
         self._stopped = asyncio.Event()
+        self._caller_audio_received_at: float | None = None
+        self._gemini_audio_send_started_at: float | None = None
+        self._gemini_first_audio_at: float | None = None
+        self._first_audio_sent_to_piopiy_at: float | None = None
+        self._audio_chunks_received = 0
+        self._audio_chunks_buffered_before_send = 0
 
     async def run(self) -> None:
         contact_details = {
@@ -130,7 +137,9 @@ class PiopiyDirectGeminiBridgeSession:
                 explicit_vad=False,
             )
             self.trace_hook(
-                f"Direct Gemini bridge connected model={self.runtime_live_model} voice={voice_name} client={self.pending_call.client_id}"
+                f"Direct Gemini bridge connected model={self.runtime_live_model} voice={voice_name} client={self.pending_call.client_id} "
+                "selected_agent_class=PiopiyDirectGeminiBridgeSession selected_audio_path=NATIVE_GEMINI_LIVE_AUDIO "
+                "gemini_live_native_audio_enabled=true separate_tts_enabled=false audio_path_locked=true voice_locked=true"
             )
             self.stage_hook("direct_gemini_connected")
 
@@ -176,6 +185,21 @@ class PiopiyDirectGeminiBridgeSession:
 
     async def _send_loop(self) -> None:
         async for chunk in self.audio.mic_chunks():
+            now = time.monotonic()
+            self._audio_chunks_received += 1
+            if self._caller_audio_received_at is None:
+                self._caller_audio_received_at = now
+                self.trace_hook(
+                    "latency caller_audio_received_at=%.6f vad_speech_start_at=%.6f audio_chunk_buffer_size=%s"
+                    % (now, now, len(chunk))
+                )
+            if self._gemini_audio_send_started_at is None:
+                self._gemini_audio_send_started_at = now
+                self.trace_hook(
+                    "latency gemini_audio_send_started_at=%.6f number_of_audio_chunks_buffered_before_send=%s "
+                    "waits_for_full_tts=false response_audio_streaming=chunk_by_chunk"
+                    % (now, self._audio_chunks_buffered_before_send)
+                )
             await self.live.send_audio(chunk)
         self._stopped.set()
 
@@ -187,7 +211,33 @@ class PiopiyDirectGeminiBridgeSession:
 
     async def _handle_event(self, event: LiveEvent) -> None:
         if event.kind == "audio" and event.audio:
+            now = time.monotonic()
+            if self._gemini_first_audio_at is None:
+                self._gemini_first_audio_at = now
+                total_latency_ms = None
+                if self._caller_audio_received_at is not None:
+                    total_latency_ms = round((now - self._caller_audio_received_at) * 1000, 1)
+                self.trace_hook(
+                    "latency gemini_first_token_or_audio_at=%.6f first_audio_chunk_ready_at=%.6f total_turn_latency_ms=%s "
+                    "audio_chunk_buffer_size=%s number_of_audio_chunks_buffered_before_send=%s waits_for_full_tts=false response_audio_streaming=chunk_by_chunk"
+                    % (
+                        now,
+                        now,
+                        total_latency_ms if total_latency_ms is not None else "",
+                        len(event.audio),
+                        self._audio_chunks_buffered_before_send,
+                    )
+                )
             await self.audio.play(event.audio)
+            if self._first_audio_sent_to_piopiy_at is None:
+                self._first_audio_sent_to_piopiy_at = time.monotonic()
+                total_latency_ms = None
+                if self._caller_audio_received_at is not None:
+                    total_latency_ms = round((self._first_audio_sent_to_piopiy_at - self._caller_audio_received_at) * 1000, 1)
+                self.trace_hook(
+                    "latency first_audio_sent_to_piopiy_at=%.6f total_turn_latency_ms=%s audio_path_active=gemini_live_audio_in_audio_out"
+                    % (self._first_audio_sent_to_piopiy_at, total_latency_ms if total_latency_ms is not None else "")
+                )
             if event.latency_ms is not None:
                 self.trace_hook(f"Direct Gemini first audio latency_ms={round(event.latency_ms, 1)}")
             return
@@ -207,6 +257,8 @@ class PiopiyDirectGeminiBridgeSession:
             return
 
         if event.kind == "turn_complete":
+            if self._caller_audio_received_at is not None:
+                self.trace_hook("latency vad_speech_end_at=%.6f" % time.monotonic())
             self.trace_hook("Direct Gemini turn complete.")
 
 

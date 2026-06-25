@@ -14,7 +14,7 @@ from .constants import PROJECT_ROOT
 
 @dataclass(slots=True)
 class AppSettings:
-    speech_provider: Literal["gemini", "sarvam"]
+    speech_provider: Literal["gemini"]
     gemini_api_key: str
     live_model: str
     structured_model: str
@@ -27,7 +27,7 @@ class AppSettings:
     processing_ambience_enabled: bool
     processing_ambience_gain: float
     public_base_url: str | None
-    telephony_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "tata", "piopiy"]
+    telephony_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "piopiy"]
     twilio_account_sid: str | None
     twilio_auth_token: str | None
     twilio_from_number: str | None
@@ -63,14 +63,6 @@ class AppSettings:
     airtel_iq_hangup_path: str
     airtel_iq_headers_json: str | None
     airtel_iq_request_template_json: str | None
-    tata_click2call_api_url: str | None
-    tata_api_key: str | None
-    tata_api_token: str | None
-    tata_agent_number: str | None
-    tata_caller_id: str | None
-    tata_async: bool
-    tata_headers_json: str | None
-    tata_request_template_json: str | None
     meta_whatsapp_base_url: str | None
     meta_whatsapp_api_version: str
     meta_whatsapp_access_token: str | None
@@ -93,7 +85,6 @@ class AppSettings:
     exotel_cost_per_minute: float
     twilio_cost_per_minute: float
     airtel_iq_cost_per_minute: float
-    tata_cost_per_minute: float
     piopiy_cost_per_minute: float
     meta_whatsapp_cost_per_minute: float
     gemini_live_input_cost_per_minute: float
@@ -135,17 +126,6 @@ class AppSettings:
     smartflo_enable_noise_gate: bool
     smartflo_noise_gate_threshold: int
     smartflo_latency_log_interval_seconds: float
-    sarvam_api_key: str | None
-    sarvam_base_url: str
-    sarvam_tts_model: str
-    sarvam_tts_speaker: str
-    sarvam_tts_target_language_code: str
-    sarvam_stt_model: str
-    sarvam_stt_mode: str
-    sarvam_stt_language_code: str
-    sarvam_chat_model: str
-
-
 def load_settings() -> AppSettings:
     """Load application settings from the environment."""
     load_dotenv(PROJECT_ROOT / ".env")
@@ -238,14 +218,6 @@ def load_settings() -> AppSettings:
         airtel_iq_hangup_path=os.getenv("AIRTEL_IQ_HANGUP_PATH", "/voice/call/hangup").strip() or "/voice/call/hangup",
         airtel_iq_headers_json=(os.getenv("AIRTEL_IQ_HEADERS_JSON", "").strip() or None),
         airtel_iq_request_template_json=(os.getenv("AIRTEL_IQ_REQUEST_TEMPLATE_JSON", "").strip() or None),
-        tata_click2call_api_url=(os.getenv("TATA_CLICK2CALL_API_URL", "").strip() or None),
-        tata_api_key=(os.getenv("TATA_API_KEY", "").strip() or None),
-        tata_api_token=(os.getenv("TATA_API_TOKEN", "").strip() or None),
-        tata_agent_number=(os.getenv("TATA_AGENT_NUMBER", "").strip() or None),
-        tata_caller_id=(os.getenv("TATA_CALLER_ID", "").strip() or None),
-        tata_async=(os.getenv("TATA_ASYNC", "1").strip().lower() in {"1", "true", "yes", "on"}),
-        tata_headers_json=(os.getenv("TATA_HEADERS_JSON", "").strip() or None),
-        tata_request_template_json=(os.getenv("TATA_REQUEST_TEMPLATE_JSON", "").strip() or None),
         meta_whatsapp_base_url=(os.getenv("META_WHATSAPP_BASE_URL", "").strip() or None),
         meta_whatsapp_api_version=(os.getenv("META_WHATSAPP_API_VERSION", "v22.0").strip() or "v22.0"),
         meta_whatsapp_access_token=(os.getenv("META_WHATSAPP_ACCESS_TOKEN", "").strip() or None),
@@ -282,7 +254,6 @@ def load_settings() -> AppSettings:
         exotel_cost_per_minute=float(os.getenv("EXOTEL_COST_PER_MINUTE", "0").strip() or "0"),
         twilio_cost_per_minute=float(os.getenv("TWILIO_COST_PER_MINUTE", "0").strip() or "0"),
         airtel_iq_cost_per_minute=float(os.getenv("AIRTEL_IQ_COST_PER_MINUTE", "0").strip() or "0"),
-        tata_cost_per_minute=float(os.getenv("TATA_COST_PER_MINUTE", "0").strip() or "0"),
         piopiy_cost_per_minute=float(os.getenv("PIOPIY_COST_PER_MINUTE", "0").strip() or "0"),
         meta_whatsapp_cost_per_minute=float(os.getenv("META_WHATSAPP_COST_PER_MINUTE", "0").strip() or "0"),
         gemini_live_input_cost_per_minute=float(os.getenv("GEMINI_LIVE_INPUT_COST_PER_MINUTE", "0").strip() or "0"),
@@ -336,13 +307,4 @@ def load_settings() -> AppSettings:
         smartflo_latency_log_interval_seconds=float(
             os.getenv("SMARTFLO_LATENCY_LOG_INTERVAL_SECONDS", "5").strip() or "5"
         ),
-        sarvam_api_key=(os.getenv("SARVAM_API_KEY", "").strip() or None),
-        sarvam_base_url=(os.getenv("SARVAM_BASE_URL", "https://api.sarvam.ai").strip() or "https://api.sarvam.ai"),
-        sarvam_tts_model=(os.getenv("SARVAM_TTS_MODEL", "bulbul:v3").strip() or "bulbul:v3"),
-        sarvam_tts_speaker=(os.getenv("SARVAM_TTS_SPEAKER", "shubh").strip() or "shubh"),
-        sarvam_tts_target_language_code=(os.getenv("SARVAM_TTS_TARGET_LANGUAGE_CODE", "en-IN").strip() or "en-IN"),
-        sarvam_stt_model=(os.getenv("SARVAM_STT_MODEL", "saaras:v3").strip() or "saaras:v3"),
-        sarvam_stt_mode=(os.getenv("SARVAM_STT_MODE", "transcribe").strip() or "transcribe"),
-        sarvam_stt_language_code=(os.getenv("SARVAM_STT_LANGUAGE_CODE", "unknown").strip() or "unknown"),
-        sarvam_chat_model=(os.getenv("SARVAM_CHAT_MODEL", "sarvam-30b").strip() or "sarvam-30b"),
     )

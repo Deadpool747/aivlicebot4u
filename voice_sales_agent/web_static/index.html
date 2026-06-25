@@ -639,6 +639,104 @@
         color: #bfd0e8;
       }
 
+      .recordings-stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .recordings-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .recordings-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+
+      .recordings-pager {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .recordings-page-label {
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .pager-btn {
+        min-width: 110px;
+      }
+
+      .recording-card {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(8, 17, 31, 0.82);
+        border: 1px solid var(--line);
+      }
+
+      .recording-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .recording-meta {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .recording-meta span {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(6, 14, 27, 0.92);
+        border: 1px solid var(--line);
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .recording-files {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+      }
+
+      .recording-file {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(6, 14, 27, 0.92);
+        border: 1px solid var(--line);
+      }
+
+      .recording-file audio {
+        width: 100%;
+      }
+
+      .empty-state {
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(8, 17, 31, 0.56);
+        border: 1px dashed var(--line);
+        color: var(--muted);
+      }
+
       .badge-pill {
         display: inline-flex;
         align-items: center;
@@ -789,6 +887,7 @@
             <button class="page-tab active" id="overviewTab" data-page="overviewPage" type="button">Index</button>
             <button class="page-tab" id="liveTab" data-page="livePage" type="button">Live</button>
             <button class="page-tab" id="resultsTab" data-page="resultsPage" type="button">Results</button>
+            <button class="page-tab" id="recordingsTab" data-page="recordingsPage" type="button">Recordings</button>
             <button class="page-tab" id="configureTab" data-page="configurePage" type="button">Configure</button>
           </div>
         </section>
@@ -1276,6 +1375,37 @@
           </div>
         </section>
 
+        <section class="page" id="recordingsPage">
+          <div class="recordings-stack">
+            <section class="panel">
+              <div class="panel-head">
+                <div class="section-title">
+                  <h2>Call Recordings</h2>
+                  <p>Listen to the saved caller, agent, and full conversation audio for recent workspace sessions.</p>
+                </div>
+              </div>
+              <div class="empty-state" id="recordingsSummary">Loading recordings...</div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div class="section-title">
+                  <h2>Recording Library</h2>
+                  <p>See the latest 10 recordings first, then move forward or backward like an inbox.</p>
+                </div>
+              </div>
+              <div class="recordings-toolbar">
+                <div class="recordings-page-label" id="recordingsPageLabel">Page 1 of 1</div>
+                <div class="recordings-pager">
+                  <button class="secondary pager-btn" id="recordingsPrevBtn" type="button">Previous</button>
+                  <button class="secondary pager-btn" id="recordingsNextBtn" type="button">Next</button>
+                </div>
+              </div>
+              <div class="recordings-list" id="recordingsList"></div>
+            </section>
+          </div>
+        </section>
+
         <section class="page" id="configurePage">
           <div class="configure-grid">
             <div class="configure-top">
@@ -1435,14 +1565,6 @@
                     <option value="piopiy">piopiy</option>
                     <option value="meta_whatsapp">meta_whatsapp</option>
                   </select>
-                </div>
-                <div>
-                  <label for="projectTataAgentNumberInput">Agent Number Override</label>
-                  <input id="projectTataAgentNumberInput" type="text" placeholder="Optional project-specific agent number" />
-                </div>
-                <div>
-                  <label for="projectTataCallerIdInput">Caller ID Override</label>
-                  <input id="projectTataCallerIdInput" type="text" placeholder="Optional project-specific caller id" />
                 </div>
                 <div>
                   <label for="projectPiopiyAgentIdInput">Piopiy Agent ID (Override)</label>
@@ -1741,8 +1863,6 @@
       const projectStatusInput = document.getElementById("projectStatusInput");
       const projectOutreachModeInput = document.getElementById("projectOutreachModeInput");
       const projectOutboundProviderInput = document.getElementById("projectOutboundProviderInput");
-      const projectTataAgentNumberInput = document.getElementById("projectTataAgentNumberInput");
-      const projectTataCallerIdInput = document.getElementById("projectTataCallerIdInput");
       const projectPiopiyAgentIdInput = document.getElementById("projectPiopiyAgentIdInput");
       const projectPiopiyCallerIdInput = document.getElementById("projectPiopiyCallerIdInput");
       const projectPiopiyAppIdInput = document.getElementById("projectPiopiyAppIdInput");
@@ -1819,6 +1939,11 @@
       const resultsTopCallSource = document.getElementById("resultsTopCallSource");
       const resultsPrimaryProvider = document.getElementById("resultsPrimaryProvider");
       const recentCallsTable = document.getElementById("recentCallsTable");
+      const recordingsSummary = document.getElementById("recordingsSummary");
+      const recordingsList = document.getElementById("recordingsList");
+      const recordingsPageLabel = document.getElementById("recordingsPageLabel");
+      const recordingsPrevBtn = document.getElementById("recordingsPrevBtn");
+      const recordingsNextBtn = document.getElementById("recordingsNextBtn");
       const pageTabs = document.querySelectorAll(".page-tab");
       const pages = document.querySelectorAll(".page");
       const timingPlaybackCooldown = document.getElementById("timingPlaybackCooldown");
@@ -1863,6 +1988,7 @@
         { key: "duration_seconds", label: "Duration" },
         { key: "follow_up", label: "Follow-Up" },
       ];
+      const RECORDINGS_PAGE_SIZE = 10;
       let dashboardSessionKey = "dashboard";
       let requiresWorkflowConfiguration = false;
       const BROWSER_INPUT_SAMPLE_RATE = 16000;
@@ -1901,6 +2027,8 @@
       let browserMicBytesSent = 0;
       let browserServerAckedFirstChunk = false;
       let browserWsOpen = false;
+      let recordingsItems = [];
+      let recordingsPageIndex = 0;
       let browserMicPermissionState = "unknown";
       let browserMicFallbackTimer = null;
 
@@ -2551,8 +2679,6 @@
             tts_model: "",
             outreach_mode: "call_only",
             outbound_call_provider: "piopiy",
-            tata_agent_number: "",
-            tata_caller_id: "",
             piopiy_agent_id: "",
             piopiy_caller_id: "",
             piopiy_app_id: "",
@@ -2592,8 +2718,6 @@
           tts_model: projectTtsModelInput.value.trim() || null,
           outreach_mode: projectOutreachModeInput.value || "call_only",
           outbound_call_provider: projectOutboundProviderInput.value || null,
-          tata_agent_number: projectTataAgentNumberInput.value.trim() || null,
-          tata_caller_id: projectTataCallerIdInput.value.trim() || null,
           piopiy_agent_id: projectPiopiyAgentIdInput.value.trim() || null,
           piopiy_caller_id: projectPiopiyCallerIdInput.value.trim() || null,
           piopiy_app_id: projectPiopiyAppIdInput.value.trim() || null,
@@ -2653,8 +2777,6 @@
         projectStatusInput.value = project.status || "draft";
         projectOutreachModeInput.value = project.runtime?.outreach_mode || "call_only";
         projectOutboundProviderInput.value = project.runtime?.outbound_call_provider || "";
-        projectTataAgentNumberInput.value = project.runtime?.tata_agent_number || "";
-        projectTataCallerIdInput.value = project.runtime?.tata_caller_id || "";
         projectPiopiyAgentIdInput.value = project.runtime?.piopiy_agent_id || "";
         projectPiopiyCallerIdInput.value = project.runtime?.piopiy_caller_id || "";
         projectPiopiyAppIdInput.value = project.runtime?.piopiy_app_id || "";
@@ -3319,6 +3441,17 @@
         return `${currency || "INR"} ${normalized.toFixed(2)}`;
       }
 
+      function formatRecordingDateTime(value) {
+        if (!value) {
+          return "-";
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return String(value);
+        }
+        return date.toLocaleString();
+      }
+
       async function loadWorkspaceSummary() {
         const res = await fetch("/api/workspace/summary");
         const data = await res.json().catch(() => ({}));
@@ -3341,6 +3474,117 @@
           `Non-minute charges: ${formatMoney(currency, billing.non_minute_charges_total)}`,
           `Sessions: ${billing.total_sessions ?? 0}`,
         ].join(" | ");
+      }
+
+      function updateRecordingsPager() {
+        const totalItems = recordingsItems.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / RECORDINGS_PAGE_SIZE));
+        const currentPage = totalItems ? recordingsPageIndex + 1 : 1;
+        recordingsPageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
+        recordingsPrevBtn.disabled = recordingsPageIndex <= 0;
+        recordingsNextBtn.disabled = totalItems === 0 || recordingsPageIndex >= totalPages - 1;
+      }
+
+      function renderRecordingsPage() {
+        const items = recordingsItems;
+        recordingsList.innerHTML = "";
+        if (!items.length) {
+          updateRecordingsPager();
+          const empty = document.createElement("div");
+          empty.className = "empty-state";
+          empty.textContent = "Recordings will appear here once a session finishes and local audio capture is saved.";
+          recordingsList.appendChild(empty);
+          return;
+        }
+
+        const startIndex = recordingsPageIndex * RECORDINGS_PAGE_SIZE;
+        const visibleItems = items.slice(startIndex, startIndex + RECORDINGS_PAGE_SIZE);
+        updateRecordingsPager();
+
+        visibleItems.forEach((item) => {
+          const card = document.createElement("div");
+          card.className = "recording-card";
+
+          const top = document.createElement("div");
+          top.className = "recording-card-top";
+
+          const title = document.createElement("div");
+          const callerNumber = String(item.from_number || "").trim();
+          const dialedNumber = String(item.to_number || "").trim();
+          title.innerHTML = `
+            <strong>${escapeHtml(item.lead_name || "Unknown")}</strong>
+            <div class="helper">
+              ${escapeHtml(item.project_name || item.project_id || "No project")} · ${escapeHtml(item.session_id || "-")}
+              ${callerNumber ? ` · Caller ${escapeHtml(callerNumber)}` : ""}
+              ${dialedNumber ? ` · DID ${escapeHtml(dialedNumber)}` : ""}
+            </div>
+          `;
+          top.appendChild(title);
+
+          const meta = document.createElement("div");
+          meta.className = "recording-meta";
+          [
+            `Provider: ${item.provider || "-"}`,
+            `Started: ${formatRecordingDateTime(item.started_at)}`,
+            `Ended: ${formatRecordingDateTime(item.ended_at)}`,
+            `Duration: ${item.duration_seconds || 0}s`,
+            `Recording: ${item.recording_status || ((item.files || []).length ? "saved" : "pending")}`,
+            item.recording_duration_seconds ? `Audio: ${item.recording_duration_seconds}s` : "",
+          ].forEach((text) => {
+            if (!text) return;
+            const badge = document.createElement("span");
+            badge.textContent = text;
+            meta.appendChild(badge);
+          });
+          top.appendChild(meta);
+          card.appendChild(top);
+
+          const files = document.createElement("div");
+          files.className = "recording-files";
+          (item.files || []).forEach((file) => {
+            const block = document.createElement("div");
+            block.className = "recording-file";
+            const label = document.createElement("strong");
+            label.textContent = file.label || file.filename || "Audio";
+            const audio = document.createElement("audio");
+            audio.controls = true;
+            audio.preload = "none";
+            audio.src = file.url;
+            block.appendChild(label);
+            block.appendChild(audio);
+            files.appendChild(block);
+          });
+          if ((item.files || []).length) {
+            card.appendChild(files);
+          } else if (item.recording_pending_message) {
+            const pending = document.createElement("div");
+            pending.className = "helper";
+            pending.textContent = item.recording_pending_message;
+            card.appendChild(pending);
+          }
+
+          const pathLine = document.createElement("div");
+          pathLine.className = "helper";
+          pathLine.textContent = item.session_dir || "";
+          card.appendChild(pathLine);
+
+          recordingsList.appendChild(card);
+        });
+      }
+
+      function renderRecordings(data) {
+        recordingsItems = Array.isArray(data?.items) ? data.items : [];
+        const totalItems = recordingsItems.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / RECORDINGS_PAGE_SIZE));
+        if (recordingsPageIndex >= totalPages) {
+          recordingsPageIndex = Math.max(0, totalPages - 1);
+        }
+        const start = totalItems ? recordingsPageIndex * RECORDINGS_PAGE_SIZE + 1 : 0;
+        const end = Math.min(totalItems, (recordingsPageIndex + 1) * RECORDINGS_PAGE_SIZE);
+        recordingsSummary.textContent = totalItems
+          ? `Showing ${start}-${end} of ${totalItems} saved recording session${totalItems === 1 ? "" : "s"} for ${data.workspace_client_id || "this workspace"}.`
+          : "No saved call recordings found for this workspace yet.";
+        renderRecordingsPage();
       }
 
       function renderAnalytics(data) {
@@ -3404,9 +3648,13 @@
 
             if (key === "lead_name") {
               const leadName = rawValue ? String(rawValue) : "-";
+              const callerPhone = call?.from_number ? String(call.from_number) : "";
               const phone = call?.to_number ? String(call.to_number) : "";
+              const helperText = callerPhone && phone && callerPhone !== phone
+                ? `Caller: ${callerPhone}${phone ? ` · DID: ${phone}` : ""}`
+                : phone;
               cell.innerHTML = `<strong>${escapeHtml(leadName)}</strong>${
-                phone && phone !== "-" ? `<div class="helper">${escapeHtml(phone)}</div>` : ""
+                helperText && helperText !== "-" ? `<div class="helper">${escapeHtml(helperText)}</div>` : ""
               }`;
               row.appendChild(cell);
               return;
@@ -3427,6 +3675,37 @@
         }
         renderAnalytics(data);
       }
+
+      async function loadRecordings() {
+        const res = await fetch("/api/recordings");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          recordingsSummary.textContent = data.detail || "Failed to load recordings.";
+          recordingsPageLabel.textContent = "Page 1 of 1";
+          recordingsPrevBtn.disabled = true;
+          recordingsNextBtn.disabled = true;
+          recordingsList.innerHTML = "";
+          return;
+        }
+        renderRecordings(data);
+      }
+
+      recordingsPrevBtn?.addEventListener("click", () => {
+        if (recordingsPageIndex <= 0) {
+          return;
+        }
+        recordingsPageIndex -= 1;
+        renderRecordingsPage();
+      });
+
+      recordingsNextBtn?.addEventListener("click", () => {
+        const totalPages = Math.max(1, Math.ceil(recordingsItems.length / RECORDINGS_PAGE_SIZE));
+        if (recordingsPageIndex >= totalPages - 1) {
+          return;
+        }
+        recordingsPageIndex += 1;
+        renderRecordingsPage();
+      });
 
       async function startDemoSession() {
         errorText.textContent = "";
@@ -3681,6 +3960,7 @@
           await loadEditor(clientSelect.value);
           await loadWorkspaceSummary();
           await loadAnalytics();
+          await loadRecordings();
           await pollState();
           renderProjectSelection();
         } finally {
@@ -3695,6 +3975,7 @@
         await loadWorkspaceSummary();
         await loadAppSettings();
         await loadAnalytics();
+        await loadRecordings();
         await loadProjects(clientSelect.value);
         await loadEditor(clientSelect.value);
         await pollState();
@@ -3723,6 +4004,7 @@
       setInterval(pollState, 1000);
       setInterval(loadAnalytics, 5000);
       setInterval(loadWorkspaceSummary, 5000);
+      setInterval(loadRecordings, 10000);
       window.addEventListener("beforeunload", () => {
         stopBrowserAudioTransport(false);
       });

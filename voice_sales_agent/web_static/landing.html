@@ -1711,6 +1711,12 @@
         }
       }
 
+      function demoRequestHeaders() {
+        return {
+          "x-guest-visitor-id": getGuestVisitorId(),
+        };
+      }
+
       function updateStartButtons() {
         const text = demoBusy ? "Starting..." : (demoRunning ? "Stop" : "Start");
         startButtons.forEach((button) => {
@@ -1768,9 +1774,8 @@
         if (demoClientId && demoSessionKey && demoProjects.length) {
           return;
         }
-        const visitorId = getGuestVisitorId();
         const response = await fetch("/api/demo/options", {
-          headers: { "x-guest-visitor-id": visitorId },
+          headers: demoRequestHeaders(),
           credentials: "same-origin",
         });
         const data = await response.json().catch(() => ({}));
@@ -1842,6 +1847,7 @@
       }
 
       function wsCandidates() {
+        const visitorId = getGuestVisitorId();
         const candidates = [wsBaseUrl()];
         const hostname = String(window.location.hostname || "").trim().toLowerCase();
         const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
@@ -1858,7 +1864,8 @@
       async function openAudioSocketWithFallback(sessionKey) {
         let lastError = null;
         for (const base of wsCandidates()) {
-          const url = `${base}/ws/browser-audio/${encodeURIComponent(sessionKey)}`;
+          const visitorId = encodeURIComponent(getGuestVisitorId());
+          const url = `${base}/ws/browser-audio/${encodeURIComponent(sessionKey)}?visitor_id=${visitorId}`;
           try {
             const socket = await new Promise((resolve, reject) => {
               const ws = new WebSocket(url);
@@ -2080,7 +2087,10 @@
         const key = encodeURIComponent(demoSessionKey || "dashboard");
         for (let i = 0; i < retries; i += 1) {
           try {
-            const snapRes = await fetch(`/api/session?session_key=${key}`, { credentials: "same-origin" });
+            const snapRes = await fetch(`/api/session?session_key=${key}`, {
+              credentials: "same-origin",
+              headers: demoRequestHeaders(),
+            });
             if (snapRes.ok) {
               const snap = await snapRes.json().catch(() => ({}));
               if (!snap.running) {
@@ -2102,6 +2112,7 @@
           stopLeadSync();
           await fetch(`/api/session/stop?session_key=${encodeURIComponent(demoSessionKey || "dashboard")}`, {
             method: "POST",
+            headers: demoRequestHeaders(),
             credentials: "same-origin",
           }).catch(() => {});
           await waitForSessionIdle();
@@ -2125,7 +2136,10 @@
           for (let attempt = 0; attempt < 3; attempt += 1) {
             startRes = await fetch("/api/session/start", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...demoRequestHeaders(),
+              },
               credentials: "same-origin",
               body: JSON.stringify(startBody),
             });
@@ -2137,6 +2151,7 @@
             }
             await fetch(`/api/session/stop?session_key=${encodeURIComponent(demoSessionKey || "dashboard")}`, {
               method: "POST",
+              headers: demoRequestHeaders(),
               credentials: "same-origin",
             }).catch(() => {});
             await waitForSessionIdle(8, 300);
@@ -2167,6 +2182,7 @@
         try {
           await fetch(`/api/session/stop?session_key=${encodeURIComponent(demoSessionKey || "dashboard")}`, {
             method: "POST",
+            headers: demoRequestHeaders(),
             credentials: "same-origin",
           });
         } catch (error) {}
@@ -2988,7 +3004,10 @@
         try {
           const response = await fetch("/api/live-preview/extract", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...demoRequestHeaders(),
+            },
             credentials: "same-origin",
             body: JSON.stringify({
               session_key: demoSessionKey || null,
@@ -3012,7 +3031,10 @@
       async function syncLeadFromSession() {
         try {
           const key = encodeURIComponent(demoSessionKey || "dashboard");
-          const response = await fetch(`/api/session?session_key=${key}`, { credentials: "same-origin" });
+          const response = await fetch(`/api/session?session_key=${key}`, {
+            credentials: "same-origin",
+            headers: demoRequestHeaders(),
+          });
           if (!response.ok) {
             return;
           }

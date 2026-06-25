@@ -14,6 +14,7 @@
       "tts_model": null,
       "outreach_mode": "call_only",
       "outbound_call_provider": null,
+      "piopiy_app_id": "b0666103-c0b5-49da-9880-625408442448",
       "whatsapp_consent_message": null,
       "whatsapp_chat_opening_message": null
     },

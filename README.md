@@ -70,7 +70,7 @@ new_voice_agent/
 ## Requirements
 
 - Python 3.11+
-- A Gemini API key (and optionally a Sarvam API key for Sarvam TTS/STT)
+- A Gemini API key
 - PortAudio installed locally for `PyAudio`
 
 Common PortAudio install commands:
@@ -96,13 +96,12 @@ cp .env.example .env
 4. Set:
 
 - `GEMINI_API_KEY`
-- `SPEECH_PROVIDER` (`gemini` or `sarvam`)
+- `SPEECH_PROVIDER` (`gemini`)
 - Optional per-component provider overrides:
-  - `LIVE_PROVIDER` (`gemini` or `sarvam`)
-  - `STRUCTURED_PROVIDER` (`gemini` or `sarvam`)
-  - `TTS_PROVIDER` (`gemini` or `sarvam`)
-  - `RECORDING_STT_PROVIDER` (`recording` provider currently supports `gemini` or `sarvam`)
-- If using Sarvam: `SARVAM_API_KEY`, optional `SARVAM_CHAT_MODEL`, `SARVAM_TTS_MODEL`, `SARVAM_TTS_SPEAKER`, `SARVAM_STT_MODEL`
+  - `LIVE_PROVIDER` (`gemini`)
+  - `STRUCTURED_PROVIDER` (`gemini`)
+  - `TTS_PROVIDER` (`gemini`)
+  - `RECORDING_STT_PROVIDER` (`gemini`)
 - Optionally `GEMINI_LIVE_MODEL`
 - Optionally `GEMINI_STRUCTURED_MODEL`
 - Optionally `DEFAULT_CLIENT_ID`

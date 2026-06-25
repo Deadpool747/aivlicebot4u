@@ -12,6 +12,7 @@ from .analytics import (
     _coerce_duration,
     _extract_appointment_snapshot,
     _extract_call_date_time,
+    _is_legacy_provider,
     _resolve_lead_name,
     _resolve_provider,
     _resolve_provider_usage,
@@ -101,6 +102,8 @@ class SqliteCallOutcomeStore:
         provider_usage = _resolve_provider_usage(session_dict)
         direction = _resolve_call_direction(session_dict, provider_usage)
         provider = _resolve_provider(session_dict, provider_usage)
+        if _is_legacy_provider(provider):
+            return
         lead_source = _resolve_source(provider, direction, provider_usage)
         appointment_details, appointment_date, appointment_time = _extract_appointment_snapshot(session_dict)
         lead_name = _resolve_lead_name(session_dict, provider_usage)

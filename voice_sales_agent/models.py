@@ -269,9 +269,7 @@ class ProjectRuntimeConfig(BaseModel):
     structured_model: str | None = None
     tts_model: str | None = None
     outreach_mode: Literal["call_only", "chat_only", "consent_then_call"] = "call_only"
-    outbound_call_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "tata", "piopiy"] | None = None
-    tata_agent_number: str | None = None
-    tata_caller_id: str | None = None
+    outbound_call_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "piopiy"] | None = None
     piopiy_agent_id: str | None = None
     piopiy_caller_id: str | None = None
     piopiy_app_id: str | None = None

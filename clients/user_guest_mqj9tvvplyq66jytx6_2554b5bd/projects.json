@@ -21,6 +21,9 @@
       "tts_model": null,
       "outreach_mode": "call_only",
       "outbound_call_provider": null,
+      "piopiy_agent_id": null,
+      "piopiy_caller_id": null,
+      "piopiy_app_id": null,
       "max_concurrent_calls": null,
       "whatsapp_consent_message": null,
       "whatsapp_chat_opening_message": null
@@ -49,6 +52,9 @@
       "tts_model": null,
       "outreach_mode": "call_only",
       "outbound_call_provider": null,
+      "piopiy_agent_id": null,
+      "piopiy_caller_id": null,
+      "piopiy_app_id": null,
       "max_concurrent_calls": null,
       "whatsapp_consent_message": null,
       "whatsapp_chat_opening_message": null
@@ -77,6 +83,9 @@
       "tts_model": null,
       "outreach_mode": "call_only",
       "outbound_call_provider": null,
+      "piopiy_agent_id": null,
+      "piopiy_caller_id": null,
+      "piopiy_app_id": null,
       "max_concurrent_calls": null,
       "whatsapp_consent_message": null,
       "whatsapp_chat_opening_message": null
@@ -105,6 +114,9 @@
       "tts_model": null,
       "outreach_mode": "call_only",
       "outbound_call_provider": null,
+      "piopiy_agent_id": null,
+      "piopiy_caller_id": null,
+      "piopiy_app_id": null,
       "max_concurrent_calls": null,
       "whatsapp_consent_message": null,
       "whatsapp_chat_opening_message": null
@@ -133,6 +145,9 @@
       "tts_model": null,
       "outreach_mode": "call_only",
       "outbound_call_provider": null,
+      "piopiy_agent_id": null,
+      "piopiy_caller_id": null,
+      "piopiy_app_id": null,
       "max_concurrent_calls": null,
       "whatsapp_consent_message": null,
       "whatsapp_chat_opening_message": null
@@ -161,6 +176,9 @@
       "tts_model": null,
       "outreach_mode": "call_only",
       "outbound_call_provider": null,
+      "piopiy_agent_id": null,
+      "piopiy_caller_id": null,
+      "piopiy_app_id": null,
       "max_concurrent_calls": null,
       "whatsapp_consent_message": null,
       "whatsapp_chat_opening_message": null

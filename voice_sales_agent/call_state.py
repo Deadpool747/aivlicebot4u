@@ -170,6 +170,9 @@ class RedisCallStateStore:
         resolved_payload = payload or await self.get_call(pending_id)
         provider = str((resolved_payload or {}).get("provider", "")).strip()
         provider_sid = str((resolved_payload or {}).get("provider_call_sid", "")).strip()
+        provider_sids = resolved_payload.get("provider_call_sids") if isinstance(resolved_payload, dict) else []
+        if not isinstance(provider_sids, list):
+            provider_sids = []
         pipe = self._redis.pipeline()
         pipe.hdel(self._key_pending_hash(), pending_id)
         pipe.hdel(self._key_context_hash(), pending_id)
@@ -178,11 +181,18 @@ class RedisCallStateStore:
             pipe.srem(self._key_pending_by_provider(provider), pending_id)
             if provider_sid:
                 pipe.hdel(self._key_pending_sid_index(provider), provider_sid)
+            for alias in provider_sids:
+                alias_value = str(alias or "").strip()
+                if alias_value:
+                    pipe.hdel(self._key_pending_sid_index(provider), alias_value)
         await pipe.execute()
 
     async def put_call(self, pending_id: str, pending_payload: dict[str, Any], context: dict[str, Any]) -> None:
         provider = str(pending_payload.get("provider", "")).strip()
         provider_sid = str(pending_payload.get("provider_call_sid", "")).strip()
+        provider_sids = pending_payload.get("provider_call_sids")
+        if not isinstance(provider_sids, list):
+            provider_sids = [provider_sid] if provider_sid else []
         pending_json = json.dumps(pending_payload, ensure_ascii=True)
         context_json = json.dumps(context, ensure_ascii=True)
         pipe = self._redis.pipeline()
@@ -192,6 +202,10 @@ class RedisCallStateStore:
             pipe.sadd(self._key_pending_by_provider(provider), pending_id)
             if provider_sid:
                 pipe.hset(self._key_pending_sid_index(provider), provider_sid, pending_id)
+            for alias in provider_sids:
+                alias_value = str(alias or "").strip()
+                if alias_value:
+                    pipe.hset(self._key_pending_sid_index(provider), alias_value, pending_id)
         await pipe.execute()
         await self._touch_pending_liveness(pending_id)
 
@@ -216,6 +230,19 @@ class RedisCallStateStore:
     async def find_call_by_provider_sid(self, provider: str, provider_sid: str) -> tuple[str, dict[str, Any]] | None:
         pending_id = await self._redis.hget(self._key_pending_sid_index(provider), provider_sid)
         if not pending_id:
+            candidates = [str(item) for item in await self._redis.smembers(self._key_pending_by_provider(provider))]
+            for candidate_pending_id in candidates:
+                if not await self._redis.exists(self._key_pending_liveness(candidate_pending_id)):
+                    await self._delete_pending_id(candidate_pending_id)
+                    continue
+                payload = await self.get_call(candidate_pending_id)
+                if payload is None:
+                    continue
+                aliases = payload.get("provider_call_sids")
+                if isinstance(aliases, list) and provider_sid in {str(item or "").strip() for item in aliases}:
+                    return candidate_pending_id, payload
+                if str(payload.get("provider_call_sid", "")).strip() == provider_sid:
+                    return candidate_pending_id, payload
             return None
         if not await self._redis.exists(self._key_pending_liveness(pending_id)):
             await self._redis.hdel(self._key_pending_sid_index(provider), provider_sid)
@@ -272,8 +299,14 @@ class RedisCallStateStore:
     async def set_call(self, pending_id: str, call_payload: dict[str, Any]) -> None:
         provider = str(call_payload.get("provider", "")).strip()
         provider_sid = str(call_payload.get("provider_call_sid", "")).strip()
+        provider_sids = call_payload.get("provider_call_sids")
+        if not isinstance(provider_sids, list):
+            provider_sids = [provider_sid] if provider_sid else []
         existing = await self.get_call(pending_id)
         old_sid = str((existing or {}).get("provider_call_sid", "")).strip()
+        old_sids = existing.get("provider_call_sids") if isinstance(existing, dict) else []
+        if not isinstance(old_sids, list):
+            old_sids = []
         pipe = self._redis.pipeline()
         pipe.hset(
             self._key_pending_hash(),
@@ -284,8 +317,16 @@ class RedisCallStateStore:
             pipe.sadd(self._key_pending_by_provider(provider), pending_id)
             if old_sid and old_sid != provider_sid:
                 pipe.hdel(self._key_pending_sid_index(provider), old_sid)
+            for alias in old_sids:
+                alias_value = str(alias or "").strip()
+                if alias_value and alias_value != provider_sid:
+                    pipe.hdel(self._key_pending_sid_index(provider), alias_value)
             if provider_sid:
                 pipe.hset(self._key_pending_sid_index(provider), provider_sid, pending_id)
+            for alias in provider_sids:
+                alias_value = str(alias or "").strip()
+                if alias_value:
+                    pipe.hset(self._key_pending_sid_index(provider), alias_value, pending_id)
         await pipe.execute()
         await self._touch_pending_liveness(pending_id)
 

@@ -59,8 +59,10 @@ FAST_TURN_PARTIAL_COMMIT_SILENCE_SECONDS = 0.16
 FAST_TURN_SHORT_REPLY_PARTIAL_COMMIT_SILENCE_SECONDS = 0.08
 GENERIC_BINARY_CONFIRMATION_AUDIO_THRESHOLD = 90.0
 GENERIC_BINARY_CONFIRMATION_SILENCE_SECONDS = 0.45
-BROWSER_EXPLICIT_VAD_AUDIO_THRESHOLD = 140.0
-BROWSER_EXPLICIT_VAD_END_SECONDS = 0.45
+# Browser demos vary a lot by mic quality and speaker volume, so keep the
+# turn-end detector forgiving enough to avoid dropped or hanging turns.
+BROWSER_EXPLICIT_VAD_AUDIO_THRESHOLD = 90.0
+BROWSER_EXPLICIT_VAD_END_SECONDS = 0.7
 TWILIO_SHORT_RESPONSE_COMMIT_SECONDS = 0.18
 TWILIO_PARTIAL_COMMIT_SILENCE_SECONDS = 0.14
 TWILIO_SHORT_REPLY_PARTIAL_COMMIT_SILENCE_SECONDS = 0.08
@@ -93,6 +95,7 @@ class VoiceSalesSession:
         audio: Any | None = None,
         telephony_context: dict[str, Any] | None = None,
         defer_initial_prompt: bool = False,
+        session_id: str | None = None,
     ) -> None:
         self.settings = settings
         self.client = load_client(client_id, project_id=project_id)
@@ -144,7 +147,7 @@ class VoiceSalesSession:
         self.recording_stt = runtime.recording_stt
         self.telephony_context = telephony_context
         self.defer_initial_prompt = defer_initial_prompt
-        self.session_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+        self.session_id = str(session_id or "").strip() or datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
         self.artifacts = SessionArtifacts(
             client_id=client_id,
             project_id=self.project.project_id if self.project else None,
@@ -901,7 +904,7 @@ class VoiceSalesSession:
             return False
         if not self.faster_stt.enabled:
             return False
-        return self._is_tata_session() or self._is_exotel_session() or self._is_twilio_session() or self._is_meta_whatsapp_session()
+        return self._is_exotel_session() or self._is_twilio_session() or self._is_meta_whatsapp_session()
 
     def _capture_parallel_stt_chunk(self, chunk: bytes) -> None:
         if not chunk or not self._parallel_stt_active():
@@ -982,7 +985,7 @@ class VoiceSalesSession:
     async def _extract_recording_corpus_and_details(self) -> None:
         if not self.settings.recording_stt_enabled:
             return
-        if not (self._is_tata_session() or self._is_exotel_session() or self._is_twilio_session() or self._is_meta_whatsapp_session()):
+        if not (self._is_exotel_session() or self._is_twilio_session() or self._is_meta_whatsapp_session()):
             return
         caller_wav_path = self.session_dir / "caller_audio.wav"
         conversation_wav_path = self.session_dir / "conversation_audio.wav"
@@ -1383,7 +1386,7 @@ class VoiceSalesSession:
             return False
         if float(self.artifacts.metrics.get("parallel_stt_chars") or 0.0) > 0.0:
             return False
-        if not (self._is_tata_session() or self._is_exotel_session() or self._is_twilio_session()):
+        if not (self._is_exotel_session() or self._is_twilio_session()):
             return False
         audio_seconds = float(self.artifacts.metrics.get("caller_audio_seconds") or 0.0)
         if audio_seconds < 1.2:
@@ -1507,7 +1510,7 @@ class VoiceSalesSession:
             self._cancel_early_commit_task()
             return
         normalized = " ".join(text.split()).strip()
-        if (self._is_exotel_session() or self._is_tata_session()) and self._is_first_user_reply_greeting_only(normalized):
+        if self._is_exotel_session() and self._is_first_user_reply_greeting_only(normalized):
             self._cancel_early_commit_task()
             return
         if not self._is_short_response_candidate(normalized):
@@ -1651,9 +1654,6 @@ class VoiceSalesSession:
     def _is_exotel_session(self) -> bool:
         return isinstance(self.telephony_context, dict) and self.telephony_context.get("provider") == "exotel"
 
-    def _is_tata_session(self) -> bool:
-        return isinstance(self.telephony_context, dict) and self.telephony_context.get("provider") == "tata"
-
     def _is_twilio_session(self) -> bool:
         return isinstance(self.telephony_context, dict) and self.telephony_context.get("provider") == "twilio"
 
@@ -1669,7 +1669,6 @@ class VoiceSalesSession:
     def _is_partial_commit_session(self) -> bool:
         return (
             self._is_exotel_session()
-            or self._is_tata_session()
             or self._is_meta_whatsapp_session()
             or self._is_twilio_session()
             or self._is_piopiy_session()
@@ -1677,7 +1676,7 @@ class VoiceSalesSession:
         )
 
     def _should_use_explicit_vad(self) -> bool:
-        if self._is_exotel_session() or self._is_tata_session():
+        if self._is_exotel_session():
             return self.settings.exotel_use_explicit_vad
         return (
             self._is_twilio_session()
@@ -2112,23 +2111,23 @@ class VoiceSalesSession:
         if self._is_fast_turn_mode():
             return min(
                 self.settings.exotel_short_response_commit_seconds
-                if self._is_exotel_session() or self._is_tata_session()
+                if self._is_exotel_session()
                 else SHORT_RESPONSE_COMMIT_SECONDS,
                 FAST_TURN_SHORT_RESPONSE_COMMIT_SECONDS,
             )
         if self._is_twilio_session():
             return min(SHORT_RESPONSE_COMMIT_SECONDS, TWILIO_SHORT_RESPONSE_COMMIT_SECONDS)
-        if self._is_exotel_session() or self._is_tata_session():
+        if self._is_exotel_session():
             return self.settings.exotel_short_response_commit_seconds
         return SHORT_RESPONSE_COMMIT_SECONDS
 
     def _interruption_grace_seconds(self) -> float:
-        if self._is_exotel_session() or self._is_tata_session():
+        if self._is_exotel_session():
             return self.settings.exotel_interruption_grace_seconds
         return INTERRUPTION_GRACE_SECONDS
 
     def _barge_in_debounce_seconds(self) -> float:
-        if self._is_exotel_session() or self._is_tata_session():
+        if self._is_exotel_session():
             return self.settings.exotel_barge_in_debounce_seconds
         return BARGE_IN_DEBOUNCE_SECONDS
 
@@ -2136,7 +2135,7 @@ class VoiceSalesSession:
         if (
             not self._running
             or not self._is_partial_commit_session()
-            or ((self._is_exotel_session() or self._is_tata_session()) and not self.settings.exotel_enable_partial_commit_watchdog)
+            or (self._is_exotel_session() and not self.settings.exotel_enable_partial_commit_watchdog)
         ):
             return False
         if self._pending_native_line is not None or self._native_line_in_flight:
@@ -2191,7 +2190,7 @@ class VoiceSalesSession:
         return (monotonic() - self._last_user_audio_activity_at) >= GENERIC_BINARY_CONFIRMATION_SILENCE_SECONDS
 
     def _binary_confirmation_audio_threshold(self) -> float:
-        if self._is_exotel_session() or self._is_tata_session() or self._is_meta_whatsapp_session():
+        if self._is_exotel_session() or self._is_meta_whatsapp_session():
             return self.settings.exotel_low_confidence_audio_threshold
         return GENERIC_BINARY_CONFIRMATION_AUDIO_THRESHOLD
 
@@ -2251,6 +2250,8 @@ class VoiceSalesSession:
         if not self._is_guest_demo_workspace() or self.project is None:
             return None
         project_id = str(self.project.project_id or "").strip().lower()
+        if project_id == "led_arts_marathi_demo":
+            return "marathi"
         if project_id == "magnum_hospital_marathi_demo":
             return "marathi"
         if project_id == "janardan_swami_cancer_helpdesk_demo":
@@ -2802,7 +2803,7 @@ class VoiceSalesSession:
         if not self.settings.processing_ambience_enabled:
             enabled = False
         else:
-            enabled = status == "processing" and (self._is_exotel_session() or self._is_tata_session())
+            enabled = status == "processing" and self._is_exotel_session()
         if hasattr(self.audio, "set_processing_ambience"):
             with contextlib.suppress(RuntimeError):
                 asyncio.create_task(self.audio.set_processing_ambience(enabled))
@@ -3391,7 +3392,7 @@ class VoiceSalesSession:
                 customer_name=self.customer_name,
             )
 
-        if self._is_exotel_session() or self._is_tata_session():
+        if self._is_exotel_session():
             if self.opening_language == "marathi":
                 return f"नमस्कार, मी {self.customer_name} यांच्याशी बोलते आहे का?"
             if self.opening_language == "hindi":
