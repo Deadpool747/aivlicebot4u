@@ -3677,6 +3677,12 @@
       }
 
       async function loadRecordings() {
+        const hasActiveRecordingAudio = Array.from(recordingsList?.querySelectorAll("audio") || []).some(
+          (audio) => !audio.paused && !audio.ended
+        );
+        if (hasActiveRecordingAudio) {
+          return;
+        }
         const res = await fetch("/api/recordings");
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
