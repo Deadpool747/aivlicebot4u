@@ -88,6 +88,7 @@ GUEST_VISITOR_COOKIE_NAME = "aivoicebot4u_guest_visitor_id"
 GUEST_VISITOR_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 DEFAULT_GUEST_DEMO_NOTIFICATION_EMAIL = "support@aivoicebot4u.com"
 ALLOWED_RECORDING_SUFFIXES = {".wav", ".mp3", ".mpeg"}
+PIOPIY_PLAYBACK_SUFFIX = ".playback.wav"
 
 
 class AuthSignupRequest(BaseModel):
@@ -3659,6 +3660,92 @@ def create_app() -> FastAPI:
             return _estimate_mp3_duration_seconds(path)
         return None
 
+    def _playback_recording_path(source_path: Path) -> Path:
+        return source_path.with_name(f"{source_path.stem}{PIOPIY_PLAYBACK_SUFFIX}")
+
+    def _ensure_browser_playback_recording(source_path: Path) -> tuple[Path | None, dict[str, Any]]:
+        """Create a browser-friendly WAV copy for telephony MP3s without touching the source."""
+        details: dict[str, Any] = {
+            "recording_playback_source_path": str(source_path),
+            "recording_playback_status": "unavailable",
+        }
+        if not source_path.exists() or not source_path.is_file() or source_path.stat().st_size <= 0:
+            details["recording_playback_error"] = "source_missing"
+            return None, details
+        if source_path.suffix.lower() == ".wav":
+            details.update(
+                {
+                    "recording_playback_status": "source",
+                    "recording_playback_filename": source_path.name,
+                    "recording_playback_path": str(source_path),
+                    "recording_playback_duration_seconds": _probe_audio_duration_seconds(source_path),
+                }
+            )
+            return source_path, details
+
+        target_path = _playback_recording_path(source_path)
+        if target_path.exists() and target_path.is_file() and target_path.stat().st_size > 0:
+            details.update(
+                {
+                    "recording_playback_status": "ready",
+                    "recording_playback_filename": target_path.name,
+                    "recording_playback_path": str(target_path),
+                    "recording_playback_size_bytes": target_path.stat().st_size,
+                    "recording_playback_duration_seconds": _probe_audio_duration_seconds(target_path),
+                }
+            )
+            return target_path, details
+
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            details["recording_playback_error"] = "ffmpeg_not_available"
+            return None, details
+
+        temp_path = target_path.with_name(f"{target_path.stem}.download{target_path.suffix}")
+        try:
+            subprocess.run(
+                [
+                    ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(source_path),
+                    "-vn",
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "16000",
+                    "-c:a",
+                    "pcm_s16le",
+                    str(temp_path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if not temp_path.exists() or temp_path.stat().st_size <= 0:
+                details["recording_playback_error"] = "conversion_empty"
+                return None, details
+            temp_path.replace(target_path)
+            details.update(
+                {
+                    "recording_playback_status": "ready",
+                    "recording_playback_filename": target_path.name,
+                    "recording_playback_path": str(target_path),
+                    "recording_playback_size_bytes": target_path.stat().st_size,
+                    "recording_playback_duration_seconds": _probe_audio_duration_seconds(target_path),
+                }
+            )
+            return target_path, details
+        except Exception as exc:
+            with contextlib.suppress(Exception):
+                temp_path.unlink()
+            details["recording_playback_error"] = str(exc)
+            return None, details
+
     def _estimate_mp3_duration_seconds(path: Path) -> float | None:
         bitrate_table = {
             (3, 3): [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0],
@@ -3905,6 +3992,16 @@ def create_app() -> FastAPI:
                 recording_duration_seconds = float(piopiy_recording_meta.get("recording_duration_seconds") or 0) or None
             except (TypeError, ValueError):
                 recording_duration_seconds = None
+            try:
+                playback_duration_seconds = (
+                    float(piopiy_recording_meta.get("recording_playback_duration_seconds") or 0) or None
+                )
+            except (TypeError, ValueError):
+                playback_duration_seconds = None
+            if playback_duration_seconds and (
+                recording_duration_seconds is None or playback_duration_seconds > recording_duration_seconds
+            ):
+                recording_duration_seconds = playback_duration_seconds
         if not recording_url:
             recording_url = str(telephony_context.get("piopiy_recording_url") or "").strip()
         if not piopiy_filename:
@@ -3917,7 +4014,28 @@ def create_app() -> FastAPI:
             parsed = urllib.parse.urlparse(recording_url)
             piopiy_filename = Path(parsed.path).name
         if piopiy_filename:
-            _add_recording_file("Piopiy Recording", piopiy_filename)
+            playback_filename = ""
+            if isinstance(piopiy_recording_meta, dict):
+                playback_filename = str(piopiy_recording_meta.get("recording_playback_filename") or "").strip()
+            source_path = session_dir / piopiy_filename
+            if not playback_filename and source_path.exists():
+                playback_path, playback_meta = _ensure_browser_playback_recording(source_path)
+                if playback_path is not None:
+                    playback_filename = playback_path.name
+                if isinstance(piopiy_recording_meta, dict) and playback_meta:
+                    with contextlib.suppress(Exception):
+                        piopiy_recording_meta.update(
+                            {key: value for key, value in playback_meta.items() if value is not None}
+                        )
+                        (session_dir / "piopiy_recording.json").write_text(
+                            json.dumps(piopiy_recording_meta, indent=2, ensure_ascii=True),
+                            encoding="utf-8",
+                        )
+            if playback_filename:
+                _add_recording_file("Piopiy Recording", playback_filename)
+                seen_filenames.add(piopiy_filename)
+            else:
+                _add_recording_file("Piopiy Recording", piopiy_filename)
         for audio_path in sorted(session_dir.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
             if audio_path.name in seen_filenames:
                 continue
@@ -4704,6 +4822,7 @@ def create_app() -> FastAPI:
             with contextlib.suppress(Exception):
                 expected_content_length = int(str(response.headers.get("content-length") or "").strip())
             recording_duration_seconds = _probe_audio_duration_seconds(recording_path)
+            playback_path, playback_meta = _ensure_browser_playback_recording(recording_path)
             meta_path = (client_root / session_id / "piopiy_recording.json").resolve()
             with contextlib.suppress(Exception):
                 meta = _read_json_file(meta_path) or {}
@@ -4722,8 +4841,10 @@ def create_app() -> FastAPI:
                         "recording_error": None,
                     }
                 )
+                meta.update({key: value for key, value in playback_meta.items() if value is not None})
                 meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=True), encoding="utf-8")
-            return _serve_audio_file_with_range(recording_path, request, recording_filename)
+            served_path = playback_path if playback_path is not None else recording_path
+            return _serve_audio_file_with_range(served_path, request, served_path.name)
 
         if filename == "piopiy_recording.wav":
             artifacts = _read_json_file(client_root / session_id / "artifacts.json")
@@ -4789,6 +4910,7 @@ def create_app() -> FastAPI:
                     with contextlib.suppress(Exception):
                         expected_content_length = int(str(response.headers.get("content-length") or "").strip())
                     recording_duration_seconds = _probe_audio_duration_seconds(recording_path)
+                    playback_path, playback_meta = _ensure_browser_playback_recording(recording_path)
                     expected_duration_seconds = None
                     if started_at and ended_at and ended_at >= started_at:
                         expected_duration_seconds = (ended_at - started_at).total_seconds()
@@ -4799,25 +4921,23 @@ def create_app() -> FastAPI:
                         file_size=len(response.content),
                     ) else "saved"
                     meta_path = (client_root / session_id / "piopiy_recording.json").resolve()
+                    meta = {
+                        "recording_url": recording_url,
+                        "recording_filename": recording_filename,
+                        "recording_path": str(recording_path),
+                        "recording_content_type": content_type,
+                        "recording_downloaded_at": datetime.now(timezone.utc).isoformat(),
+                        "recording_size_bytes": len(response.content),
+                        "recording_expected_content_length": expected_content_length,
+                        "recording_duration_seconds": round(recording_duration_seconds, 3) if recording_duration_seconds is not None else None,
+                        "recording_expected_duration_seconds": round(expected_duration_seconds, 3) if expected_duration_seconds is not None else None,
+                        "recording_status": recording_status,
+                        "recording_error": "recording_duration_shorter_than_call" if recording_status == "partial" else None,
+                        "recording_source": "cdr_lookup",
+                    }
+                    meta.update({key: value for key, value in playback_meta.items() if value is not None})
                     meta_path.write_text(
-                        json.dumps(
-                            {
-                                "recording_url": recording_url,
-                                "recording_filename": recording_filename,
-                                "recording_path": str(recording_path),
-                                "recording_content_type": content_type,
-                                "recording_downloaded_at": datetime.now(timezone.utc).isoformat(),
-                                "recording_size_bytes": len(response.content),
-                                "recording_expected_content_length": expected_content_length,
-                                "recording_duration_seconds": round(recording_duration_seconds, 3) if recording_duration_seconds is not None else None,
-                                "recording_expected_duration_seconds": round(expected_duration_seconds, 3) if expected_duration_seconds is not None else None,
-                                "recording_status": recording_status,
-                                "recording_error": "recording_duration_shorter_than_call" if recording_status == "partial" else None,
-                                "recording_source": "cdr_lookup",
-                            },
-                            indent=2,
-                            ensure_ascii=True,
-                        ),
+                        json.dumps(meta, indent=2, ensure_ascii=True),
                         encoding="utf-8",
                     )
                     with contextlib.suppress(Exception):
@@ -4837,7 +4957,8 @@ def create_app() -> FastAPI:
                                 json.dumps(artifacts, indent=2, ensure_ascii=True),
                                 encoding="utf-8",
                             )
-                    return _serve_audio_file_with_range(recording_path, request, recording_filename)
+                    served_path = playback_path if playback_path is not None else recording_path
+                    return _serve_audio_file_with_range(served_path, request, served_path.name)
         raise HTTPException(status_code=404, detail="Recording not found.")
 
     @app.post("/api/lead-sources/excel/parse")
@@ -6710,6 +6831,7 @@ def create_app() -> FastAPI:
                 )
                 return
             temp_recording_path.replace(recording_path)
+            playback_path, playback_meta = _ensure_browser_playback_recording(recording_path)
             recording_meta = {
                 "recording_url": recording_url,
                 "recording_filename": file_name,
@@ -6726,6 +6848,7 @@ def create_app() -> FastAPI:
                 "selected_recording_type": selected_recording_type,
                 "cdr_leg": cdr_leg,
             }
+            recording_meta.update({key: value for key, value in playback_meta.items() if value is not None})
             (session_dir / "piopiy_recording.json").write_text(
                 json.dumps(recording_meta, indent=2, ensure_ascii=True),
                 encoding="utf-8",
@@ -6773,6 +6896,9 @@ def create_app() -> FastAPI:
                 call_duration_seconds=expected_duration_seconds,
                 download_completed=True,
                 selected_recording_type=selected_recording_type,
+                playback_recording_path=str(playback_path) if playback_path is not None else None,
+                playback_recording_status=playback_meta.get("recording_playback_status"),
+                playback_recording_error=playback_meta.get("recording_playback_error"),
             )
             _write_latest_call_runtime(
                 {

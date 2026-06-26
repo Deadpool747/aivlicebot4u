@@ -456,6 +456,7 @@ async def run_piopiy_agent() -> None:
                     gemini_live_factory,
                     api_key=gemini_live_config.api_key,
                     model=selected_live_model,
+                    voice_id=voice_name,
                     system_instruction=instructions,
                     params=gemini_input_params(
                         modalities=selected_modality,
