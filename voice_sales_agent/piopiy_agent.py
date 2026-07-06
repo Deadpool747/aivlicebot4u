@@ -16,8 +16,11 @@ import importlib
 import inspect
 import logging
 import os
+import subprocess
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +35,11 @@ logger = logging.getLogger(__name__)
 TRACE_FILE = Path(os.getenv("PIOPIY_TRACE_FILE", "/opt/new_voice_agent/runtime/piopiy_agent_trace.jsonl"))
 JANJAL_CLIENT_ID = "user_janjal_voicebot_12c92bbc"
 JANJAL_DEFAULT_VOICE_NAME = "Aoede"
+JANJAL_DEFAULT_IDLE_TIMEOUT_SECS = 15
+JANJAL_DEFAULT_IDLE_WARNING_SECS = 7
+JANJAL_IDLE_WARNING_TEXT = "आपण बोलत नसाल तर मी कॉल थोड्याच वेळात समाप्त करते."
+JANJAL_IDLE_CLOSING_TEXT = "जर आपण बोलत नसाल तर मी कॉल इथेच समाप्त करते. धन्यवाद, जय महाराष्ट्र."
+ACTIVE_PIOPIY_CONVERSATIONS: dict[str, dict[str, Any]] = {}
 
 
 @dataclass(slots=True)
@@ -60,6 +68,468 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if value in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        logger.warning("Invalid integer for %s=%r; using default=%s", name, value, default)
+        return default
+    return max(1, parsed)
+
+
+def _resolve_idle_timeout_secs(client_id: str) -> int:
+    if client_id == JANJAL_CLIENT_ID:
+        return _env_int("PIOPIY_JANJAL_IDLE_TIMEOUT_SECS", JANJAL_DEFAULT_IDLE_TIMEOUT_SECS)
+    return _env_int("PIOPIY_IDLE_TIMEOUT_SECS", 60)
+
+
+def _resolve_idle_warning_secs(client_id: str, idle_timeout_secs: int) -> int:
+    if client_id != JANJAL_CLIENT_ID:
+        return min(7, max(1, idle_timeout_secs - 1))
+    configured = _env_int("PIOPIY_JANJAL_IDLE_WARNING_SECS", JANJAL_DEFAULT_IDLE_WARNING_SECS)
+    return min(configured, max(1, idle_timeout_secs - 1))
+
+
+def _apply_idle_policy_instruction(instructions: str, *, client_id: str, idle_timeout_secs: int) -> str:
+    if client_id != JANJAL_CLIENT_ID:
+        return instructions
+    idle_warning_secs = _resolve_idle_warning_secs(client_id, idle_timeout_secs)
+    policy = (
+        "\n\n# Janjal Silent Caller Handling\n"
+        f"- If the caller stays silent after you ask a question, give one short warning after about {idle_warning_secs} seconds: "
+        f"'{JANJAL_IDLE_WARNING_TEXT}'\n"
+        f"- If the caller is still silent until about {idle_timeout_secs} seconds total, the live call will end automatically.\n"
+        "- If you need to say a final closing line before silence ends the call, use: "
+        f"'{JANJAL_IDLE_CLOSING_TEXT}'\n"
+        "- Do not repeat the warning more than once in the same silence period."
+    )
+    return instructions.rstrip() + policy
+
+
+def _resolve_piopiy_conversation_id(call_id: str, metadata: dict[str, Any] | None = None) -> str:
+    """Resolve the Piopiy conversation id used by the official Node AI hangup API."""
+    candidates = (
+        (metadata or {}).get("conversation_id"),
+        (metadata or {}).get("piopiy_conversation_id"),
+        (metadata or {}).get("call_id"),
+        call_id,
+    )
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if value:
+            return value
+    return call_id
+
+
+def _node_hangup_helper_path() -> Path:
+    configured = os.getenv("PIOPIY_AI_HANGUP_HELPER", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parents[1] / "scripts" / "piopiy_ai_hangup.js"
+
+
+def _call_piopiy_ai_hangup_sync(
+    *,
+    conversation_id: str,
+    token: str,
+    cause: str,
+    reason: str,
+) -> dict[str, Any]:
+    node_bin = os.getenv("PIOPIY_NODE_BIN", "node").strip() or "node"
+    helper_path = _node_hangup_helper_path()
+    command = [node_bin, str(helper_path), conversation_id, cause, reason]
+    env = os.environ.copy()
+    env["PIOPIY_TOKEN"] = token
+    started_at = time.time()
+    completed = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=_env_int("PIOPIY_AI_HANGUP_TIMEOUT_SECS", 8),
+        env=env,
+    )
+    elapsed_ms = int((time.time() - started_at) * 1000)
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
+    parsed: Any = None
+    for raw in (stdout, stderr):
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+            break
+        except json.JSONDecodeError:
+            continue
+    return {
+        "ok": completed.returncode == 0,
+        "returncode": completed.returncode,
+        "elapsed_ms": elapsed_ms,
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
+        "parsed": parsed,
+        "helper_path": str(helper_path),
+        "node_bin": node_bin,
+    }
+
+
+def _call_piopiy_ai_hangup_rest_sync(
+    *,
+    conversation_id: str,
+    token: str,
+    cause: str,
+    reason: str,
+) -> dict[str, Any]:
+    """Fallback matching the Piopiy Node SDK's client.ai.hangup REST request.
+
+    The official Node SDK posts this payload to /v3/voice/call/hangup. Keeping
+    the payload/headers identical lets production hang up even if spawning Node
+    fails on a small instance.
+    """
+    url = os.getenv("PIOPIY_AI_HANGUP_URL", "https://rest.piopiy.com/v3/voice/call/hangup").strip()
+    payload = {
+        "call_id": conversation_id,
+        "cause": cause,
+    }
+    if reason:
+        payload["reason"] = reason
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    started_at = time.time()
+    try:
+        with urllib.request.urlopen(request, timeout=_env_int("PIOPIY_AI_HANGUP_TIMEOUT_SECS", 8)) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            elapsed_ms = int((time.time() - started_at) * 1000)
+            parsed: Any = None
+            if body.strip():
+                try:
+                    parsed = json.loads(body)
+                except json.JSONDecodeError:
+                    parsed = None
+            return {
+                "ok": 200 <= int(response.status) < 300,
+                "status": int(response.status),
+                "elapsed_ms": elapsed_ms,
+                "url": url,
+                "payload": payload,
+                "body": body[-2000:],
+                "parsed": parsed,
+                "transport": "python_rest_sdk_equivalent",
+            }
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        elapsed_ms = int((time.time() - started_at) * 1000)
+        parsed: Any = None
+        if body.strip():
+            try:
+                parsed = json.loads(body)
+            except json.JSONDecodeError:
+                parsed = None
+        return {
+            "ok": False,
+            "status": int(exc.code),
+            "elapsed_ms": elapsed_ms,
+            "url": url,
+            "payload": payload,
+            "body": body[-2000:],
+            "parsed": parsed,
+            "transport": "python_rest_sdk_equivalent",
+        }
+    except Exception as exc:
+        elapsed_ms = int((time.time() - started_at) * 1000)
+        return {
+            "ok": False,
+            "elapsed_ms": elapsed_ms,
+            "url": url,
+            "payload": payload,
+            "error": repr(exc),
+            "transport": "python_rest_sdk_equivalent",
+        }
+
+
+async def _call_piopiy_ai_hangup(
+    *,
+    conversation_id: str,
+    token: str,
+    cause: str = "NORMAL_CLEARING",
+    reason: str = "Conversation completed",
+) -> dict[str, Any]:
+    try:
+        node_result = await asyncio.to_thread(
+            _call_piopiy_ai_hangup_sync,
+            conversation_id=conversation_id,
+            token=token,
+            cause=cause,
+            reason=reason,
+        )
+    except Exception as exc:
+        node_result = {
+            "ok": False,
+            "error": repr(exc),
+            "helper_path": str(_node_hangup_helper_path()),
+            "node_bin": os.getenv("PIOPIY_NODE_BIN", "node").strip() or "node",
+        }
+    if node_result.get("ok"):
+        return {
+            "ok": True,
+            "primary": "node_sdk",
+            "node": node_result,
+        }
+
+    rest_result = await asyncio.to_thread(
+        _call_piopiy_ai_hangup_rest_sync,
+        conversation_id=conversation_id,
+        token=token,
+        cause=cause,
+        reason=reason,
+    )
+    return {
+        "ok": bool(rest_result.get("ok")),
+        "primary": "node_sdk",
+        "fallback": "python_rest_sdk_equivalent",
+        "node": node_result,
+        "rest": rest_result,
+    }
+
+
+async def _run_agent_with_optional_silence_watchdog(
+    agent: Any,
+    *,
+    client_id: str,
+    call_id: str,
+    idle_warning_secs: int,
+    idle_timeout_secs: int,
+    llm: Any | None = None,
+    conversation_id: str | None = None,
+    piopiy_token: str | None = None,
+) -> None:
+    """Run Piopiy's existing agent, adding a Janjal-only no-speech watchdog.
+
+    The Piopiy SDK's built-in idle timeout watches general pipeline activity.
+    Gemini native audio can keep the pipeline active even when the caller is
+    silent, so Janjal needs a small observer that tracks actual user speech
+    frames. This does not add another audio path; it queues normal LLM frames
+    into the same PipelineTask and cancels that task if silence continues.
+    """
+    if client_id != JANJAL_CLIENT_ID:
+        await agent.start()
+        return
+
+    try:
+        from piopiy.frames.frames import (
+            BotStartedSpeakingFrame,
+            BotStoppedSpeakingFrame,
+            UserSpeakingFrame,
+            UserStartedSpeakingFrame,
+            UserStoppedSpeakingFrame,
+        )
+        from piopiy.observers.base_observer import BaseObserver
+    except Exception as exc:
+        logger.warning(
+            "Piopiy silence watchdog unavailable for call_id=%s; running without watchdog. error=%s",
+            call_id,
+            exc,
+        )
+        await agent.start()
+        return
+
+    if getattr(agent, "_task", None) is None:
+        build_task = getattr(agent, "_build_task", None)
+        if build_task is not None:
+            await build_task()
+
+    task = getattr(agent, "_task", None)
+    if task is None:
+        logger.warning("Piopiy silence watchdog skipped for call_id=%s; no PipelineTask available", call_id)
+        await agent.start()
+        return
+
+    state: dict[str, Any] = {
+        "bot_speaking": False,
+        "silence_started_at": None,
+        "warning_sent": False,
+        "hangup_sent": False,
+        "hangup_cancel_at": None,
+    }
+
+    class JanjalSilenceObserver(BaseObserver):
+        async def on_push_frame(self, data: Any) -> None:
+            frame = data.frame
+            now = time.monotonic()
+            if isinstance(frame, (UserStartedSpeakingFrame, UserSpeakingFrame, UserStoppedSpeakingFrame)):
+                state["silence_started_at"] = None
+                state["warning_sent"] = False
+                state["hangup_sent"] = False
+                state["hangup_cancel_at"] = None
+                return
+            if isinstance(frame, BotStartedSpeakingFrame):
+                state["bot_speaking"] = True
+                return
+            if isinstance(frame, BotStoppedSpeakingFrame):
+                state["bot_speaking"] = False
+                if state["silence_started_at"] is None:
+                    state["silence_started_at"] = now
+
+    observer = JanjalSilenceObserver()
+    try:
+        task.add_observer(observer)
+    except Exception as exc:
+        logger.warning(
+            "Piopiy silence watchdog observer attach failed for call_id=%s; running without watchdog. error=%s",
+            call_id,
+            exc,
+        )
+        await agent.start()
+        return
+
+    async def watchdog() -> None:
+        _append_trace(
+            "janjal_silence_watchdog_started",
+            call_id=call_id,
+            idle_warning_secs=idle_warning_secs,
+            idle_timeout_secs=idle_timeout_secs,
+        )
+
+        async def speak_via_active_gemini(text: str, *, stage: str) -> None:
+            create_single_response = getattr(llm, "_create_single_response", None)
+            if create_single_response is None:
+                _append_trace(
+                    "janjal_silence_speak_unavailable",
+                    call_id=call_id,
+                    stage=stage,
+                    reason="llm_has_no_create_single_response",
+                )
+                return
+            try:
+                await create_single_response(
+                    [
+                        {
+                            "role": "user",
+                            "content": f"Say exactly this line and nothing else: {text}",
+                        }
+                    ]
+                )
+                _append_trace(
+                    "janjal_silence_speak_requested",
+                    call_id=call_id,
+                    stage=stage,
+                    text=text,
+                    method="gemini_live_create_single_response",
+                )
+            except Exception as exc:
+                _append_trace(
+                    "janjal_silence_speak_error",
+                    call_id=call_id,
+                    stage=stage,
+                    error=repr(exc),
+                )
+
+        async def terminate_piopiy_call() -> bool:
+            resolved_conversation_id = str(conversation_id or call_id or "").strip()
+            if not resolved_conversation_id:
+                _append_trace("janjal_silence_ai_hangup_skipped", call_id=call_id, reason="missing_conversation_id")
+                return False
+            token = str(piopiy_token or os.getenv("PIOPIY_TOKEN") or os.getenv("PIOPIY_API_TOKEN") or os.getenv("AGENT_TOKEN") or "").strip()
+            if not token:
+                _append_trace(
+                    "janjal_silence_ai_hangup_skipped",
+                    call_id=call_id,
+                    conversation_id=resolved_conversation_id,
+                    reason="missing_piopiy_token",
+                )
+                return False
+            request_payload = {
+                "conversation_id": resolved_conversation_id,
+                "cause": "NORMAL_CLEARING",
+                "reason": "Conversation completed",
+            }
+            _append_trace("janjal_silence_ai_hangup_request", call_id=call_id, **request_payload)
+            try:
+                result = await _call_piopiy_ai_hangup(token=token, **request_payload)
+            except Exception as exc:
+                _append_trace(
+                    "janjal_silence_ai_hangup_error",
+                    call_id=call_id,
+                    conversation_id=resolved_conversation_id,
+                    error=repr(exc),
+                )
+                return False
+            _append_trace(
+                "janjal_silence_ai_hangup_response",
+                call_id=call_id,
+                conversation_id=resolved_conversation_id,
+                ok=bool(result.get("ok")),
+                result=result,
+            )
+            return bool(result.get("ok"))
+
+        while True:
+            await asyncio.sleep(0.25)
+            if getattr(task, "has_finished", lambda: False)():
+                return
+            silence_started_at = state.get("silence_started_at")
+            if silence_started_at is None or state.get("bot_speaking"):
+                continue
+            elapsed = time.monotonic() - float(silence_started_at)
+            if elapsed >= idle_warning_secs and not state["warning_sent"]:
+                state["warning_sent"] = True
+                _append_trace(
+                    "janjal_silence_warning_sent",
+                    call_id=call_id,
+                    idle_elapsed_secs=round(elapsed, 2),
+                    warning_text=JANJAL_IDLE_WARNING_TEXT,
+                )
+                await speak_via_active_gemini(JANJAL_IDLE_WARNING_TEXT, stage="warning")
+            if elapsed >= idle_timeout_secs and not state["hangup_sent"]:
+                state["hangup_sent"] = True
+                state["hangup_cancel_at"] = time.monotonic() + 2.0
+                _append_trace(
+                    "janjal_silence_closing_sent",
+                    call_id=call_id,
+                    idle_elapsed_secs=round(elapsed, 2),
+                    closing_text=JANJAL_IDLE_CLOSING_TEXT,
+                )
+                await speak_via_active_gemini(JANJAL_IDLE_CLOSING_TEXT, stage="closing")
+            cancel_at = state.get("hangup_cancel_at")
+            if cancel_at is not None and time.monotonic() >= float(cancel_at):
+                _append_trace(
+                    "janjal_silence_hangup_sent",
+                    call_id=call_id,
+                    idle_elapsed_secs=round(elapsed, 2),
+                )
+                hangup_ok = await terminate_piopiy_call()
+                _append_trace(
+                    "janjal_silence_local_session_cleanup_started",
+                    call_id=call_id,
+                    conversation_id=conversation_id or call_id,
+                    hangup_ok=hangup_ok,
+                )
+                await task.cancel(reason="janjal_silent_caller_timeout")
+                return
+
+    watchdog_task = asyncio.create_task(watchdog(), name=f"janjal_silence_watchdog_{call_id}")
+    try:
+        await agent.start()
+    finally:
+        watchdog_task.cancel()
+        try:
+            await watchdog_task
+        except asyncio.CancelledError:
+            pass
 
 
 def _load_factory(spec: str) -> Any:
@@ -425,6 +895,28 @@ async def run_piopiy_agent() -> None:
         )
         del kwargs
         try:
+            try:
+                from piopiy.agent import ROOM_CTX
+                room_name = ROOM_CTX.get("")
+            except Exception:
+                room_name = ""
+            conversation_id = _resolve_piopiy_conversation_id(call_id, metadata)
+            ACTIVE_PIOPIY_CONVERSATIONS[call_id] = {
+                "conversation_id": conversation_id,
+                "room_name": room_name,
+                "agent_id": agent_id,
+                "from_number": from_number,
+                "to_number": to_number,
+                "started_at_epoch": time.time(),
+            }
+            _append_trace(
+                "active_conversation_stored",
+                call_id=call_id,
+                conversation_id=conversation_id,
+                room_name=room_name,
+                from_number=from_number,
+                to_number=to_number,
+            )
             client = load_client(client_id, project_id=project_id)
             customer_name = _resolve_customer_name(from_number, metadata)
             contact_details = _resolve_contact_details(from_number, to_number, metadata)
@@ -434,6 +926,13 @@ async def run_piopiy_agent() -> None:
                 project_id=project_id,
                 customer_name=customer_name,
                 contact_details=contact_details,
+            )
+            idle_timeout_secs = _resolve_idle_timeout_secs(client_id)
+            idle_warning_secs = _resolve_idle_warning_secs(client_id, idle_timeout_secs)
+            instructions = _apply_idle_policy_instruction(
+                instructions,
+                client_id=client_id,
+                idle_timeout_secs=idle_timeout_secs,
             )
 
             client_voice_name = (client.config.voice.voice_name or "").strip() or None
@@ -469,6 +968,7 @@ async def run_piopiy_agent() -> None:
                         voice_agent = VoiceAgent(
                             instructions=instructions,
                             greeting=greeting,
+                            idle_timeout_secs=idle_timeout_secs,
                         )
                         configure_method = await _configure_native_voice_agent(
                             voice_agent,
@@ -501,8 +1001,19 @@ async def run_piopiy_agent() -> None:
                             user_audio_received_at=None,
                             speech_detected_at=None,
                             gemini_request_started_at=round(session_started_at, 6),
+                            idle_warning_secs=idle_warning_secs,
+                            idle_timeout_secs=idle_timeout_secs,
                         )
-                        await voice_agent.start()
+                        await _run_agent_with_optional_silence_watchdog(
+                            voice_agent,
+                            client_id=client_id,
+                            call_id=call_id,
+                            idle_warning_secs=idle_warning_secs,
+                            idle_timeout_secs=idle_timeout_secs,
+                            llm=omni,
+                            conversation_id=conversation_id,
+                            piopiy_token=agent_token,
+                        )
                         _append_trace(
                             "session_started",
                             call_id=call_id,
@@ -535,6 +1046,7 @@ async def run_piopiy_agent() -> None:
                 speech_agent = SpeechAgent(
                     instructions=instructions,
                     greeting=greeting,
+                    idle_timeout_secs=idle_timeout_secs,
                 )
                 tts = _instantiate(
                     gemini_tts_factory,
@@ -572,6 +1084,8 @@ async def run_piopiy_agent() -> None:
                     fallback_switch_count=0,
                     duplicate_audio_path_detected=False,
                     marker="AUDIO_PATH_SELECTED = SPEECH_AGENT_WITH_TTS_FALLBACK",
+                    idle_warning_secs=idle_warning_secs,
+                    idle_timeout_secs=idle_timeout_secs,
                 )
                 await speech_agent.Action(
                     omni=omni,
@@ -587,7 +1101,16 @@ async def run_piopiy_agent() -> None:
                     active_voice_name=voice_name,
                     duplicate_audio_path_detected=False,
                 )
-                await speech_agent.start()
+                await _run_agent_with_optional_silence_watchdog(
+                    speech_agent,
+                    client_id=client_id,
+                    call_id=call_id,
+                    idle_warning_secs=idle_warning_secs,
+                    idle_timeout_secs=idle_timeout_secs,
+                    llm=omni,
+                    conversation_id=conversation_id,
+                    piopiy_token=agent_token,
+                )
                 _append_trace("session_started", call_id=call_id, mode="speech_agent_text_tts")
                 logger.info("Piopiy SpeechAgent+TTS session started for call_id=%s voice=%s", call_id, voice_name)
                 return
@@ -599,6 +1122,13 @@ async def run_piopiy_agent() -> None:
         except Exception as exc:
             _append_trace("create_session_error", call_id=call_id, error=repr(exc))
             raise
+        finally:
+            ACTIVE_PIOPIY_CONVERSATIONS.pop(call_id, None)
+            _append_trace(
+                "active_conversation_cleared",
+                call_id=call_id,
+                conversation_id=locals().get("conversation_id", call_id),
+            )
 
     from piopiy.agent import Agent
 

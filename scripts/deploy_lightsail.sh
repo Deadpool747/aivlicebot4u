@@ -76,6 +76,7 @@ echo "[4/6] Applying files on server..."
 
 echo "[5/6] Installing requirements and restarting services..."
 "${SSH_CMD[@]}" "ubuntu@$INSTANCE_IP" "cd $REMOTE_APP_DIR && sudo $REMOTE_APP_DIR/.venv/bin/pip install -r requirements.txt >/tmp/pip_deploy.log 2>&1"
+"${SSH_CMD[@]}" "ubuntu@$INSTANCE_IP" "if [ -f $REMOTE_APP_DIR/package.json ] && command -v npm >/dev/null 2>&1; then cd $REMOTE_APP_DIR && sudo npm install --omit=dev >/tmp/npm_deploy.log 2>&1; fi"
 "${SSH_CMD[@]}" "ubuntu@$INSTANCE_IP" "sudo mkdir -p $REMOTE_PIOPIY_DIR && sudo chown -R ubuntu:ubuntu $REMOTE_PIOPIY_DIR"
 "${SSH_CMD[@]}" "ubuntu@$INSTANCE_IP" "if [ ! -x $REMOTE_PIOPIY_DIR/.venv/bin/python ]; then python3 -m venv $REMOTE_PIOPIY_DIR/.venv; fi"
 "${SSH_CMD[@]}" "ubuntu@$INSTANCE_IP" "$REMOTE_PIOPIY_DIR/.venv/bin/pip install -U pip >/tmp/piopiy_pip_bootstrap.log 2>&1"

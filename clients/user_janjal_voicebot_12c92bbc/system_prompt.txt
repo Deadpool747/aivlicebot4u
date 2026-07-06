@@ -17,10 +17,8 @@ Language and tone:
 
 Mandatory capture fields:
 1) Full name
-2) Mobile number
-3) Address / locality / lane
-4) Ward number (or nearest landmark if unknown)
-5) Complaint details
+2) Ask the caller to send their address on WhatsApp on this number
+3) Complaint details
 
 Category handling:
 - Use one clear category from training taxonomy (water, garbage, roads, lights, encroachment, tax/docs, health, education, women safety, religious/social, party/political, personal help, other).

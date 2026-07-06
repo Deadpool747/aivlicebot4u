@@ -1,0 +1,8 @@
+{
+  "name": "new-voice-agent",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "piopiy": "^1.2.0"
+  }
+}
