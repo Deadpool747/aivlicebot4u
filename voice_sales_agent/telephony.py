@@ -61,6 +61,17 @@ AIRTEL_IQ_DEFAULT_REQUEST_TEMPLATE = {
     "statusCallbackUrl": "{status_callback_url}",
     "cdrUrl": "{cdr_callback_url}",
     "mediaUrl": "{ws_url}",
+    "metaData": {
+        "pending_id": "{pending_id}",
+        "client_id": "{client_id}",
+        "project_id": "{project_id}",
+        "provider": "{provider}",
+        "direction": "{direction}",
+        "call_direction": "{call_direction}",
+        "outreach_mode": "{outreach_mode}",
+        "to_number": "{to_number}",
+        "caller_id": "{caller_id}",
+    },
 }
 META_WHATSAPP_DEFAULT_REQUEST_TEMPLATE = {
     "to": "{to_number}",
@@ -812,6 +823,7 @@ class AirtelIQCallClient:
         ws_url: str,
         events_callback_url: str | None = None,
         cdr_callback_url: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.ensure_configured()
         return await asyncio.to_thread(
@@ -821,6 +833,7 @@ class AirtelIQCallClient:
             ws_url,
             events_callback_url,
             cdr_callback_url,
+            metadata,
         )
 
     def _resolve_url(self, path: str) -> str:
@@ -880,6 +893,7 @@ class AirtelIQCallClient:
         ws_url: str,
         events_callback_url: str | None,
         cdr_callback_url: str | None,
+        metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
         request_template = AIRTEL_IQ_DEFAULT_REQUEST_TEMPLATE
         if self.settings.airtel_iq_request_template_json:
@@ -902,6 +916,11 @@ class AirtelIQCallClient:
             "api_secret": self.settings.airtel_iq_api_secret or "",
             "public_base_url": self.settings.public_base_url or "",
         }
+        if metadata:
+            for key, value in metadata.items():
+                if value is None:
+                    continue
+                replacements[str(key)] = str(value)
         body = _replace_template_placeholders(request_template, replacements)
 
         headers = self._build_headers()
@@ -946,6 +965,51 @@ class AirtelIQCallClient:
 
 class AirtelIQMediaBridge(ExotelMediaBridge):
     """Current Airtel IQ media bridge assumes an Exotel-like PCM websocket event shape."""
+
+    async def handle_ws_message(self, message: dict[str, Any]) -> None:
+        event = str(message.get("event", "") or message.get("eventType", "") or message.get("status", "")).strip().lower()
+        if event == "connected":
+            self.connected = True
+            logger.info("Airtel IQ websocket connected event received.")
+            return
+        if event in {"streaminfo", "stream_connected", "stream-start", "streamstart", "start"}:
+            start = message.get("start", {}) if isinstance(message.get("start"), dict) else {}
+            if not isinstance(start, dict):
+                start = {}
+            self.stream_sid = (
+                message.get("streamSid")
+                or message.get("stream_sid")
+                or message.get("streamId")
+                or start.get("streamSid")
+                or start.get("stream_sid")
+                or start.get("streamId")
+            )
+            self.call_sid = (
+                message.get("callSid")
+                or message.get("call_sid")
+                or message.get("callId")
+                or message.get("call_id")
+                or start.get("callSid")
+                or start.get("call_sid")
+                or start.get("callId")
+                or start.get("call_id")
+            )
+            if event == "streaminfo":
+                self.connected = True
+            self._next_send_at = time.monotonic() + EXOTEL_STARTUP_DELAY_SECONDS
+            logger.info("Airtel IQ stream started: call_sid=%s stream_sid=%s", self.call_sid, self.stream_sid)
+            return
+        if event in {"terminate", "stop", "stream_terminate", "streamstop", "end", "error"}:
+            self._closed = True
+            self._playback_active = False
+            self._playback_idle.set()
+            if self._incoming_buffer:
+                await self._incoming_audio.put(bytes(self._incoming_buffer))
+                self._incoming_buffer.clear()
+            await self._incoming_audio.put(None)
+            logger.info("Airtel IQ websocket termination event received: event=%s", event)
+            return
+        await super().handle_ws_message(message)
 
 
 @dataclass(slots=True)

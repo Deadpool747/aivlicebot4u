@@ -32,7 +32,7 @@ AIRTEL_IQ_APPLICATION_ID=your_airtel_iq_application_id
 AIRTEL_IQ_CALLER_ID=your_airtel_iq_caller_id
 
 AIRTEL_IQ_HEADERS_JSON={"Authorization":"Bearer {api_key}","Content-Type":"application/json"}
-AIRTEL_IQ_REQUEST_TEMPLATE_JSON={"to":"{to_number}","from":"{caller_id}","applicationId":"{application_id}","callbackUrl":"{events_callback_url}","statusCallbackUrl":"{status_callback_url}","cdrUrl":"{cdr_callback_url}","mediaUrl":"{ws_url}"}
+AIRTEL_IQ_REQUEST_TEMPLATE_JSON={"to":"{to_number}","from":"{caller_id}","applicationId":"{application_id}","callbackUrl":"{events_callback_url}","statusCallbackUrl":"{status_callback_url}","cdrUrl":"{cdr_callback_url}","mediaUrl":"{ws_url}","metaData":{"pending_id":"{pending_id}","client_id":"{client_id}","project_id":"{project_id}","provider":"{provider}","direction":"{direction}","call_direction":"{call_direction}","outreach_mode":"{outreach_mode}","to_number":"{to_number}","caller_id":"{caller_id}"}}
 ```
 
 Optional internal costing:
@@ -68,7 +68,18 @@ Example:
   "callbackUrl": "{events_callback_url}",
   "statusCallbackUrl": "{status_callback_url}",
   "cdrUrl": "{cdr_callback_url}",
-  "mediaUrl": "{ws_url}"
+  "mediaUrl": "{ws_url}",
+  "metaData": {
+    "pending_id": "{pending_id}",
+    "client_id": "{client_id}",
+    "project_id": "{project_id}",
+    "provider": "{provider}",
+    "direction": "{direction}",
+    "call_direction": "{call_direction}",
+    "outreach_mode": "{outreach_mode}",
+    "to_number": "{to_number}",
+    "caller_id": "{caller_id}"
+  }
 }
 ```
 
@@ -79,14 +90,14 @@ This app exposes these Airtel IQ-facing routes:
 - `POST /airtel-iq/status/{pending_id}`
 - `POST /airtel-iq/events/{pending_id}`
 - `POST /airtel-iq/cdr/{pending_id}`
-- `WS /airtel-iq/media/{pending_id}`
+- `WS /airtel-iq/ws-airtel/`
 
 What they do:
 
 - `/airtel-iq/status/{pending_id}` captures status payloads.
 - `/airtel-iq/events/{pending_id}` captures real-time event payloads (for example `CALL_CONNECTED`, `PROMPT_COMPLETED`, `USER_INPUT_RECEIVED`, `CALL_DISCONNECTED`).
 - `/airtel-iq/cdr/{pending_id}` captures call detail records (duration/disposition/etc).
-- `/airtel-iq/media/{pending_id}` is the media WebSocket endpoint for one pending call.
+- `/airtel-iq/ws-airtel/` is the static media WebSocket endpoint for Airtel IQ. The call session is resolved from `start.customParameters.pending_id`.
 
 ## 4. Important note on the media bridge
 
@@ -114,7 +125,8 @@ When you click `Call`, the app builds:
 - `events_callback_url = <PUBLIC_BASE_URL>/airtel-iq/events/<pending_id>`
 - `status_callback_url = <PUBLIC_BASE_URL>/airtel-iq/status/<pending_id>`
 - `cdr_callback_url = <PUBLIC_BASE_URL>/airtel-iq/cdr/<pending_id>`
-- `ws_url = wss://<PUBLIC_BASE_URL host>/airtel-iq/media/<pending_id>`
+- `ws_url = wss://<PUBLIC_BASE_URL host>/airtel-iq/ws-airtel/`
+- `metaData` includes `pending_id`, `client_id`, `project_id`, `provider`, `direction`, `call_direction`, `outreach_mode`, `to_number`, and `caller_id`
 
 and injects those into the configured request template before POSTing to:
 
@@ -149,7 +161,7 @@ Use your Airtel account’s exact API examples as source of truth. The field nam
 - Airtel IQ can reach `/airtel-iq/events/{pending_id}`
 - Airtel IQ can reach `/airtel-iq/status/{pending_id}`
 - Airtel IQ can reach `/airtel-iq/cdr/{pending_id}`
-- Airtel IQ can reach `wss://<public-host>/airtel-iq/media/{pending_id}` if your account supports live media streaming
+- Airtel IQ can reach `wss://<public-host>/airtel-iq/ws-airtel/` if your account supports live media streaming
 
 ## 8. Relevant code locations
 

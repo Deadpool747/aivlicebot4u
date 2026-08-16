@@ -202,7 +202,7 @@ AIRTEL_IQ_API_SECRET=your_airtel_iq_api_secret
 AIRTEL_IQ_APPLICATION_ID=your_airtel_iq_application_id
 AIRTEL_IQ_CALLER_ID=your_airtel_iq_caller_id
 AIRTEL_IQ_HEADERS_JSON={"Authorization":"Bearer {api_key}","Content-Type":"application/json"}
-AIRTEL_IQ_REQUEST_TEMPLATE_JSON={"to":"{to_number}","from":"{caller_id}","applicationId":"{application_id}","callbackUrl":"{events_callback_url}","statusCallbackUrl":"{status_callback_url}","cdrUrl":"{cdr_callback_url}","mediaUrl":"{ws_url}"}
+AIRTEL_IQ_REQUEST_TEMPLATE_JSON={"to":"{to_number}","from":"{caller_id}","applicationId":"{application_id}","callbackUrl":"{events_callback_url}","statusCallbackUrl":"{status_callback_url}","cdrUrl":"{cdr_callback_url}","mediaUrl":"{ws_url}","metaData":{"pending_id":"{pending_id}","client_id":"{client_id}","project_id":"{project_id}","provider":"{provider}","direction":"{direction}","call_direction":"{call_direction}","outreach_mode":"{outreach_mode}","to_number":"{to_number}","caller_id":"{caller_id}"}}
 ```
 
 For Meta WhatsApp (direct API):
@@ -267,7 +267,7 @@ Notes:
 
 - Twilio will fetch TwiML from `/twilio/voice/outbound/<id>` and then open a bidirectional Media Streams WebSocket to `/twilio/media/<id>`.
 - Exotel outbound calls use `/exotel/status/<id>` for status callbacks and now support `/exotel/media/<id>` as the safer per-call media WebSocket bridge.
-- Airtel IQ uses `/airtel-iq/events/<id>`, `/airtel-iq/status/<id>`, `/airtel-iq/cdr/<id>`, and `/airtel-iq/media/<id>` for configurable callback and media entry points.
+- Airtel IQ uses `/airtel-iq/events/<id>`, `/airtel-iq/status/<id>`, `/airtel-iq/cdr/<id>`, and the static `/airtel-iq/ws-airtel/` WebSocket endpoint for media streaming. Per-call values are passed through `metaData` and arrive on Airtel’s `start.customParameters`.
 - Meta WhatsApp direct path uses `/meta-whatsapp/status/<id>` and `/meta-whatsapp/webhook` for callbacks and `/api/meta-whatsapp/action` for explicit call actions (`connect`, `pre_accept`, `accept`, `reject`, `terminate`).
 - The call session auto-stops when the conversation ends, and closing the WebSocket lets Twilio continue to the trailing `<Hangup/>`.
 - The app now supports multiple concurrent pending calls and per-call session isolation.

@@ -664,12 +664,48 @@ def _extract_airtel_iq_payload(raw_payload: object) -> dict[str, str]:
     return {str(key): str(value) for key, value in raw_payload.items() if value is not None}
 
 
+def _extract_airtel_iq_start_details(raw_payload: object) -> dict[str, str]:
+    if not isinstance(raw_payload, dict):
+        return {}
+    sources: list[dict[str, Any]] = [raw_payload]
+    start = raw_payload.get("start")
+    if isinstance(start, dict):
+        sources.append(start)
+        custom_parameters = start.get("customParameters")
+        if isinstance(custom_parameters, dict):
+            sources.append(custom_parameters)
+    metadata = raw_payload.get("metaData")
+    if isinstance(metadata, dict):
+        sources.append(metadata)
+    metadata = raw_payload.get("metadata")
+    if isinstance(metadata, dict):
+        sources.append(metadata)
+    comments = raw_payload.get("comments")
+    if isinstance(comments, str) and comments.strip():
+        try:
+            parsed_comments = json.loads(comments)
+        except json.JSONDecodeError:
+            parsed_comments = None
+        if isinstance(parsed_comments, dict):
+            sources.append(parsed_comments)
+
+    flattened: dict[str, str] = {}
+    for source in sources:
+        for key, value in source.items():
+            if value is None:
+                continue
+            flattened[str(key)] = str(value)
+    return flattened
+
+
 def _payload_value(payload: dict[str, str], *keys: str) -> str:
     for key in keys:
         value = str(payload.get(key) or "").strip()
         if value:
             return value
     return ""
+
+
 def _extract_meta_whatsapp_payload(raw_payload: object) -> dict[str, str]:
     if not isinstance(raw_payload, dict):
         return {}
@@ -2187,13 +2223,25 @@ class TelephonyController:
                 base_url.geturl().rstrip("/") + "/",
                 f"airtel-iq/cdr/{pending_id}",
             )
-            ws_url = build_ws_url(self.settings.public_base_url or "", f"/airtel-iq/media/{pending_id}")
+            ws_url = build_ws_url(self.settings.public_base_url or "", "/airtel-iq/ws-airtel/")
+            airtel_metadata: dict[str, str | float | int | bool | None] = {
+                "pending_id": pending_id,
+                "client_id": client_id,
+                "project_id": project_id,
+                "provider": "airtel_iq",
+                "direction": "outbound",
+                "call_direction": "outbound",
+                "outreach_mode": "voicebot",
+                "to_number": to_number,
+                "caller_id": self.settings.airtel_iq_caller_id,
+            }
             call = await self.airtel_iq.create_call(
                 to_number=to_number,
                 status_callback_url=status_callback_url,
                 ws_url=ws_url,
                 events_callback_url=events_callback_url,
                 cdr_callback_url=cdr_callback_url,
+                metadata=airtel_metadata,
             )
         elif provider == "meta_whatsapp":
             base_url = validate_public_base_url(self.settings.public_base_url or "")
@@ -6157,6 +6205,47 @@ def create_app() -> FastAPI:
             )
         return {"url": build_ws_url(settings.public_base_url or "", "/exotel/media")}
 
+    @app.get("/airtel-iq/ws-url")
+    @app.get("/airtel-iq/ws-url/{pending_id}")
+    async def airtel_iq_ws_url(request: Request, pending_id: str | None = None) -> dict[str, str]:
+        base_url = settings.public_base_url or str(request.base_url).rstrip("/")
+        try:
+            ws_url = build_ws_url(base_url, "/airtel-iq/ws-airtel/")
+        except RuntimeError:
+            parsed_base = urllib.parse.urlparse(str(request.base_url).rstrip("/"))
+            ws_url = urllib.parse.urlunparse(("wss", parsed_base.netloc, "/airtel-iq/ws-airtel/", "", "", ""))
+        response: dict[str, str] = {"url": ws_url}
+        if pending_id:
+            response["pending_id"] = pending_id
+        return response
+
+    @app.get("/airtel-iq/debug-url")
+    async def airtel_iq_debug_url(request: Request) -> dict[str, object]:
+        base_url = settings.public_base_url or str(request.base_url).rstrip("/")
+        try:
+            ws_url_pattern = build_ws_url(base_url, "/airtel-iq/ws-airtel/")
+        except RuntimeError:
+            parsed_base = urllib.parse.urlparse(str(request.base_url).rstrip("/"))
+            ws_url_pattern = urllib.parse.urlunparse(("wss", parsed_base.netloc, "/airtel-iq/ws-airtel/", "", "", ""))
+        return {
+            "ok": True,
+            "media_url_pattern": f"{base_url.rstrip('/')}/airtel-iq/ws-airtel/",
+            "ws_url_pattern": ws_url_pattern,
+            "voice_bot_wss_url_pattern": ws_url_pattern,
+            "voice_bot_port": 443,
+            "voice_bot_metadata_keys": [
+                "pending_id",
+                "client_id",
+                "project_id",
+                "provider",
+                "direction",
+                "call_direction",
+                "outreach_mode",
+                "to_number",
+                "caller_id",
+            ],
+        }
+
     @app.get("/exotel/passthru/{pending_id}")
     async def exotel_passthru(pending_id: str, request: Request) -> dict[str, object]:
         params = {key: value for key, value in request.query_params.items()}
@@ -6475,36 +6564,61 @@ def create_app() -> FastAPI:
     async def exotel_media(websocket: WebSocket, pending_id: str) -> None:
         await _run_exotel_media_session(websocket, pending_id=pending_id)
 
-    @app.websocket("/airtel-iq/media/{pending_id}")
-    async def airtel_iq_media(websocket: WebSocket, pending_id: str) -> None:
-        logger.info("Airtel IQ media websocket connection requested for pending_id=%s", pending_id)
+    async def _run_airtel_iq_media_session(websocket: WebSocket, pending_id: str | None = None) -> None:
+        logger.info(
+            "Airtel IQ media websocket connection requested for pending_id=%s",
+            pending_id or "<dynamic>",
+        )
         await websocket.accept()
-        pending_call = await telephony.consume_pending_call(pending_id)
-        if pending_call is None:
-            logger.warning("No pending Airtel IQ call found for media websocket pending_id=%s", pending_id)
-            await websocket.close()
-            return
-
         bridge = AirtelIQMediaBridge(websocket)
+        pending_call = await telephony.get_pending_call(pending_id) if pending_id else None
         session_started = False
+        active_pending_id = pending_id or ""
         try:
             while True:
-                if session_started and not await controller.is_busy(session_key=pending_id):
-                    logger.info("Voice session finished; closing Airtel IQ media stream pending_id=%s", pending_id)
+                if session_started and active_pending_id and not await controller.is_busy(session_key=active_pending_id):
+                    logger.info(
+                        "Voice session finished; closing Airtel IQ media stream pending_id=%s",
+                        active_pending_id,
+                    )
                     break
                 try:
-                    payload = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+                    payload = await asyncio.wait_for(websocket.receive(), timeout=1.0)
                 except TimeoutError:
                     continue
-                message = json.loads(payload)
-                event = str(message.get("event", "")).strip().lower()
-                if event in {"connected", "start", "stop", "media", "clear"}:
-                    logger.info("Airtel IQ media event: pending_id=%s event=%s", pending_id, event or "<missing>")
-                if event == "stop":
-                    logger.info("Received Airtel IQ stop event, closing media loop pending_id=%s", pending_id)
+                raw_text = ""
+                if payload.get("text"):
+                    raw_text = str(payload.get("text") or "")
+                elif payload.get("bytes"):
+                    raw_text = bytes(payload.get("bytes") or b"").decode("utf-8", errors="replace")
+                if not raw_text.strip():
+                    continue
+                try:
+                    message = json.loads(raw_text)
+                except json.JSONDecodeError:
+                    logger.warning("Discarding non-JSON Airtel IQ websocket payload: %s", raw_text[:200])
+                    continue
+                start_details = _extract_airtel_iq_start_details(message)
+                event = str(message.get("event", "") or message.get("eventType", "") or message.get("status", "")).strip().lower()
+                if event in {"connected", "start", "stop", "media", "clear", "streaminfo", "terminate"}:
+                    logger.info("Airtel IQ media event: pending_id=%s event=%s", active_pending_id or pending_id or "", event or "<missing>")
+                if not active_pending_id:
+                    active_pending_id = _payload_value(start_details, "pending_id", "pendingId", "biz_opaque_callback_data")
+                    if active_pending_id:
+                        pending_call = await telephony.get_pending_call(active_pending_id)
+                        if pending_call is None:
+                            pending_call = await telephony.consume_pending_call(active_pending_id)
+                    if not active_pending_id and pending_id:
+                        active_pending_id = pending_id
+                if event in {"stop", "terminate", "error"}:
+                    logger.info("Received Airtel IQ terminal event, closing media loop pending_id=%s", active_pending_id or pending_id or "")
                     break
                 await bridge.handle_ws_message(message)
-                if not session_started and event in {"connected", "start", "media"}:
+                if pending_call is not None and not session_started and event in {"connected", "start", "media", "streaminfo"}:
+                    active_pending_id = active_pending_id or pending_id or ""
+                    if not active_pending_id:
+                        logger.warning("Airtel IQ start event did not include a pending_id; waiting for a resolvable session.")
+                        continue
                     await controller.start_with_audio(
                         client_id=pending_call.client_id,
                         customer_name=pending_call.customer_name,
@@ -6512,22 +6626,31 @@ def create_app() -> FastAPI:
                         audio=bridge,
                         telephony_context=pending_call.metadata,
                         defer_initial_prompt=event == "connected",
-                        session_key=pending_id,
+                        session_key=active_pending_id,
                     )
                     session_started = True
                     if event == "connected":
                         continue
-                if session_started and event == "start":
-                    await controller.release_initial_prompt(session_key=pending_id)
+                if session_started and event == "start" and active_pending_id:
+                    await controller.release_initial_prompt(session_key=active_pending_id)
         except WebSocketDisconnect:
-            logger.info("Airtel IQ media websocket disconnected for pending_id=%s", pending_id)
+            logger.info("Airtel IQ media websocket disconnected for pending_id=%s", active_pending_id or pending_id or "")
         except RuntimeError:
-            logger.exception("Airtel IQ media session failed for pending_id=%s", pending_id)
+            logger.exception("Airtel IQ media session failed for pending_id=%s", active_pending_id or pending_id or "")
             await bridge.close()
         finally:
-            if session_started:
-                await _safe_stop_session(session_key=pending_id)
+            if session_started and active_pending_id:
+                await _safe_stop_session(session_key=active_pending_id)
             await bridge.close()
+
+    @app.websocket("/airtel-iq/ws-airtel/")
+    @app.websocket("/airtel-iq/ws-airtel")
+    async def airtel_iq_media(websocket: WebSocket) -> None:
+        await _run_airtel_iq_media_session(websocket, pending_id=None)
+
+    @app.websocket("/airtel-iq/media/{pending_id}")
+    async def airtel_iq_media_legacy(websocket: WebSocket, pending_id: str) -> None:
+        await _run_airtel_iq_media_session(websocket, pending_id=pending_id)
 
     async def _build_piopiy_answer_response(
         request: Request,
