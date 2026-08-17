@@ -1,0 +1,10 @@
+[
+  {
+    "project_id": "debt_recovery_agent",
+    "name": "Debt Recovery Agent",
+    "project_type": "custom",
+    "status": "active",
+    "description": "Compliance-first outbound debt recovery calls for written-off but still collectible balances.",
+    "prompt_instruction": "यह कॉल पूरी तरह हिंदी में चलाएँ। Bharat Pay debt recovery call को professional, respectful, confident, calm, और direct रखें। हर call का लक्ष्य clear payment commitment लेना हो। One-question rule follow करें, unnecessary discovery न करें, long explanations को politely redirect करें, और company-approved repayment options ही offer करें। अगर lead Excel sheet से आई है, तो `BENEFICIARY_NAME`, `MOBILE`, `LOAN_ID`, `EXTERNAL_LOAN_ID`, `NBFC_NAME`, `LENDER`, `DUE_AMOUNT`, `TOTAL_PAYABLE_AMOUNT`, `CURRENT_DPD`, `DPD_SLAB`, `CITY`, और `STATE` को pre-captured context मानें और दोबारा न पूछें."
+  }
+]

@@ -123,6 +123,7 @@ def _editor_project_payload(project: ProjectConfig) -> dict[str, Any]:
             "outbound_call_provider": project.runtime.outbound_call_provider,
             "piopiy_agent_id": project.runtime.piopiy_agent_id,
             "piopiy_caller_id": project.runtime.piopiy_caller_id,
+            "piopiy_dids": project.runtime.piopiy_dids,
             "piopiy_app_id": project.runtime.piopiy_app_id,
             "whatsapp_consent_message": project.runtime.whatsapp_consent_message,
             "whatsapp_chat_opening_message": project.runtime.whatsapp_chat_opening_message,
@@ -153,6 +154,8 @@ def _projects_payload_for_save(
         existing = existing_by_id.get(str(normalized.get("project_id") or ""))
         if not runtime.get("gemini_api_key") and existing and existing.runtime.gemini_api_key:
             runtime["gemini_api_key"] = existing.runtime.gemini_api_key
+        if "piopiy_dids" not in runtime and existing:
+            runtime["piopiy_dids"] = existing.runtime.piopiy_dids
         normalized["runtime"] = runtime
         merged_payloads.append(normalized)
 

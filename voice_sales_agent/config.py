@@ -75,6 +75,8 @@ class AppSettings:
     meta_whatsapp_default_sdp: str | None
     meta_whatsapp_webhook_verify_token: str | None
     meta_whatsapp_app_secret: str | None
+    meta_whatsapp_post_call_template_name: str | None
+    meta_whatsapp_post_call_template_language_code: str
     meta_whatsapp_outbound_source_rate: int
     meta_whatsapp_outbound_preroll_ms: int
     piopiy_api_token: str | None
@@ -102,6 +104,18 @@ class AppSettings:
     recording_stt_enabled: bool
     recording_stt_chunk_seconds: int
     recording_llm_extraction_enabled: bool
+    recording_audio_model: str
+    call_transcripts_db_path: Path
+    google_stt_project_id: str | None
+    google_cloud_project: str | None
+    google_stt_recognizer_name: str | None
+    google_stt_location: str
+    google_stt_recognizer_id: str
+    google_stt_model: str
+    google_stt_language_codes: list[str]
+    post_call_summary_enabled: bool
+    post_call_whatsapp_notification_enabled: bool
+    post_call_whatsapp_number: str | None
     client_store_backend: Literal["auto", "file", "mysql", "mongo"]
     mysql_uri: str | None
     mysql_host: str | None
@@ -138,8 +152,8 @@ def load_settings() -> AppSettings:
         speech_provider=os.getenv("SPEECH_PROVIDER", "gemini").strip().lower() or "gemini",
         gemini_api_key=api_key,
         live_model=os.getenv("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-preview-12-2025"),
-        structured_model=os.getenv("GEMINI_STRUCTURED_MODEL", "gemini-2.5-flash"),
-        tts_model=os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts"),
+        structured_model=os.getenv("GEMINI_STRUCTURED_MODEL", "gemini-3.1-flash-lite"),
+        tts_model=os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-native-audio-preview-12-2025"),
         agent_response_mode=os.getenv("AGENT_RESPONSE_MODE", "live_audio").strip().lower() or "live_audio",
         default_client_id=os.getenv("DEFAULT_CLIENT_ID", "acme_health"),
         session_output_dir=Path(os.getenv("SESSION_OUTPUT_DIR", PROJECT_ROOT / "sessions")).resolve(),
@@ -240,6 +254,12 @@ def load_settings() -> AppSettings:
         meta_whatsapp_default_sdp=(os.getenv("META_WHATSAPP_DEFAULT_SDP", "").strip() or None),
         meta_whatsapp_webhook_verify_token=(os.getenv("META_WHATSAPP_WEBHOOK_VERIFY_TOKEN", "").strip() or None),
         meta_whatsapp_app_secret=(os.getenv("META_WHATSAPP_APP_SECRET", "").strip() or None),
+        meta_whatsapp_post_call_template_name=(
+            os.getenv("META_WHATSAPP_POST_CALL_TEMPLATE_NAME", "").strip() or None
+        ),
+        meta_whatsapp_post_call_template_language_code=(
+            os.getenv("META_WHATSAPP_POST_CALL_TEMPLATE_LANGUAGE_CODE", "en_US").strip() or "en_US"
+        ),
         meta_whatsapp_outbound_source_rate=int(
             os.getenv("META_WHATSAPP_OUTBOUND_SOURCE_RATE", "24000").strip() or "24000"
         ),
@@ -261,10 +281,10 @@ def load_settings() -> AppSettings:
         gemini_tts_cost_per_1k_chars=float(os.getenv("GEMINI_TTS_COST_PER_1K_CHARS", "0").strip() or "0"),
         gemini_structured_cost_per_1k_chars=float(os.getenv("GEMINI_STRUCTURED_COST_PER_1K_CHARS", "0").strip() or "0"),
         faster_stt_enabled=(os.getenv("FASTER_STT_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}),
-        faster_stt_model=os.getenv("FASTER_STT_MODEL", "small").strip() or "small",
+        faster_stt_model=os.getenv("FASTER_STT_MODEL", "tiny").strip() or "tiny",
         faster_stt_device=os.getenv("FASTER_STT_DEVICE", "cpu").strip() or "cpu",
-        faster_stt_compute_type=os.getenv("FASTER_STT_COMPUTE_TYPE", "int8").strip() or "int8",
-        faster_stt_beam_size=int(os.getenv("FASTER_STT_BEAM_SIZE", "5").strip() or "5"),
+        faster_stt_compute_type=os.getenv("FASTER_STT_COMPUTE_TYPE", "int8_float32").strip() or "int8_float32",
+        faster_stt_beam_size=int(os.getenv("FASTER_STT_BEAM_SIZE", "1").strip() or "1"),
         parallel_stt_enabled=(os.getenv("PARALLEL_STT_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}),
         parallel_stt_segment_seconds=float(os.getenv("PARALLEL_STT_SEGMENT_SECONDS", "8").strip() or "8"),
         parallel_stt_finalize_timeout_seconds=float(
@@ -275,6 +295,35 @@ def load_settings() -> AppSettings:
         recording_llm_extraction_enabled=(
             os.getenv("RECORDING_LLM_EXTRACTION_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
         ),
+        recording_audio_model=os.getenv("RECORDING_AUDIO_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash",
+        call_transcripts_db_path=Path(
+            os.getenv(
+                "CALL_TRANSCRIPTS_DB_PATH", ""
+            ).strip()
+            or Path(os.getenv("SESSION_OUTPUT_DIR", PROJECT_ROOT / "sessions")) / "call_transcripts.db"
+        ).resolve(),
+        google_stt_project_id=(os.getenv("GOOGLE_STT_PROJECT_ID", "").strip() or None),
+        google_cloud_project=(os.getenv("GOOGLE_CLOUD_PROJECT", "").strip() or None),
+        google_stt_recognizer_name=(os.getenv("GOOGLE_STT_RECOGNIZER_NAME", "").strip() or None),
+        google_stt_location=os.getenv("GOOGLE_STT_LOCATION", "global").strip() or "global",
+        google_stt_recognizer_id=os.getenv("GOOGLE_STT_RECOGNIZER_ID", "_").strip() or "_",
+        google_stt_model=os.getenv("GOOGLE_STT_MODEL", "chirp_3").strip() or "chirp_3",
+        google_stt_language_codes=[
+            code.strip()
+            for code in os.getenv("GOOGLE_STT_LANGUAGE_CODES", "en-IN,hi-IN,mr-IN").split(",")
+            if code.strip()
+        ],
+        post_call_summary_enabled=(
+            os.getenv("POST_CALL_SUMMARY_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+            if os.getenv("POST_CALL_SUMMARY_ENABLED") is not None
+            else True
+        ),
+        post_call_whatsapp_notification_enabled=(
+            os.getenv("POST_CALL_WHATSAPP_NOTIFICATION_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+            if os.getenv("POST_CALL_WHATSAPP_NOTIFICATION_ENABLED") is not None
+            else True
+        ),
+        post_call_whatsapp_number=(os.getenv("CALL_TRANSCRIPTION_WHATSAPP_NUMBER", "").strip() or None),
         client_store_backend=(os.getenv("CLIENT_STORE_BACKEND", "auto").strip().lower() or "auto"),
         mysql_uri=(os.getenv("MYSQL_URI", "").strip() or None),
         mysql_host=(os.getenv("MYSQL_HOST", "").strip() or None),

@@ -1,0 +1,113 @@
+{
+  "client_id": "user_oswelltechnologies_co_f2238ea2",
+  "identity": {
+    "display_name": "Oswell Technologies",
+    "industry": "Custom",
+    "website": null,
+    "status": "draft",
+    "tags": [
+      "custom",
+      "inbound",
+      "user_workspace"
+    ]
+  },
+  "business_profile": {
+    "primary_offer": "Oswell Technologies helps healthcare organizations reduce repetitive administrative work, improve operational efficiency, automate manual processes, improve system integration, explore practical AI use cases, improve patient and staff experiences, plan digital transformation initiatives, and validate new healthcare software or AI product ideas.",
+    "target_audience": [
+      "Healthcare operations leaders",
+      "Digital transformation leaders",
+      "Healthcare technology leaders",
+      "Clinic and hospital administrators",
+      "Healthcare founders and owners",
+      "Innovation and process improvement leaders"
+    ],
+    "tone": [
+      "neutral USA English business voice",
+      "natural American English accent",
+      "consistent",
+      "consultative",
+      "brief"
+    ],
+    "languages_supported": [
+      "english"
+    ],
+    "services": [
+      "48-Hour Healthcare AI and Digital Transformation Assessment",
+      "Healthcare workflow automation",
+      "Healthcare system integration",
+      "Practical AI use-case planning",
+      "Patient and staff experience improvements",
+      "Healthcare software and MVP discovery"
+    ],
+    "locations": []
+  },
+  "conversation": {
+    "conversation_mode": "sales_discovery",
+    "default_opening_language": "english",
+    "workflow_mode": "model_led",
+    "closure_mode": "default",
+    "opening_script": {
+      "english": "Hello, am I talking to {customer_name}?",
+      "marathi": "Hello, am I talking to {customer_name}?",
+      "hindi": "Hello, am I talking to {customer_name}?"
+    },
+    "closure_examples": {
+      "positive": [
+        "Would you be open to a 20-minute strategy meeting this week?"
+      ],
+      "negative": [
+        "No problem, I understand. I will not take more of your time. Thank you."
+      ],
+      "non_closing_questions": [
+        "Am I talking to {customer_name}?",
+        "Can I take 30 seconds to explain why I reached out?",
+        "Would it be alright if I ask one quick question to see whether it may be relevant?"
+      ],
+      "guidance": "Keep it brief. Ask no more than two or three qualifying questions, then move toward the healthcare strategy meeting."
+    },
+    "disallowed_claims": [
+      "Do not guarantee ROI, cost savings, exact delivery timelines, pricing, or technical outcomes.",
+      "Do not hard sell or pressure the customer.",
+      "Do not ask for date/time before the customer agrees to a meeting or callback."
+    ],
+    "allowed_contact_fields": [
+      "name",
+      "email",
+      "phone"
+    ],
+    "booking_rules": {},
+    "handoff_rules": {},
+    "intent_overrides": {},
+    "results_base_template": "default_v1",
+    "results_extra_fields": []
+  },
+  "voice": {
+    "voice_name": "Kore",
+    "persona_gender": "female",
+    "speaking_rate": 1.0
+  },
+  "model_routing": {
+    "live_generation": {
+      "temperature": 0.25,
+      "top_p": 0.7,
+      "top_k": 12,
+      "max_output_tokens": 180
+    },
+    "structured_generation": {
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "top_k": 20,
+      "max_output_tokens": 512
+    }
+  },
+  "import_metadata": {
+    "schema_version": 2,
+    "source": "client_builder_ui",
+    "external_id": null,
+    "imported_at": null,
+    "imported_from": "user_oswelltechnologies_co_f2238ea2",
+    "notes": [
+      "Generated from the dashboard client builder."
+    ]
+  }
+}

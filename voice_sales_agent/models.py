@@ -272,6 +272,7 @@ class ProjectRuntimeConfig(BaseModel):
     outbound_call_provider: Literal["twilio", "exotel", "airtel_iq", "meta_whatsapp", "piopiy"] | None = None
     piopiy_agent_id: str | None = None
     piopiy_caller_id: str | None = None
+    piopiy_dids: list[str] = Field(default_factory=list)
     piopiy_app_id: str | None = None
     max_concurrent_calls: int | None = Field(default=None, ge=1, le=100)
     whatsapp_consent_message: str | None = None
@@ -401,6 +402,12 @@ class CriticalCallDetails(BaseModel):
     important_questions_asked: list[str] = Field(default_factory=list)
 
 
+class RecordingKeyDetails(BaseModel):
+    name: str | None = None
+    problem: str | None = None
+    location: str | None = None
+
+
 class CostLineItem(BaseModel):
     provider: str
     category: str
@@ -438,6 +445,7 @@ class SessionArtifacts(BaseModel):
     recording_stt_corpus: str | None = None
     recording_stt_full_corpus: str | None = None
     recording_llm_details: CriticalCallDetails | None = None
+    recording_key_details: RecordingKeyDetails | None = None
     piopiy_recording_url: str | None = None
     piopiy_recording_path: str | None = None
     piopiy_recording_filename: str | None = None

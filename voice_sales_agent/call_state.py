@@ -86,6 +86,10 @@ class InMemoryCallStateStore:
                 if str(payload.get("provider_call_sid", "")) == provider_sid:
                     self._call_deadlines[pending_id] = self._deadline()
                     return pending_id, dict(payload)
+                aliases = payload.get("provider_call_sids")
+                if isinstance(aliases, list) and provider_sid in {str(item or "").strip() for item in aliases}:
+                    self._call_deadlines[pending_id] = self._deadline()
+                    return pending_id, dict(payload)
         return None
 
     async def list_pending_ids(self, provider: str | None = None) -> list[str]:

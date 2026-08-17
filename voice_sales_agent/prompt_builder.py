@@ -37,10 +37,10 @@ class PromptBuilder:
             else "Opening language for this session is not set."
         )
         contact_details_block = (
-            "Pre-captured contact details: "
+            "Pre-captured contact/account context: "
             + json.dumps({key: value for key, value in (contact_details or {}).items() if value}, ensure_ascii=False)
             if contact_details
-            else "No pre-captured contact details."
+            else "No pre-captured contact/account context."
         )
         global_prompt = self._build_global_prompt(client)
 
@@ -201,6 +201,8 @@ class PromptBuilder:
                 "- If the caller clearly switches languages, switch only on the next turn and keep that turn fully in the new language.\n"
                 "- The visitor already shared name, phone, and email before the conversation started. Do not ask for them again unless they want to correct them.\n"
                 "- Ask one clear question at a time and keep replies short enough for live voice.\n"
+                "- If the visitor stays silent or gives no usable response, do not continue collecting business details, appointment date, or appointment time. Ask once whether they can hear you and whether you should disconnect.\n"
+                "- Never treat silence as permission to move to the next workflow step.\n"
                 "- Respond in the caller's latest language naturally. Default to the configured opening language until the caller clearly switches.\n"
                 "- When speaking English, sound like an Indian business assistant: natural Indian phrasing, polite tone, and no Americanized slang.\n"
                 "- English lines should feel local and familiar in India, using phrasing like please let me know, are you looking for, for your requirement, yes sure, and our team will connect with you.\n"
@@ -221,6 +223,8 @@ class PromptBuilder:
                 "- Keep exactly one language per sentence and one language per turn. Never mix Marathi, Hindi, and English inside the same sentence.\n"
                 "- If the caller clearly switches languages, switch only on the next turn and keep that turn fully in the new language.\n"
                 "- Ask one clear question at a time.\n"
+                "- If the caller stays silent or gives no usable response, do not repeat appointment date or time questions. Ask once whether they can hear you and say you will disconnect if there is still no response.\n"
+                "- Never treat silence as an appointment answer, confirmation, date, or time preference.\n"
                 "- Keep replies short and practical for phone delivery.\n"
                 "- Expect very short telephony answers such as haan, ji, yes, no, speaking, bolo, or naam confirmation.\n"
                 "- Treat short confirmations as sufficient signal and respond immediately instead of waiting for a longer explanation.\n"

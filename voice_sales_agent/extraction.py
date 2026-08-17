@@ -9,7 +9,7 @@ import textwrap
 from datetime import datetime, timezone
 from typing import Any
 
-from .models import ClientBundle, PostCallSummary, SessionArtifacts, SessionMemory
+from .models import ClientBundle, PostCallSummary, RecordingKeyDetails, SessionArtifacts, SessionMemory
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +139,74 @@ def build_recording_details_prompt(
         {corpus_text}
         """
     ).strip()
+
+
+def build_key_details_prompt(transcript_text: str) -> str:
+    """Build strict JSON prompt for extracting a name, problem, and location."""
+    required_shape = {
+        "name": "string or null",
+        "problem": "string or null",
+        "location": "string or null",
+    }
+    return textwrap.dedent(
+        f"""
+        You are extracting key call details from a transcript for a WhatsApp follow-up.
+
+        Return valid JSON only. Do not wrap it in markdown.
+        Use exactly this shape:
+        {json.dumps(required_shape, indent=2, ensure_ascii=False)}
+
+        Rules:
+        - Only use facts that are explicitly present in caller/user speech.
+        - Ignore any agent/AI speech, even if it repeats, confirms, or infers a detail.
+        - `name` should come from the caller only. If the caller does not state a name, return null.
+        - `problem` should be a short plain-language description of the caller's issue or complaint.
+        - `location` should be the location, ward, area, village, city, or other place name if the caller mentions it. If not mentioned by the caller, return null.
+        - If a location is mentioned only by the agent/AI while asking the caller to send details on WhatsApp, treat it as not mentioned and return null.
+        - Keep `problem` and `location` concise.
+        - Do not infer or expand missing information.
+
+        Transcript:
+        {transcript_text}
+        """
+    ).strip()
+
+
+def parse_key_details_payload(raw_text: str) -> RecordingKeyDetails:
+    """Parse key-detail extraction output into a validated model."""
+    payload = raw_text.strip()
+    if payload.startswith("```"):
+        payload = payload.strip("`")
+        payload = payload.replace("json", "", 1).strip()
+    try:
+        details = RecordingKeyDetails.model_validate_json(payload)
+    except Exception:
+        start = payload.find("{")
+        end = payload.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                details = RecordingKeyDetails.model_validate_json(payload[start : end + 1])
+            except Exception:
+                details = RecordingKeyDetails()
+        else:
+            details = RecordingKeyDetails()
+    details.name = " ".join(str(details.name or "").split()).strip() or None
+    details.problem = " ".join(str(details.problem or "").split()).strip() or None
+    details.location = " ".join(str(details.location or "").split()).strip() or None
+    return details
+
+
+def clear_non_caller_location(details: RecordingKeyDetails, caller_transcript_text: str) -> RecordingKeyDetails:
+    """Drop locations that do not appear in the caller's own transcript text."""
+    location = str(details.location or "").strip()
+    if not location:
+        return details
+
+    caller_text = " ".join(str(caller_transcript_text or "").split()).lower()
+    normalized_location = " ".join(location.split()).lower()
+    if normalized_location and normalized_location not in caller_text:
+        details.location = None
+    return details
 
 
 def parse_summary_payload(raw_text: str) -> PostCallSummary:

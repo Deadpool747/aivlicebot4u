@@ -66,6 +66,7 @@ class LocalAudioIO:
             raise RuntimeError("Input stream is not open.")
 
         voiced_hangover = 0
+        noise_floor = 0.0
         while True:
             chunk = await asyncio.to_thread(
                 self._input_stream.read,
@@ -73,7 +74,23 @@ class LocalAudioIO:
                 exception_on_overflow=False,
             )
             if MIC_ENERGY_THRESHOLD <= 0:
-                yield chunk
+                energy = self._chunk_energy(chunk)
+                if noise_floor <= 0:
+                    noise_floor = energy
+                else:
+                    if energy < noise_floor:
+                        noise_floor = (0.94 * noise_floor) + (0.06 * energy)
+                    else:
+                        noise_floor = (0.992 * noise_floor) + (0.008 * energy)
+                threshold = max(180.0, noise_floor * 2.2)
+                if energy >= threshold:
+                    voiced_hangover = MIC_HANGOVER_CHUNKS
+                    yield chunk
+                    continue
+                if voiced_hangover > 0:
+                    voiced_hangover -= 1
+                    if energy >= max(120.0, noise_floor * 1.2):
+                        yield chunk
                 continue
             if self._chunk_energy(chunk) >= MIC_ENERGY_THRESHOLD:
                 voiced_hangover = MIC_HANGOVER_CHUNKS

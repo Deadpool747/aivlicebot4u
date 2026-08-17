@@ -91,6 +91,7 @@
         display: grid;
         gap: 10px;
         max-width: 760px;
+        min-width: 0;
       }
 
       .hero-copy p {
@@ -184,6 +185,7 @@
       .builder-preview-stack {
         display: grid;
         gap: 18px;
+        min-width: 0;
       }
 
       .builder-callout {
@@ -211,12 +213,15 @@
         padding: 14px;
         background: rgba(8, 17, 31, 0.78);
         border: 1px solid var(--line);
+        min-width: 0;
       }
 
       .builder-preview-card strong {
         display: block;
         margin-top: 4px;
         font-size: 20px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       .builder-preview-block {
@@ -226,6 +231,7 @@
         border-radius: 16px;
         background: rgba(8, 17, 31, 0.78);
         border: 1px solid var(--line);
+        min-width: 0;
       }
 
       .builder-preview-block pre {
@@ -234,6 +240,8 @@
         font: inherit;
         color: var(--muted);
         line-height: 1.6;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       .configure-grid {
@@ -254,6 +262,7 @@
         padding: 18px;
         box-shadow: var(--shadow);
         backdrop-filter: blur(14px);
+        min-width: 0;
       }
 
       .panel-head {
@@ -276,6 +285,7 @@
       .stack {
         display: grid;
         gap: 14px;
+        min-width: 0;
       }
 
       .section-title {
@@ -429,6 +439,7 @@
         border-radius: 14px;
         background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
+        min-width: 0;
       }
 
       .status-card {
@@ -438,6 +449,7 @@
         border-radius: 18px;
         background: rgba(6, 14, 27, 0.94);
         border: 1px solid var(--line);
+        min-width: 0;
       }
 
       .status-pill {
@@ -473,6 +485,9 @@
         padding: 14px;
         background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       .metric .label,
@@ -487,16 +502,18 @@
       .metric strong {
         display: block;
         font-size: 26px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       .index-detail-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 12px;
       }
 
       .index-detail-grid.four-up {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       }
 
       .index-detail-grid .info-card {
@@ -611,7 +628,7 @@
 
       .results-metrics {
         display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         gap: 12px;
       }
 
@@ -630,6 +647,7 @@
         border-radius: 16px;
         background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
+        min-width: 0;
       }
 
       .results-row.header {
@@ -658,6 +676,13 @@
         margin-bottom: 14px;
       }
 
+      .recordings-toolbar .toolbar-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
       .recordings-pager {
         display: inline-flex;
         align-items: center;
@@ -682,6 +707,7 @@
         border-radius: 18px;
         background: rgba(8, 17, 31, 0.82);
         border: 1px solid var(--line);
+        min-width: 0;
       }
 
       .recording-card-top {
@@ -690,6 +716,16 @@
         align-items: flex-start;
         gap: 14px;
         flex-wrap: wrap;
+      }
+
+      .recording-card-action {
+        flex: 0 0 auto;
+        min-width: 140px;
+      }
+
+      .recording-card-action button {
+        width: auto;
+        min-width: 140px;
       }
 
       .recording-meta {
@@ -710,10 +746,45 @@
         font-weight: 700;
       }
 
+      .recording-meta span.coverage {
+        letter-spacing: 0.02em;
+      }
+
+      .recording-meta span.coverage.full_conversation {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.28);
+        color: #bbf7d0;
+      }
+
+      .recording-meta span.coverage.ai_leg_only,
+      .recording-meta span.coverage.single_leg_unknown {
+        background: rgba(245, 158, 11, 0.12);
+        border-color: rgba(245, 158, 11, 0.28);
+        color: #fde68a;
+      }
+
+      .recording-meta span.coverage.caller_leg_only {
+        background: rgba(59, 130, 246, 0.12);
+        border-color: rgba(59, 130, 246, 0.28);
+        color: #bfdbfe;
+      }
+
       .recording-files {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 12px;
+      }
+
+      .recording-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .recording-actions .secondary,
+      .recording-actions .ghost {
+        min-width: 120px;
       }
 
       .recording-file {
@@ -759,6 +830,142 @@
         color: #fecdd3;
       }
 
+      .transcript-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(2, 6, 23, 0.75);
+        backdrop-filter: blur(8px);
+      }
+
+      .transcript-modal.open {
+        display: flex;
+      }
+
+      .transcript-modal-card {
+        width: min(900px, 100%);
+        max-height: min(82vh, 920px);
+        display: grid;
+        gap: 16px;
+        padding: 22px;
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(12, 19, 36, 0.98), rgba(7, 14, 28, 0.98));
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+        overflow: hidden;
+      }
+
+      .transcript-modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .transcript-modal-title {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .transcript-modal-title strong {
+        font-size: 20px;
+      }
+
+      .transcript-modal-meta {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .transcript-modal-body {
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(6, 14, 27, 0.88);
+        border: 1px solid var(--line);
+        color: #e5eefb;
+        display: grid;
+        gap: 12px;
+        white-space: normal;
+        line-height: 1.6;
+        overflow: auto;
+        min-height: 240px;
+      }
+
+      .transcript-turns {
+        display: grid;
+        gap: 10px;
+      }
+
+      .transcript-turn {
+        display: grid;
+        gap: 6px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(8, 17, 31, 0.9);
+        border: 1px solid var(--line);
+      }
+
+      .transcript-turn-label {
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #93c5fd;
+      }
+
+      .transcript-turn-label.user {
+        color: #86efac;
+      }
+
+      .transcript-turn-text {
+        font-size: 0.96rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        color: #e5eefb;
+      }
+
+      .transcript-turn-time {
+        font-size: 12px;
+        color: #94a3b8;
+      }
+
+      .transcript-source-note {
+        font-size: 12px;
+        color: #94a3b8;
+      }
+
+      .transcript-source-warning {
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.28);
+        color: #fde68a;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .transcript-source-warning.info {
+        background: rgba(59, 130, 246, 0.12);
+        border-color: rgba(59, 130, 246, 0.28);
+        color: #bfdbfe;
+      }
+
+      .transcript-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .transcript-status {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
       @media (max-width: 1080px) {
         .overview-grid,
         .builder-grid,
@@ -766,17 +973,15 @@
           grid-template-columns: 1fr;
         }
 
-        .index-detail-grid,
-        .index-detail-grid.four-up {
-          grid-template-columns: 1fr 1fr;
-        }
-
-        .results-metrics {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
         .results-row {
           grid-template-columns: repeat(2, minmax(180px, 1fr));
+        }
+      }
+
+      @media (max-width: 1320px) {
+        .index-detail-grid,
+        .index-detail-grid.four-up {
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         }
       }
 
@@ -1120,7 +1325,7 @@
                     <button id="useFirstExcelLeadBtn" class="ghost" type="button">Use First Lead for Call</button>
                     <button id="callExcelLeadsBtn" class="primary" type="button">Call Parsed Leads</button>
                   </div>
-                  <p id="excelStatus" class="helper">Upload a sheet with columns like Name and Phone or Mobile.</p>
+                  <p id="excelStatus" class="helper">Upload a sheet with `BENEFICIARY_NAME` and `MOBILE`. Extra fields like `LOAN_ID`, `NBFC_NAME`, and `DUE_AMOUNT` will be carried into the call context automatically.</p>
                   <div class="lead-preview" id="excelLeadPreview"></div>
                 </div>
                 <div class="source-panel" id="sourcePanel-meta">
@@ -1205,7 +1410,7 @@
                 <div class="panel-head">
                   <div class="section-title">
                     <h2>Live View</h2>
-                    <p>Watch latency and post-call summary updates in real time.</p>
+                    <p>Watch response time and post-call summary updates in real time.</p>
                   </div>
                 </div>
 
@@ -1215,7 +1420,7 @@
                     <strong id="firstLatency">-</strong>
                   </div>
                   <div class="metric">
-                    <div class="label">Turn Latency</div>
+                    <div class="label">Response Time</div>
                     <strong id="turnLatency">-</strong>
                   </div>
                 </div>
@@ -1391,12 +1596,12 @@
               <div class="panel-head">
                 <div class="section-title">
                   <h2>Recording Library</h2>
-                  <p>See the latest 10 recordings first, then move forward or backward like an inbox.</p>
+                  <p>See the latest 5 recordings first, then move forward or backward like an inbox.</p>
                 </div>
               </div>
               <div class="recordings-toolbar">
                 <div class="recordings-page-label" id="recordingsPageLabel">Page 1 of 1</div>
-                <div class="recordings-pager">
+                <div class="toolbar-actions">
                   <button class="secondary pager-btn" id="recordingsPrevBtn" type="button">Previous</button>
                   <button class="secondary pager-btn" id="recordingsNextBtn" type="button">Next</button>
                 </div>
@@ -1405,6 +1610,25 @@
             </section>
           </div>
         </section>
+
+        <div class="transcript-modal" id="transcriptModal" aria-hidden="true">
+          <div class="transcript-modal-card" role="dialog" aria-modal="true" aria-labelledby="transcriptModalTitle">
+            <div class="transcript-modal-head">
+              <div class="transcript-modal-title">
+                <strong id="transcriptModalTitle">Transcript</strong>
+                <div class="transcript-modal-meta" id="transcriptModalMeta">Select a call to view its transcript.</div>
+              </div>
+              <button class="ghost" id="transcriptModalCloseBtn" type="button">Close</button>
+            </div>
+            <div class="transcript-status" id="transcriptModalStatus"></div>
+            <div class="transcript-modal-body" id="transcriptModalBody">Choose a recording and click Transcribe.</div>
+            <div class="transcript-modal-footer">
+              <button class="secondary" id="transcriptModalCsvBtn" type="button" disabled>Download CSV</button>
+              <button class="secondary" id="transcriptModalRetryBtn" type="button" disabled>Transcribe again</button>
+              <button class="ghost" id="transcriptModalDismissBtn" type="button">Done</button>
+            </div>
+          </div>
+        </div>
 
         <section class="page" id="configurePage">
           <div class="configure-grid">
@@ -1944,6 +2168,15 @@
       const recordingsPageLabel = document.getElementById("recordingsPageLabel");
       const recordingsPrevBtn = document.getElementById("recordingsPrevBtn");
       const recordingsNextBtn = document.getElementById("recordingsNextBtn");
+      const transcriptModal = document.getElementById("transcriptModal");
+      const transcriptModalTitle = document.getElementById("transcriptModalTitle");
+      const transcriptModalMeta = document.getElementById("transcriptModalMeta");
+      const transcriptModalStatus = document.getElementById("transcriptModalStatus");
+      const transcriptModalBody = document.getElementById("transcriptModalBody");
+      const transcriptModalCloseBtn = document.getElementById("transcriptModalCloseBtn");
+      const transcriptModalDismissBtn = document.getElementById("transcriptModalDismissBtn");
+      const transcriptModalRetryBtn = document.getElementById("transcriptModalRetryBtn");
+      const transcriptModalCsvBtn = document.getElementById("transcriptModalCsvBtn");
       const pageTabs = document.querySelectorAll(".page-tab");
       const pages = document.querySelectorAll(".page");
       const timingPlaybackCooldown = document.getElementById("timingPlaybackCooldown");
@@ -1988,7 +2221,7 @@
         { key: "duration_seconds", label: "Duration" },
         { key: "follow_up", label: "Follow-Up" },
       ];
-      const RECORDINGS_PAGE_SIZE = 10;
+      const RECORDINGS_PAGE_SIZE = 5;
       let dashboardSessionKey = "dashboard";
       let requiresWorkflowConfiguration = false;
       const BROWSER_INPUT_SAMPLE_RATE = 16000;
@@ -2013,6 +2246,7 @@
       let editorDefaultCta = {};
       let activeLeadSourceId = "manual_single";
       let importedExcelLeads = [];
+      let activeBatchCampaignId = null;
       let browserAudioWs = null;
       let browserMicStream = null;
       let browserMicContext = null;
@@ -2027,10 +2261,16 @@
       let browserMicBytesSent = 0;
       let browserServerAckedFirstChunk = false;
       let browserWsOpen = false;
+      let browserWsCloseCode = "";
+      let browserWsCloseReason = "";
+      let browserWsWasClean = "";
       let recordingsItems = [];
       let recordingsPageIndex = 0;
       let browserMicPermissionState = "unknown";
       let browserMicFallbackTimer = null;
+      let activeTranscriptSession = null;
+      let activeTranscriptRecording = null;
+      let activeTranscriptCsvUrl = "";
 
       function renderBrowserAudioDiagnostics() {
         if (!browserAudioDiagnostics) {
@@ -2040,6 +2280,9 @@
           "Browser audio diagnostics",
           `Mic permission: ${browserMicPermissionState}`,
           `WebSocket: ${browserWsOpen ? "open" : "closed"}`,
+          `WebSocket close code: ${browserWsCloseCode || "-"}`,
+          `WebSocket clean close: ${browserWsWasClean === "" ? "-" : browserWsWasClean}`,
+          `WebSocket close reason: ${browserWsCloseReason || "-"}`,
           `Capture mode: ${browserMicCaptureMode}`,
           `Chunks sent: ${browserMicChunksSent}`,
           `Bytes sent: ${browserMicBytesSent}`,
@@ -2252,6 +2495,9 @@
 
       async function playBrowserAudioChunk(payload, sampleRate) {
         const context = await ensureBrowserPlaybackContext();
+        if (context.state === "suspended") {
+          await context.resume().catch(() => {});
+        }
         const pcm = decodePcm16ToFloat32(bytesFromBase64(payload));
         if (!pcm.length) {
           return;
@@ -2267,12 +2513,32 @@
         browserPlaybackCursor = when + buffer.duration;
       }
 
+      async function primeBrowserPlaybackContext() {
+        const context = await ensureBrowserPlaybackContext();
+        if (context.state === "suspended") {
+          await context.resume().catch(() => {});
+        }
+        try {
+          const silentBuffer = context.createBuffer(1, 1, context.sampleRate || BROWSER_OUTPUT_SAMPLE_RATE);
+          const source = context.createBufferSource();
+          source.buffer = silentBuffer;
+          source.connect(context.destination);
+          source.start(0);
+        } catch (error) {
+          // If priming fails, playback can still continue with the next chunk.
+        }
+        browserPlaybackCursor = context.currentTime + 0.01;
+      }
+
       async function startBrowserAudioTransport() {
         const securityHint = browserMicSecurityHint();
         if (securityHint) {
           throw new Error(securityHint);
         }
         if (browserAudioWs && browserAudioWs.readyState === WebSocket.OPEN) {
+          if (browserPlaybackContext) {
+            browserPlaybackCursor = browserPlaybackContext.currentTime + 0.01;
+          }
           return;
         }
         if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
@@ -2283,6 +2549,7 @@
           throw new Error("Web Audio API is unavailable in this browser.");
         }
         await ensureBrowserPlaybackContext();
+        await primeBrowserPlaybackContext();
         const ws = new WebSocket(`${websocketBaseUrl()}/ws/browser-audio/${dashboardSessionKey}`);
         await new Promise((resolve, reject) => {
           const timer = window.setTimeout(() => reject(new Error("Timed out connecting audio channel.")), 10000);
@@ -2301,13 +2568,19 @@
         });
         browserAudioWs = ws;
         browserWsOpen = true;
+        browserWsCloseCode = "";
+        browserWsCloseReason = "";
+        browserWsWasClean = "";
         browserServerAckedFirstChunk = false;
         browserMicChunksSent = 0;
         browserMicBytesSent = 0;
         renderBrowserAudioDiagnostics();
-        browserAudioWs.onclose = () => {
+        browserAudioWs.onclose = (event) => {
           browserAudioWs = null;
           browserWsOpen = false;
+          browserWsCloseCode = String(event.code || "");
+          browserWsCloseReason = String(event.reason || "");
+          browserWsWasClean = event.wasClean ? "yes" : "no";
           renderBrowserAudioDiagnostics();
         };
         browserAudioWs.onmessage = async (event) => {
@@ -2343,9 +2616,11 @@
 
         browserMicStream = await navigator.mediaDevices.getUserMedia({
           audio: {
+            channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            voiceActivityDetection: true,
           },
         });
         browserMicPermissionState = "granted";
@@ -3290,11 +3565,18 @@
       function renderExcelLeadPreview() {
         excelLeadPreview.innerHTML = "";
         importedExcelLeads.forEach((lead, index) => {
+          const contactDetails = lead.contact_details && typeof lead.contact_details === "object" ? lead.contact_details : {};
+          const extraBits = [
+            contactDetails.loan_id || contactDetails.external_loan_id || "",
+            contactDetails.nbfc_name || contactDetails.lender || "",
+            contactDetails.due_amount || contactDetails.total_payable_amount || "",
+          ].filter(Boolean);
           const item = document.createElement("div");
           item.className = "lead-preview-item";
           item.innerHTML = `
             <div>${lead.customer_name || `Lead ${index + 1}`}</div>
             <div>${lead.to_number || "-"}</div>
+            <div class="muted" style="font-size: 12px; line-height: 1.35;">${extraBits.join(" • ") || "No extra account details found."}</div>
             <button type="button" class="ghost" data-lead-index="${index}">Use</button>
           `;
           item.querySelector("button").addEventListener("click", () => {
@@ -3377,7 +3659,7 @@
         const sessionActive = ["starting", "listening", "speaking", "running", "processing"].includes(normalizedStatus);
         startBtn.disabled = sessionActive;
         callBtn.disabled = sessionActive;
-        stopBtn.disabled = !sessionActive;
+        stopBtn.disabled = false;
       }
 
       async function pollState() {
@@ -3523,7 +3805,18 @@
 
           const meta = document.createElement("div");
           meta.className = "recording-meta";
+          const coverage = String(item.recording_coverage || "").trim();
+          const coverageLabel = coverage === "piopiy_ai_leg"
+            ? "Piopiy AI leg"
+            : coverage === "piopiy_caller_leg"
+              ? "Piopiy caller leg"
+              : coverage === "full_conversation"
+                ? "Full"
+                : coverage === "single_leg_unknown"
+                  ? "Single leg"
+                  : "";
           [
+            coverageLabel ? `Coverage: ${coverageLabel}` : "",
             `Provider: ${item.provider || "-"}`,
             `Started: ${formatRecordingDateTime(item.started_at)}`,
             `Ended: ${formatRecordingDateTime(item.ended_at)}`,
@@ -3533,6 +3826,9 @@
           ].forEach((text) => {
             if (!text) return;
             const badge = document.createElement("span");
+            if (text.startsWith("Coverage: ")) {
+              badge.className = `coverage ${coverage || "single_leg_unknown"}`;
+            }
             badge.textContent = text;
             meta.appendChild(badge);
           });
@@ -3562,6 +3858,18 @@
             pending.textContent = item.recording_pending_message;
             card.appendChild(pending);
           }
+
+          const transcribeBtn = document.createElement("button");
+          transcribeBtn.type = "button";
+          transcribeBtn.className = "secondary";
+          transcribeBtn.textContent = "Transcribe";
+          transcribeBtn.addEventListener("click", () => {
+            void transcribeRecording(item, transcribeBtn);
+          });
+          const actionWrap = document.createElement("div");
+          actionWrap.className = "recording-card-action";
+          actionWrap.appendChild(transcribeBtn);
+          top.appendChild(actionWrap);
 
           const pathLine = document.createElement("div");
           pathLine.className = "helper";
@@ -3713,6 +4021,300 @@
         renderRecordingsPage();
       });
 
+      function openTranscriptModal(item) {
+        activeTranscriptSession = item || null;
+        activeTranscriptCsvUrl = "";
+        transcriptModalTitle.textContent = item?.lead_name ? `${item.lead_name} Transcript` : "Transcript";
+        transcriptModalMeta.textContent = [
+          item?.project_name || item?.project_id || "No project",
+          item?.session_id || "-",
+          item?.started_at ? `Started ${formatRecordingDateTime(item.started_at)}` : "",
+        ].filter(Boolean).join(" · ");
+        transcriptModalStatus.textContent = "";
+        transcriptModalBody.textContent = "Choose a recording and click Transcribe.";
+        transcriptModalRetryBtn.disabled = true;
+        transcriptModalCsvBtn.disabled = true;
+        transcriptModal.classList.add("open");
+        transcriptModal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeTranscriptModal() {
+        transcriptModal.classList.remove("open");
+        transcriptModal.setAttribute("aria-hidden", "true");
+        activeTranscriptSession = null;
+        activeTranscriptRecording = null;
+        activeTranscriptCsvUrl = "";
+      }
+
+      function renderTranscriptData(data, sessionId) {
+        const transcriptText = String(data?.transcript_text || "").trim();
+        const summaryText = String(data?.summary || "").trim();
+        const recordingSources = Array.isArray(data?.recording_sources) ? data.recording_sources : [];
+        activeTranscriptCsvUrl = String(data?.csv_url || activeTranscriptCsvUrl || "").trim();
+        const recordingCoverage = String(data?.recording_coverage || "").trim();
+        const confidenceText = data?.transcription?.confidence !== null && data?.transcription?.confidence !== undefined
+          ? `${Math.round(Number(data.transcription.confidence) * 100)}%`
+          : "-";
+        const coverageLabel = recordingCoverage === "piopiy_ai_leg"
+          ? "Piopiy AI leg"
+          : recordingCoverage === "piopiy_caller_leg"
+            ? "Piopiy caller leg"
+            : recordingCoverage === "full_conversation"
+              ? "Full conversation"
+              : recordingCoverage === "single_leg_unknown"
+                ? "Single leg"
+                : "";
+        transcriptModalStatus.textContent = [
+          `Provider: ${data?.transcription?.provider || "-"}`,
+          `Confidence: ${confidenceText}`,
+          coverageLabel ? `Coverage: ${coverageLabel}` : "",
+        ].filter(Boolean).join(" · ");
+        transcriptModalMeta.textContent = [
+          activeTranscriptSession?.project_name || activeTranscriptSession?.project_id || "No project",
+          activeTranscriptSession?.session_id || sessionId,
+          data?.recording_name ? `Source: ${data.recording_name}` : "",
+        ].filter(Boolean).join(" · ");
+        transcriptModalBody.innerHTML = "";
+        const recordingNote = String(data?.recording_note || "").trim();
+        if (recordingCoverage === "full_conversation") {
+          const info = document.createElement("div");
+          info.className = "transcript-source-warning info";
+          info.textContent = "Full conversation recording available. The transcript can include both sides when the audio quality is good.";
+          transcriptModalBody.appendChild(info);
+        } else if (recordingCoverage === "piopiy_ai_leg") {
+          const warning = document.createElement("div");
+          warning.className = "transcript-source-warning";
+          warning.textContent = "Piopiy AI leg recording. The transcript model may still capture both sides depending on audio quality.";
+          transcriptModalBody.appendChild(warning);
+        } else if (recordingCoverage === "piopiy_caller_leg") {
+          const warning = document.createElement("div");
+          warning.className = "transcript-source-warning";
+          warning.textContent = "Piopiy caller leg recording. The transcript model may still capture both sides depending on audio quality.";
+          transcriptModalBody.appendChild(warning);
+        } else if (recordingNote) {
+          const warning = document.createElement("div");
+          warning.className = "transcript-source-warning";
+          warning.textContent = recordingNote;
+          transcriptModalBody.appendChild(warning);
+        }
+        const turns = Array.isArray(data?.speaker_turns) ? data.speaker_turns : [];
+        if (turns.length) {
+          const container = document.createElement("div");
+          container.className = "transcript-turns";
+          turns.forEach((turn) => {
+            const block = document.createElement("div");
+            block.className = "transcript-turn";
+            const role = String(turn?.speaker || turn?.speaker_role || turn?.label || "").trim().toLowerCase();
+            const timestamp = String(turn?.timestamp || "").trim();
+            const label = document.createElement("div");
+            label.className = `transcript-turn-label ${role === "user" ? "user" : "ai"}`;
+            label.textContent = role === "user" ? "User" : role === "ai" ? "AI" : String(turn?.speaker_label || "Speaker");
+            const text = document.createElement("div");
+            text.className = "transcript-turn-text";
+            text.textContent = String(turn?.text || "").trim();
+            block.appendChild(label);
+            block.appendChild(text);
+            if (timestamp) {
+              const time = document.createElement("div");
+              time.className = "transcript-turn-time";
+              time.textContent = timestamp;
+              block.appendChild(time);
+            }
+            if (turn?.source && String(turn.source).trim()) {
+              const source = document.createElement("div");
+              source.className = "transcript-source-note";
+              source.textContent = String(turn.source);
+              block.appendChild(source);
+            }
+            container.appendChild(block);
+          });
+          transcriptModalBody.appendChild(container);
+        } else {
+          const fallback = document.createElement("div");
+          fallback.className = "transcript-turn";
+          const label = document.createElement("div");
+          label.className = "transcript-turn-label ai";
+          label.textContent = "Transcript";
+          const text = document.createElement("div");
+          text.className = "transcript-turn-text";
+          text.textContent = transcriptText || "No transcript text was returned for this recording.";
+          fallback.appendChild(label);
+          fallback.appendChild(text);
+          transcriptModalBody.appendChild(fallback);
+        }
+        if (summaryText) {
+          const summary = document.createElement("div");
+          summary.className = "transcript-turn";
+          const label = document.createElement("div");
+          label.className = "transcript-turn-label ai";
+          label.textContent = "Summary";
+          const text = document.createElement("div");
+          text.className = "transcript-turn-text";
+          text.textContent = summaryText;
+          summary.appendChild(label);
+          summary.appendChild(text);
+          transcriptModalBody.appendChild(summary);
+        }
+        transcriptModalRetryBtn.disabled = false;
+        transcriptModalCsvBtn.disabled = !activeTranscriptCsvUrl;
+      }
+
+      function restoreTranscriptButton(triggerButton) {
+        if (triggerButton) {
+          triggerButton.disabled = false;
+          triggerButton.textContent = "Transcribe";
+        }
+      }
+
+      function sleep(ms) {
+        return new Promise((resolve) => window.setTimeout(resolve, ms));
+      }
+
+      async function fetchTranscriptData(clientId, sessionId) {
+        const response = await fetch(
+          `/api/recordings/${encodeURIComponent(clientId)}/${encodeURIComponent(sessionId)}/transcript`,
+          { method: "POST" }
+        );
+        const data = await response.json().catch(() => ({}));
+        return { response, data };
+      }
+
+      async function pollTranscriptUntilReady(item, triggerButton, delayMs = 4000, maxAttempts = 45) {
+        const clientId = String(item?.client_id || "").trim();
+        const sessionId = String(item?.session_id || "").trim();
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          await sleep(delayMs);
+          try {
+            const { response, data } = await fetchTranscriptData(clientId, sessionId);
+            if (response.ok && String(data?.status || "").trim().toLowerCase() === "processing") {
+              transcriptModalStatus.textContent = "Transcription is still running. Checking again shortly...";
+              transcriptModalBody.textContent = "This call is longer than the live request window, so we are waiting for the background transcript job.";
+              restoreTranscriptButton(triggerButton);
+              continue;
+            }
+            if (response.ok) {
+              renderTranscriptData(data, sessionId);
+              restoreTranscriptButton(triggerButton);
+              return;
+            }
+            const message = data?.detail || data?.message || "Failed to transcribe this recording.";
+            transcriptModalStatus.textContent = message;
+            transcriptModalBody.textContent = message;
+            restoreTranscriptButton(triggerButton);
+            return;
+          } catch (error) {
+            const message = attempt < maxAttempts - 1
+              ? "Temporary network issue while waiting for the transcript. Retrying..."
+              : (error instanceof Error ? error.message : "Failed to transcribe this recording.");
+            transcriptModalStatus.textContent = message;
+            transcriptModalBody.textContent = attempt < maxAttempts - 1
+              ? "The transcript job is still running. We are retrying the saved recording request."
+              : message;
+            if (attempt < maxAttempts - 1) {
+              continue;
+            }
+            restoreTranscriptButton(triggerButton);
+            return;
+          }
+        }
+        transcriptModalStatus.textContent = "Transcription is still running.";
+        transcriptModalBody.textContent = "The transcript is taking longer than expected. Try again in a minute.";
+        restoreTranscriptButton(triggerButton);
+      }
+
+      async function loadTranscriptForRecording(item, triggerButton) {
+        const clientId = String(item?.client_id || "").trim();
+        const sessionId = String(item?.session_id || "").trim();
+        if (!clientId || !sessionId) {
+          transcriptModalStatus.textContent = "Missing recording identity.";
+          transcriptModalBody.textContent = "This recording cannot be transcribed because the client or session id is missing.";
+          return;
+        }
+        openTranscriptModal(item);
+        activeTranscriptRecording = item;
+        transcriptModalStatus.textContent = "Transcribing saved recording...";
+        transcriptModalBody.textContent = "Working on the transcript now. This uses the saved recording only.";
+        transcriptModalRetryBtn.disabled = true;
+        if (triggerButton) {
+          triggerButton.disabled = true;
+          triggerButton.textContent = "Working...";
+        }
+        let keepWaiting = false;
+        let lastError = null;
+        try {
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+              const { response, data } = await fetchTranscriptData(clientId, sessionId);
+              const status = String(data?.status || "").trim().toLowerCase();
+              if (response.ok && status === "processing") {
+                transcriptModalStatus.textContent = "Transcription is running in the background...";
+                transcriptModalBody.textContent = "This call is longer than the live request window, so the transcript is being prepared now.";
+                transcriptModalRetryBtn.disabled = true;
+                keepWaiting = true;
+                void pollTranscriptUntilReady(item, triggerButton);
+                return;
+              }
+              if (!response.ok) {
+                const message = data?.detail || data?.message || "Failed to transcribe this recording.";
+                transcriptModalStatus.textContent = message;
+                transcriptModalBody.textContent = message;
+                return;
+              }
+              renderTranscriptData(data, sessionId);
+              return;
+            } catch (error) {
+              lastError = error;
+              if (attempt < 2) {
+                transcriptModalStatus.textContent = "Temporary network issue. Retrying transcript request...";
+                transcriptModalBody.textContent = "We are trying the saved recording again before giving up.";
+                await sleep(1200);
+                continue;
+              }
+              throw error;
+            }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to transcribe this recording.";
+          transcriptModalStatus.textContent = message;
+          transcriptModalBody.textContent = lastError instanceof Error && lastError.message === "Failed to fetch"
+            ? "The transcript service had a temporary connection problem. Please try again in a moment."
+            : message;
+        } finally {
+          if (!keepWaiting) {
+            restoreTranscriptButton(triggerButton);
+          }
+        }
+      }
+
+      async function transcribeRecording(item, triggerButton) {
+        await loadTranscriptForRecording(item, triggerButton);
+      }
+
+      transcriptModalCloseBtn?.addEventListener("click", closeTranscriptModal);
+      transcriptModalDismissBtn?.addEventListener("click", closeTranscriptModal);
+      transcriptModalCsvBtn?.addEventListener("click", () => {
+        if (!activeTranscriptCsvUrl) {
+          return;
+        }
+        window.open(activeTranscriptCsvUrl, "_blank", "noopener,noreferrer");
+      });
+      transcriptModalRetryBtn?.addEventListener("click", () => {
+        if (!activeTranscriptSession) {
+          return;
+        }
+        void loadTranscriptForRecording(activeTranscriptSession, null);
+      });
+      transcriptModal?.addEventListener("click", (event) => {
+        if (event.target === transcriptModal) {
+          closeTranscriptModal();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && transcriptModal?.classList.contains("open")) {
+          closeTranscriptModal();
+        }
+      });
+
       async function startDemoSession() {
         errorText.textContent = "";
         try {
@@ -3781,6 +4383,7 @@
           callStatus.textContent = "Enter a mobile number in E.164 format, for example +15551234567.";
           return;
         }
+        activeBatchCampaignId = null;
         callStatus.textContent = "Dialing mobile phone...";
         const response = await fetch("/api/telephony/call", {
           method: "POST",
@@ -3824,8 +4427,9 @@
             leads: importedExcelLeads.map((lead, index) => ({
               customer_name: lead.customer_name || `Lead ${index + 1}`,
               to_number: lead.to_number || "",
+              contact_details: lead.contact_details || {},
             })),
-            lead_source: "excel",
+            lead_source: "excel_batch",
             max_concurrent_calls: concurrency,
           }),
         });
@@ -3836,10 +4440,78 @@
           errorText.textContent = msg;
           return;
         }
+        if (data.campaign_id) {
+          activeBatchCampaignId = data.campaign_id;
+          callStatus.textContent = `Sequential campaign started. 0/${data.requested_count} calls placed.`;
+          pollBatchCampaign(data.campaign_id);
+          return;
+        }
+        const failedRows = Array.isArray(data.results)
+          ? data.results.filter((item) => item && item.status === "failed")
+          : [];
+        const firstErrors = failedRows.slice(0, 3).map((item) => {
+          const row = Number.isFinite(Number(item.index)) ? Number(item.index) + 1 : "?";
+          return `Row ${row}: ${item.error || "Unknown error"}`;
+        });
         callStatus.textContent = `Batch queued. Success: ${data.success_count}/${data.requested_count}. Failed: ${data.failed_count}. Concurrency: ${data.concurrency_used}.`;
+        if (firstErrors.length) {
+          errorText.textContent = firstErrors.join(" | ");
+        }
+      }
+
+      async function pollBatchCampaign(campaignId) {
+        try {
+          const response = await fetch(`/api/telephony/call-batch/${encodeURIComponent(campaignId)}`);
+          const data = await response.json().catch(() => ({ detail: "Failed to load campaign status." }));
+          if (!response.ok) {
+            errorText.textContent = data.detail || "Failed to load campaign status.";
+            return;
+          }
+          const placed = Number(data.success_count || 0) + Number(data.failed_count || 0);
+          const current = data.current_lead
+            ? ` Current: ${data.current_lead.customer_name || "Lead"} ${data.current_lead.to_number || ""}.`
+            : "";
+          callStatus.textContent = `Sequential campaign ${data.status}. Placed ${placed}/${data.requested_count}. Success: ${data.success_count}. Failed: ${data.failed_count}.${current}`;
+          const failedRows = Array.isArray(data.results)
+            ? data.results.filter((item) => item && item.status === "failed")
+            : [];
+          if (failedRows.length) {
+            errorText.textContent = failedRows.slice(0, 3).map((item) => {
+              const row = Number.isFinite(Number(item.index)) ? Number(item.index) + 1 : "?";
+              return `Row ${row}: ${item.error || "Unknown error"}`;
+            }).join(" | ");
+          }
+          const normalizedStatus = String(data.status || "").toLowerCase();
+          if (["completed", "failed", "cancelled", "canceled"].includes(normalizedStatus)) {
+            activeBatchCampaignId = null;
+          }
+          if (!["completed", "failed", "cancelled", "canceled"].includes(normalizedStatus)) {
+            setTimeout(() => pollBatchCampaign(campaignId), 5000);
+          }
+        } catch (error) {
+          errorText.textContent = error instanceof Error ? error.message : "Failed to poll campaign.";
+        }
       }
 
       document.getElementById("stopBtn").addEventListener("click", async () => {
+        const cancelResponse = await fetch("/api/telephony/call-batch/cancel-active", { method: "POST" });
+        const cancelData = await cancelResponse.json().catch(() => ({ detail: "Failed to stop campaign." }));
+        if (!cancelResponse.ok) {
+          errorText.textContent = cancelData.detail || "Failed to stop campaign.";
+          return;
+        }
+        if (cancelData.cancelled_count > 0) {
+          callStatus.textContent = "Stopping outbound campaign and cancelling queued calls...";
+          const failedHangup = Array.isArray(cancelData.results)
+            ? cancelData.results.find((item) => item?.hangup_result && item.hangup_result.ok === false)
+            : null;
+          if (failedHangup) {
+            errorText.textContent = `Campaign stopped. Active call hangup attempt: ${failedHangup.hangup_result.error || "not confirmed"}.`;
+          }
+          if (activeBatchCampaignId) {
+            pollBatchCampaign(activeBatchCampaignId);
+          }
+        }
         if (remoteLocalMicModeBlocked()) {
           await stopBrowserAudioTransport();
         }

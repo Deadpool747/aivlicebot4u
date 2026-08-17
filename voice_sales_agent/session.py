@@ -46,6 +46,8 @@ INTERRUPTION_GRACE_SECONDS = 0.3
 MIN_BARGE_IN_CHARACTERS = 2
 BARGE_IN_DEBOUNCE_SECONDS = 0.025
 NATIVE_PROMPT_PREROLL_SECONDS = 0.025
+NATIVE_SCRIPT_SEGMENT_TIMEOUT_SECONDS = 14.0
+NATIVE_SCRIPT_SEGMENT_MAX_CHARS = 95
 AUTO_STOP_GRACE_SECONDS = 0.2
 SHORT_RESPONSE_COMMIT_SECONDS = 0.22
 EXOTEL_INTERRUPTION_GRACE_SECONDS = 0.16
@@ -101,11 +103,6 @@ class VoiceSalesSession:
         self.client = load_client(client_id, project_id=project_id)
         self.project = self.client.active_project
         self.customer_name = (customer_name or "Salman Shaikh").strip() or "Salman Shaikh"
-        self.contact_details = {
-            str(key): str(value).strip()
-            for key, value in (contact_details or {}).items()
-            if str(value or "").strip()
-        }
         self.opening_language = (
             self._guest_demo_opening_language()
             or self.client.config.default_opening_language
@@ -119,6 +116,13 @@ class VoiceSalesSession:
         self.call_outcome_store = SqliteCallOutcomeStore(settings.call_outcomes_db_path)
         self.audio = audio or LocalAudioIO()
         project_runtime = self.project.runtime if self.project is not None else None
+        telephony_contact_details = self._extract_contact_details_from_telephony_context(telephony_context)
+        provided_contact_details = {
+            str(key): str(value).strip()
+            for key, value in (contact_details or {}).items()
+            if str(value or "").strip()
+        }
+        self.contact_details = {**telephony_contact_details, **provided_contact_details}
         runtime_api_key = (
             (project_runtime.gemini_api_key if project_runtime else None)
             or (os.getenv(project_runtime.gemini_api_key_env or "") if project_runtime and project_runtime.gemini_api_key_env else None)
@@ -199,6 +203,7 @@ class VoiceSalesSession:
         self._last_user_intents: tuple[str, ...] = ()
         self._last_user_audio_activity_at = 0.0
         self._last_low_confidence_reprompt_at = 0.0
+        self._low_confidence_reprompt_count = 0
         self._awaiting_binary_confirmation = False
         self._binary_confirmation_prompted_at = 0.0
         self._binary_confirmation_resolved = False
@@ -362,7 +367,11 @@ class VoiceSalesSession:
         async for chunk in self.audio.mic_chunks():
             if not self._running:
                 return
-            if self.audio.is_playing() and self.audio.should_drop_input_while_playing():
+            if self._is_browser_session() and (
+                not self._opening_delivered or self._pending_native_line is not None or self._native_line_in_flight
+            ):
+                continue
+            if self.audio.is_playing() and (self.audio.should_drop_input_while_playing() or self._is_yash_enterprise_session()):
                 continue
             remaining_cooldown = self._agent_audio_deadline - monotonic()
             if remaining_cooldown > 0:
@@ -399,7 +408,12 @@ class VoiceSalesSession:
     async def _handle_live_event(self, event: LiveEvent) -> None:
         if event.kind == "audio" and event.audio:
             if self._deterministic_followup_task is not None and not self._deterministic_followup_task.done():
-                self._deterministic_followup_task.cancel()
+                if self._is_oswell_sales_session():
+                    if self._pending_native_line is None and not self._native_line_in_flight:
+                        logger.info("Dropping unsolicited Gemini audio while Oswell scripted follow-up is pending.")
+                        return
+                else:
+                    self._deterministic_followup_task.cancel()
             self.cost_tracker.record_live_output_audio(event.audio)
             self._capture_agent_audio_stats(event.audio, sample_rate=24_000)
             self._agent_audio_deadline = monotonic() + AGENT_PLAYBACK_COOLDOWN_SECONDS
@@ -411,6 +425,9 @@ class VoiceSalesSession:
             return
 
         if event.kind == "interrupted":
+            if self._is_yash_enterprise_session():
+                logger.debug("Ignoring interruption event for yash_enterprise to preserve full agent sentences.")
+                return
             if not self._should_flush_for_barge_in():
                 logger.debug("Ignoring interruption event without recent user speech.")
                 return
@@ -441,7 +458,12 @@ class VoiceSalesSession:
 
         if event.kind == "agent_text" and event.text:
             if self._deterministic_followup_task is not None and not self._deterministic_followup_task.done():
-                self._deterministic_followup_task.cancel()
+                if self._is_oswell_sales_session():
+                    if self._pending_native_line is None and not self._native_line_in_flight:
+                        logger.info("Dropping unsolicited Gemini text while Oswell scripted follow-up is pending.")
+                        return
+                else:
+                    self._deterministic_followup_task.cancel()
             self._mark_binary_confirmation_state(event.text)
             normalized_candidate = " ".join(event.text.split()).strip()
             if self._pending_native_line:
@@ -1569,6 +1591,7 @@ class VoiceSalesSession:
                 if not self._should_reprompt_after_low_confidence_speech():
                     continue
                 self._last_low_confidence_reprompt_at = monotonic()
+                self._low_confidence_reprompt_count += 1
                 logger.debug("Re-prompting after low-confidence telephony speech with no usable transcript.")
                 await self._deliver_native_agent_line(self._render_low_confidence_reprompt())
         except asyncio.CancelledError:
@@ -1578,7 +1601,7 @@ class VoiceSalesSession:
         try:
             while self._running:
                 await asyncio.sleep(0.1)
-                if not self._should_send_guest_silence_followup():
+                if not self._should_send_browser_silence_followup():
                     continue
                 self._silence_follow_up_sent = True
                 await self._deliver_native_agent_line(self._render_silence_follow_up_text())
@@ -1619,16 +1642,25 @@ class VoiceSalesSession:
                     else DEFAULT_DETERMINISTIC_FOLLOWUP_DELAY_SECONDS
                 )
             )
+            if self._is_yash_enterprise_session():
+                delay_seconds = max(min(delay_seconds, 0.35), 0.18)
             await asyncio.sleep(delay_seconds)
             if not self._running:
                 return
             if self.audio.is_playing():
-                return
+                if self._is_oswell_sales_session():
+                    await self.audio.wait_for_playback_idle()
+                else:
+                    return
             if self._pending_native_line is not None or self._native_line_in_flight:
-                return
+                if self._is_oswell_sales_session():
+                    with contextlib.suppress(asyncio.TimeoutError):
+                        await asyncio.wait_for(self._native_line_completed.wait(), timeout=8.0)
+                else:
+                    return
             if self._turn_buffers.get("agent") or self._partial_turns.get("agent"):
-                if self.client.config.conversation_mode == "appointment_booking":
-                    # Prefer deterministic next-step prompt for low-latency booking turns.
+                if self.client.config.conversation_mode == "appointment_booking" or self._is_oswell_sales_session():
+                    # Prefer scripted next-step prompts over stale model buffers for strict flows.
                     self._turn_buffers.pop("agent", None)
                     self._partial_turns.pop("agent", None)
                 else:
@@ -1689,6 +1721,8 @@ class VoiceSalesSession:
         if not self._is_fast_turn_mode():
             return None
         normalized = user_text.lower().strip(" .,!?:;")
+        if self._is_oswell_sales_session():
+            return self._plan_oswell_sales_followup(user_text, intents)
         # For appointment booking, allow deterministic stage progression even on longer replies.
         if (
             self.client.config.conversation_mode != "appointment_booking"
@@ -1873,6 +1907,161 @@ class VoiceSalesSession:
                 return "Understood. We have noted your enquiry. Thank you."
             return None
         return None
+
+    def _plan_oswell_sales_followup(self, user_text: str, intents: tuple[str, ...]) -> str | None:
+        normalized = " ".join((user_text or "").lower().split()).strip(" .,!?:;")
+        if self._is_oswell_background_or_noise_turn(normalized):
+            return self._render_low_confidence_reprompt()
+        short_or_ack = (
+            "short_reply" in intents
+            or "affirm" in intents
+            or "greeting" in intents
+            or normalized in {"yes", "yeah", "yep", "ok", "okay", "sure", "go ahead", "speaking"}
+        )
+        meaningful_reply = bool(normalized) and "deny" not in intents
+
+        if self._scripted_flow_stage == "none":
+            self._scripted_flow_stage = "identity_confirmation"
+
+        if self._scripted_flow_stage == "identity_confirmation":
+            if "deny" in intents:
+                self._scripted_flow_stage = "identity_redirect"
+                return f"No problem. Can I talk to {self.customer_name}?"
+            if short_or_ack or meaningful_reply:
+                self._scripted_flow_stage = "permission_to_continue"
+                return (
+                    "Thank you. This is Anna from Oswell Technologies. "
+                    "I know this is an unexpected call, so I will keep it brief. "
+                    "Can I take 30 seconds to explain why I reached out?"
+                )
+            return None
+
+        if self._scripted_flow_stage == "identity_redirect":
+            if "deny" in intents:
+                self._scripted_flow_stage = "closing_confirmation"
+                return "No problem. I will not take more of your time. Thank you."
+            if short_or_ack or meaningful_reply:
+                self._scripted_flow_stage = "permission_to_continue"
+                return (
+                    "Thank you. This is Anna from Oswell Technologies. "
+                    "I know this is an unexpected call, so I will keep it brief. "
+                    "Can I take 30 seconds to explain why I reached out?"
+                )
+            return None
+
+        if self._scripted_flow_stage == "permission_to_continue":
+            if "deny" in intents:
+                self._scripted_flow_stage = "callback_preference"
+                return "No problem. May I send you a short overview and a meeting link instead?"
+            if short_or_ack or meaningful_reply:
+                self._scripted_flow_stage = "value_statement"
+                return (
+                    "We help healthcare organizations reduce manual work and improve operations "
+                    "through practical AI, automation, and software improvements."
+                )
+            return None
+
+        if self._scripted_flow_stage == "value_statement":
+            if "deny" in intents:
+                self._scripted_flow_stage = "callback_preference"
+                return "No problem. May I send you a short overview and a meeting link instead?"
+            if short_or_ack or meaningful_reply:
+                self._scripted_flow_stage = "assessment_offer"
+                return "We are currently offering a complimentary 48-hour Healthcare AI and Digital Transformation Assessment."
+            return None
+
+        if self._scripted_flow_stage == "assessment_offer":
+            if "deny" in intents:
+                self._scripted_flow_stage = "callback_preference"
+                return "No problem. May I send you a short overview and a meeting link instead?"
+            if short_or_ack or meaningful_reply:
+                self._scripted_flow_stage = "discovery_permission"
+                return "Would it be alright if I ask one quick question to see whether it may be relevant?"
+            return None
+
+        if self._scripted_flow_stage == "discovery_permission":
+            if "deny" in intents:
+                self._scripted_flow_stage = "callback_preference"
+                return "No problem. May I send you a short overview and a meeting link instead?"
+            if short_or_ack or meaningful_reply:
+                self._scripted_flow_stage = "qualify_need"
+                return "Are you currently exploring any AI, automation, or digital transformation initiatives?"
+            return None
+
+        if self._scripted_flow_stage == "qualify_need":
+            if "deny" in intents:
+                self._scripted_flow_stage = "manual_process_question"
+                return "Is there any manual or repetitive process your team would like to reduce?"
+            if meaningful_reply or short_or_ack:
+                self._scripted_flow_stage = "meeting_request"
+                return "That is useful context. Would you be open to a 20-minute strategy meeting this week?"
+            return None
+
+        if self._scripted_flow_stage == "manual_process_question":
+            if meaningful_reply or short_or_ack:
+                self._scripted_flow_stage = "meeting_request"
+                return "That sounds like a relevant area for the assessment. Would you be open to a 20-minute strategy meeting this week?"
+            return None
+
+        if self._scripted_flow_stage == "meeting_request":
+            if "deny" in intents:
+                self._scripted_flow_stage = "callback_preference"
+                return "No problem. May I send you a short overview and a meeting link instead?"
+            if short_or_ack or meaningful_reply:
+                self._scripted_flow_stage = "schedule_window"
+                return "Would an earlier or later part of the week suit you better?"
+            return None
+
+        if self._scripted_flow_stage == "schedule_window":
+            if "deny" in intents:
+                self._scripted_flow_stage = "callback_preference"
+                return "No problem. May I send you a short overview and a meeting link instead?"
+            if meaningful_reply or short_or_ack:
+                self._scripted_flow_stage = "schedule_day"
+                return "Which day works best?"
+            return None
+
+        if self._scripted_flow_stage == "schedule_day":
+            if meaningful_reply or short_or_ack:
+                self._scripted_flow_stage = "schedule_time"
+                return "What time would be convenient?"
+            return None
+
+        if self._scripted_flow_stage == "schedule_time":
+            if meaningful_reply or short_or_ack:
+                self._scripted_flow_stage = "collect_email"
+                return "Which email address should I send the invitation to?"
+            return None
+
+        if self._scripted_flow_stage == "collect_email":
+            if meaningful_reply or short_or_ack:
+                self._scripted_flow_stage = "closing_confirmation"
+                return "Thank you. I will send the calendar invitation and details shortly."
+            return None
+
+        if self._scripted_flow_stage == "callback_preference":
+            if "deny" in intents:
+                self._scripted_flow_stage = "closing_confirmation"
+                return "No problem. I will not take more of your time. Thank you."
+            if meaningful_reply or short_or_ack:
+                self._scripted_flow_stage = "closing_confirmation"
+                return "Thank you. I will send a short overview and meeting link."
+            return None
+
+        return None
+
+    def _is_oswell_background_or_noise_turn(self, normalized: str) -> bool:
+        if not normalized:
+            return True
+        if normalized in {"<noise>", ".", ",", "?", "!", "uh", "um", "hmm"}:
+            return True
+        if "<noise>" in normalized:
+            return True
+        ascii_letters = sum(1 for char in normalized if char.isascii() and char.isalpha())
+        non_ascii_letters = sum(1 for char in normalized if (not char.isascii()) and char.isalpha())
+        if non_ascii_letters > ascii_letters:
+            return True
+        return False
 
     def _looks_like_name_reply(self, user_text: str, intents: tuple[str, ...]) -> bool:
         if "provided_name" in intents:
@@ -2109,16 +2298,19 @@ class VoiceSalesSession:
 
     def _short_response_commit_seconds(self) -> float:
         if self._is_fast_turn_mode():
-            return min(
+            delay = min(
                 self.settings.exotel_short_response_commit_seconds
                 if self._is_exotel_session()
                 else SHORT_RESPONSE_COMMIT_SECONDS,
                 FAST_TURN_SHORT_RESPONSE_COMMIT_SECONDS,
             )
+            return min(delay, 0.12) if self._is_yash_enterprise_session() else delay
         if self._is_twilio_session():
             return min(SHORT_RESPONSE_COMMIT_SECONDS, TWILIO_SHORT_RESPONSE_COMMIT_SECONDS)
         if self._is_exotel_session():
             return self.settings.exotel_short_response_commit_seconds
+        if self._is_yash_enterprise_session():
+            return 0.12
         return SHORT_RESPONSE_COMMIT_SECONDS
 
     def _interruption_grace_seconds(self) -> float:
@@ -2167,7 +2359,11 @@ class VoiceSalesSession:
             return False
         if self._partial_turns.get("user") or self._turn_buffers.get("user"):
             return False
+        if self._is_browser_session() and self._is_sales_discovery_session():
+            return False
         if not self._opening_delivered or not self._waiting_for_user_after_agent:
+            return False
+        if self._is_sales_discovery_session() and self._low_confidence_reprompt_count >= 1:
             return False
         if self._last_user_audio_activity_at <= self._last_agent_turn_at:
             return False
@@ -2178,6 +2374,8 @@ class VoiceSalesSession:
 
     def _should_infer_binary_confirmation_from_audio(self) -> bool:
         if not self._running or not self._awaiting_binary_confirmation or self._binary_confirmation_resolved:
+            return False
+        if self._is_sales_discovery_session():
             return False
         if self.audio.is_playing():
             return False
@@ -2197,7 +2395,8 @@ class VoiceSalesSession:
     def _partial_commit_silence_seconds(self, pending: str) -> float:
         if self._is_browser_session():
             if self._is_short_response_candidate(pending):
-                return min(self.settings.exotel_short_reply_partial_commit_silence_seconds, 0.18)
+                delay = min(self.settings.exotel_short_reply_partial_commit_silence_seconds, 0.18)
+                return min(delay, 0.14) if self._is_yash_enterprise_session() else delay
             return min(self.settings.exotel_partial_commit_silence_seconds, 0.35)
         if self._is_twilio_session():
             if self._is_short_response_candidate(pending):
@@ -2207,13 +2406,15 @@ class VoiceSalesSession:
             return EXOTEL_FIRST_REPLY_GREETING_HOLD_SECONDS
         if self._is_fast_turn_mode():
             if self._is_short_response_candidate(pending):
-                return min(
+                delay = min(
                     self.settings.exotel_short_reply_partial_commit_silence_seconds,
                     FAST_TURN_SHORT_REPLY_PARTIAL_COMMIT_SILENCE_SECONDS,
                 )
+                return min(delay, 0.14) if self._is_yash_enterprise_session() else delay
             return min(self.settings.exotel_partial_commit_silence_seconds, FAST_TURN_PARTIAL_COMMIT_SILENCE_SECONDS)
         if self._is_short_response_candidate(pending):
-            return self.settings.exotel_short_reply_partial_commit_silence_seconds
+            delay = self.settings.exotel_short_reply_partial_commit_silence_seconds
+            return min(delay, 0.14) if self._is_yash_enterprise_session() else delay
         return self.settings.exotel_partial_commit_silence_seconds
 
     def _normalize_user_commit_text(self, fragments: list[str]) -> str:
@@ -2232,6 +2433,8 @@ class VoiceSalesSession:
     def _is_fast_turn_mode(self) -> bool:
         if self._is_guest_demo_workspace():
             return False
+        if self._is_oswell_sales_session():
+            return True
         if self._is_piopiy_session():
             return True
         project_type = self.project.project_type if self.project is not None else "custom"
@@ -2240,6 +2443,20 @@ class VoiceSalesSession:
             "lead_qualification",
             "followup",
         }
+
+    def _is_sales_discovery_session(self) -> bool:
+        project_type = self.project.project_type if self.project is not None else "custom"
+        return self.client.config.conversation_mode == "sales_discovery" or project_type == "sales"
+
+    def _is_oswell_sales_session(self) -> bool:
+        client_id = str(self.client.config.client_id or "").strip().lower()
+        if client_id != "user_oswelltechnologies_co_f2238ea2":
+            return False
+        project_id = str(getattr(self.project, "project_id", "") or "").strip().lower()
+        return project_id in {"", "sales_agent_3"}
+
+    def _is_yash_enterprise_session(self) -> bool:
+        return str(self.client.config.client_id or "").strip().lower() == "yash_enterprise"
 
     def _is_guest_demo_workspace(self) -> bool:
         client_id = str(self.client.config.client_id or "")
@@ -3140,6 +3357,58 @@ class VoiceSalesSession:
                 f"[bold]Suggested next action:[/bold] {self.artifacts.summary.suggested_next_action}"
             )
 
+    def _native_script_segments(self, text: str) -> list[str]:
+        normalized = " ".join(str(text or "").split()).strip()
+        if len(normalized) <= NATIVE_SCRIPT_SEGMENT_MAX_CHARS:
+            return [normalized] if normalized else []
+        sentences = [
+            segment.strip()
+            for segment in re.split(r"(?<=[.!?])\s+", normalized)
+            if segment and segment.strip()
+        ]
+        segments: list[str] = []
+        for sentence in sentences or [normalized]:
+            if len(sentence) <= NATIVE_SCRIPT_SEGMENT_MAX_CHARS:
+                segments.append(sentence)
+                continue
+            parts = [
+                part.strip()
+                for part in re.split(r"(?<=,)\s+(?=(?:and|but|so|because|calling|this)\b)", sentence, flags=re.IGNORECASE)
+                if part and part.strip()
+            ]
+            if len(parts) <= 1:
+                segments.append(sentence)
+            else:
+                segments.extend(parts)
+        return segments
+
+    def _should_segment_native_script_line(self, text: str) -> bool:
+        return self._is_browser_session() and len(" ".join(str(text or "").split())) > NATIVE_SCRIPT_SEGMENT_MAX_CHARS
+
+    async def _send_native_script_segment(self, segment: str, *, timeout_seconds: float = NATIVE_SCRIPT_SEGMENT_TIMEOUT_SECONDS) -> None:
+        prompt = (
+            "Speak exactly the following short line and nothing else. "
+            f"Do not add any introduction or explanation: {segment}"
+        )
+        self._agent_audio_deadline = monotonic() + NATIVE_PROMPT_PREROLL_SECONDS
+        self._native_line_in_flight = True
+        self._native_line_completed.clear()
+        self._pending_native_line = segment
+        self._waiting_for_user_after_agent = False
+        await self.live.send_text_turn(prompt, role="user", turn_complete=True)
+        try:
+            await asyncio.wait_for(self._native_line_completed.wait(), timeout=timeout_seconds)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Timed out waiting for Gemini native script segment to complete session_id=%s segment=%r",
+                self.session_id,
+                segment[:160],
+            )
+            self._pending_native_line = None
+            self._native_line_in_flight = False
+            self._native_line_completed.set()
+        await self.audio.wait_for_playback_idle()
+
     async def _deliver_native_agent_line(self, text: str) -> None:
         self._set_status("speaking", "Starting native audio reply...")
         self._mark_binary_confirmation_state(text)
@@ -3153,16 +3422,31 @@ class VoiceSalesSession:
                 await self.audio._send_mark(mark_name)
             except Exception:
                 logger.debug("Failed to emit Exotel opening mark.", exc_info=True)
-        self._agent_audio_deadline = monotonic() + NATIVE_PROMPT_PREROLL_SECONDS
-        self._native_line_in_flight = True
-        self._native_line_completed.clear()
         self._waiting_for_user_after_agent = False
-        prompt = (
-            "Speak exactly the following line and nothing else. "
-            f"Do not add any introduction or explanation: {text}"
-        )
-        await self.live.send_text_turn(prompt, role="user", turn_complete=True)
-        self._pending_native_line = text
+        if self._is_yash_enterprise_session() and text == self._render_opening_text():
+            self._agent_audio_deadline = monotonic() + NATIVE_PROMPT_PREROLL_SECONDS
+            self._native_line_in_flight = True
+            self._native_line_completed.clear()
+            audio = await self.speech.synthesize(text, self.client.config.voice.voice_name)
+            self.cost_tracker.record_tts(text, audio)
+            self._capture_agent_audio_stats(audio, sample_rate=24_000)
+            self._pending_native_line = text
+            self.session_logger.append_turn(
+                self.artifacts,
+                TranscriptTurn(speaker="agent", text=text, turn_id=self._turn_index),
+            )
+            self._opening_delivered = True
+            self.console.print(f"[bold green]Agent:[/bold green] {text}")
+            await self.audio.play(audio)
+            await self.audio.wait_for_playback_idle()
+            self._pending_native_line = None
+            self._native_line_in_flight = False
+            self._native_line_completed.set()
+            self._last_agent_turn_at = monotonic()
+            self._waiting_for_user_after_agent = True
+            await self._emit("turn", speaker="agent", text=text, turn_id=self._turn_index)
+            return
+
         self.session_logger.append_turn(
             self.artifacts,
             TranscriptTurn(speaker="agent", text=text, turn_id=self._turn_index),
@@ -3171,6 +3455,33 @@ class VoiceSalesSession:
             self._opening_delivered = True
         self.console.print(f"[bold green]Agent:[/bold green] {text}")
         await self._emit("turn", speaker="agent", text=text, turn_id=self._turn_index)
+        if self._is_browser_session():
+            if self._should_segment_native_script_line(text):
+                segments = self._native_script_segments(text)
+                logger.info(
+                    "Segmenting Gemini native scripted line session_id=%s segments=%s original_chars=%s",
+                    self.session_id,
+                    len(segments),
+                    len(text),
+                )
+                for segment in segments:
+                    await self._send_native_script_segment(segment)
+                self._last_agent_turn_at = monotonic()
+                self._waiting_for_user_after_agent = True
+                self._set_status("listening", "Ready for the next turn.")
+                return
+            await self._send_native_script_segment(text)
+            return
+
+        prompt = (
+            "Speak exactly the following line and nothing else. "
+            f"Do not add any introduction or explanation: {text}"
+        )
+        self._agent_audio_deadline = monotonic() + NATIVE_PROMPT_PREROLL_SECONDS
+        self._native_line_in_flight = True
+        self._native_line_completed.clear()
+        await self.live.send_text_turn(prompt, role="user", turn_complete=True)
+        self._pending_native_line = text
 
     def _record_telephony_timing_metrics(self) -> None:
         if not isinstance(self.telephony_context, dict):
@@ -3195,7 +3506,68 @@ class VoiceSalesSession:
                 continue
             self.artifacts.metrics[metric_key] = round((end - start) * 1000, 3)
 
+    @staticmethod
+    def _extract_contact_details_from_telephony_context(telephony_context: dict[str, Any] | None) -> dict[str, str]:
+        if not isinstance(telephony_context, dict):
+            return {}
+        excluded_exact = {
+            "provider",
+            "direction",
+            "call_direction",
+            "outreach_mode",
+            "selected_provider",
+            "client_id",
+            "project_id",
+            "project_name",
+            "customer_name",
+            "to_number",
+            "from_number",
+            "lead_source",
+            "call_status",
+            "call_requested_at_epoch",
+            "workspace_session_key",
+            "pending_id",
+            "session_id",
+            "call_sid",
+            "call_id",
+            "stream_id",
+            "provider_call_sid",
+            "stream_sid",
+            "initial_prompt_requested_at_epoch",
+            "consent_status",
+            "target_call_provider",
+            "meta_whatsapp_call_errors",
+            "meta_whatsapp_payload",
+            "meta_whatsapp_session_sdp_type",
+            "stream_started",
+        }
+        excluded_prefixes = (
+            "piopiy_",
+            "exotel_",
+            "meta_whatsapp_",
+            "twilio_",
+            "airtel_",
+            "browser_",
+        )
+        details: dict[str, str] = {}
+        for key, value in telephony_context.items():
+            field_name = str(key or "").strip()
+            if not field_name:
+                continue
+            lowered = field_name.lower()
+            if lowered in excluded_exact or any(lowered.startswith(prefix) for prefix in excluded_prefixes):
+                continue
+            if isinstance(value, (dict, list, tuple, set)):
+                continue
+            text = str(value or "").strip()
+            if not text:
+                continue
+            details[field_name] = text
+        return details
+
     def _should_flush_for_barge_in(self) -> bool:
+        if self._is_yash_enterprise_session():
+            return False
         now = monotonic()
         if (now - self._last_user_transcription_at) > self._interruption_grace_seconds():
             return False
@@ -3441,14 +3813,24 @@ class VoiceSalesSession:
         return f"Hello, this is {display_name}. Am I speaking with {self.customer_name}?"
 
     def _render_silence_follow_up_text(self) -> str:
+        if self.client.config.conversation_mode == "appointment_booking":
+            if self.current_language == "marathi":
+                return "हॅलो, माझा आवाज ऐकू येतोय का? प्रतिसाद नसेल तर मी कॉल डिस्कनेक्ट करते."
+            if self.current_language == "hindi":
+                return "हैलो, क्या मेरी आवाज़ आ रही है? जवाब नहीं मिला तो मैं कॉल डिस्कनेक्ट कर दूँगी."
+            return "Hello, can you hear me? If there is no response, I will disconnect the call."
+        if self._is_sales_discovery_session():
+            return "Hello, can you hear me? Should I disconnect the call?"
         if self.current_language == "marathi":
             return "हॅलो, तुम्ही आहात का? काही प्रश्न आहेत का?"
         if self.current_language == "hindi":
             return "हैलो, क्या आप वहाँ हैं? क्या आपके कोई सवाल हैं?"
         return "Hello, are you there? Do you have any questions?"
 
-    def _should_send_guest_silence_followup(self) -> bool:
-        if not self._running or not self._is_guest_demo_workspace():
+    def _should_send_browser_silence_followup(self) -> bool:
+        if not self._running or not self._is_browser_session():
+            return False
+        if not (self._is_guest_demo_workspace() or self._is_sales_discovery_session()):
             return False
         if not self._opening_delivered or not self._waiting_for_user_after_agent:
             return False
@@ -3462,9 +3844,13 @@ class VoiceSalesSession:
             return False
         if self._last_agent_turn_at <= 0.0:
             return False
+        if self._is_sales_discovery_session() and self._last_user_audio_activity_at > self._last_agent_turn_at:
+            return False
         return (monotonic() - self._last_agent_turn_at) >= GUEST_SILENCE_FOLLOW_UP_SECONDS
 
     def _render_low_confidence_reprompt(self) -> str:
+        if self._is_sales_discovery_session():
+            return "Sorry, I heard some background noise. Could you please repeat that?"
         if self.current_language == "marathi":
             return "माफ करा, आवाज नीट आला नाही. कृपया हो किंवा नाही सांगा."
         if self.current_language == "hindi":

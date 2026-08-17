@@ -1,0 +1,11 @@
+{
+  "fields": {
+    "identity_verified": "Have we confirmed we are speaking with the correct account holder?",
+    "current_financial_situation": "Is the customer facing hardship, temporary delay, or willingness to pay?",
+    "ability_to_pay": "What amount can the customer realistically arrange now or soon?",
+    "preferred_option": "Does the customer prefer full settlement or installments?",
+    "commitment_date": "What exact date can the customer commit to?",
+    "dispute_status": "Is the customer disputing the debt and requesting review?",
+    "contact_preference": "Has the customer asked to stop calls or change follow-up preference?"
+  }
+}

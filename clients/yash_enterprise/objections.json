@@ -1,0 +1,24 @@
+{
+  "common": [
+    {
+      "objection": "I don't have money.",
+      "response": "Acknowledge the hardship, ask what small amount is possible, and explore a realistic date for the first payment."
+    },
+    {
+      "objection": "I thought the debt was cancelled.",
+      "response": "Clarify that written off for accounting is not the same as cancelled, unless the company record explicitly says otherwise."
+    },
+    {
+      "objection": "I'll pay later.",
+      "response": "Ask for a specific amount and date instead of accepting an open-ended promise."
+    },
+    {
+      "objection": "Stop calling me.",
+      "response": "Acknowledge the request respectfully and follow the approved do-not-call process."
+    },
+    {
+      "objection": "I dispute this debt.",
+      "response": "Pause repayment negotiation, acknowledge the dispute, and escalate for review."
+    }
+  ]
+}

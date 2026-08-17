@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from array import array
 import base64
 import contextlib
 import csv
+import ipaddress
 import hashlib
 import hmac
 from http.cookies import SimpleCookie
@@ -25,11 +27,11 @@ from typing import Any
 import urllib.parse
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from openpyxl import Workbook, load_workbook
 try:
     from aiortc import RTCPeerConnection, RTCSessionDescription
@@ -50,6 +52,13 @@ from .clients import (
 from .config import AppSettings, load_settings
 from .call_state import InMemoryCallStateStore, RedisCallStateStore
 from .provider_runtime import build_structured_client
+from .tenant_routing import (
+    DuplicatePiopiyNumberError,
+    TenantRoutingError,
+    UnknownPiopiyNumberError,
+    assert_piopiy_number_owned_by_client,
+    resolve_piopiy_number_route,
+)
 from .live_preview_pipeline import (
     DEFAULT_LIVE_PREVIEW_FIELD_CONFIG,
     build_stage1_prompt,
@@ -77,10 +86,18 @@ from .telephony import (
 from .piopiy_direct_gemini_bridge import PiopiyDirectGeminiBridgeSession
 from .constants import INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE, PROJECT_ROOT
 from .models import SessionArtifacts
+from .post_call_transcription import (
+    FasterWhisperRecordingTranscriber,
+    PostCallTranscriptionPipeline,
+    RecordingTranscriptionJob,
+    SqliteCallTranscriptionStore,
+    build_transcript_summary,
+)
 from .transcripts import SessionLogger
 from .web_state import DashboardState
 
 logger = logging.getLogger(__name__)
+BROWSER_AUDIO_RECONNECT_GRACE_SECONDS = 10.0
 
 SESSION_COOKIE_NAME = "oswell_session"
 SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14
@@ -89,6 +106,49 @@ GUEST_VISITOR_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
 DEFAULT_GUEST_DEMO_NOTIFICATION_EMAIL = "support@aivoicebot4u.com"
 ALLOWED_RECORDING_SUFFIXES = {".wav", ".mp3", ".mpeg"}
 PIOPIY_PLAYBACK_SUFFIX = ".playback.wav"
+RECORDING_TRANSCRIPT_ENGINE_VERSION = "2026-07-18-gemini-audio-recordings-v1"
+RECORDING_TRANSCRIPT_PROCESSING_TIMEOUT_SECONDS = 30 * 60
+
+
+def _normalize_ip_allowlist(raw_value: str | None) -> set[str]:
+    values = set()
+    for token in str(raw_value or "").split(","):
+        item = token.strip()
+        if item:
+            values.add(item)
+    return values
+
+
+def _extract_client_ip(headers: Any, fallback_host: str | None) -> str:
+    forwarded_for = str((headers or {}).get("x-forwarded-for") or "").strip()
+    if forwarded_for:
+        first_forwarded = forwarded_for.split(",", 1)[0].strip()
+        if first_forwarded:
+            return first_forwarded
+
+    real_ip = str((headers or {}).get("x-real-ip") or "").strip()
+    if real_ip:
+        return real_ip
+
+    return str(fallback_host or "").strip()
+
+
+def _ip_in_allowlist(client_ip: str, allowlist: set[str]) -> bool:
+    if not allowlist:
+        return True
+    try:
+        candidate = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+
+    for allowed_item in allowlist:
+        try:
+            allowed = ipaddress.ip_address(allowed_item)
+        except ValueError:
+            continue
+        if candidate == allowed:
+            return True
+    return False
 
 
 class AuthSignupRequest(BaseModel):
@@ -161,14 +221,21 @@ class AuthManager:
         )
         return digest.hex()
 
+    @staticmethod
+    def _normalize_password(password: str) -> str:
+        # Avoid accidental copy/paste spaces creating an account that cannot be
+        # reproduced during login. Internal whitespace remains part of the password.
+        return str(password or "").strip()
+
     def signup(self, name: str, email: str, password: str) -> dict[str, str]:
         normalized_email = self._normalize_email(email)
         normalized_name = self._normalize_name(name)
+        normalized_password = self._normalize_password(password)
         if len(normalized_name) < 2:
             raise ValueError("Enter your full name.")
         if "@" not in normalized_email or "." not in normalized_email.rsplit("@", 1)[-1]:
             raise ValueError("Enter a valid email address.")
-        if len(password.strip()) < 8:
+        if len(normalized_password) < 8:
             raise ValueError("Use at least 8 characters for your password.")
         salt_hex = os.urandom(16).hex()
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -176,7 +243,7 @@ class AuthManager:
             user_id=str(uuid4()),
             name=normalized_name,
             email=normalized_email,
-            password_hash=self._hash_password(password, salt_hex),
+            password_hash=self._hash_password(normalized_password, salt_hex),
             password_salt=salt_hex,
             created_at=now_iso,
         )
@@ -205,10 +272,15 @@ class AuthManager:
         user = self._store.get_user_by_email(normalized_email)
         if user is None:
             raise ValueError("Invalid email or password.")
-        expected = self._hash_password(password, user["password_salt"])
-        if not hmac.compare_digest(expected, user["password_hash"]):
-            raise ValueError("Invalid email or password.")
-        return user
+        password_candidates = [self._normalize_password(password)]
+        raw_password = str(password or "")
+        if raw_password not in password_candidates:
+            password_candidates.append(raw_password)
+        for candidate in password_candidates:
+            expected = self._hash_password(candidate, user["password_salt"])
+            if hmac.compare_digest(expected, user["password_hash"]):
+                return user
+        raise ValueError("Invalid email or password.")
 
     def create_guest_demo_lead(
         self,
@@ -625,6 +697,31 @@ def _is_terminal_event(event_type: str) -> bool:
     }
 
 
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning("Invalid integer for %s=%r; using default=%s", name, value, default)
+        return default
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if not normalized:
+        return default
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _extract_exotel_stream_metadata(params: dict[str, str]) -> dict[str, str | bool | None]:
     stream_payload = params.get("Stream")
     parsed_stream: dict[str, str] = {}
@@ -667,35 +764,42 @@ def _extract_airtel_iq_payload(raw_payload: object) -> dict[str, str]:
 def _extract_airtel_iq_start_details(raw_payload: object) -> dict[str, str]:
     if not isinstance(raw_payload, dict):
         return {}
-    sources: list[dict[str, Any]] = [raw_payload]
     start = raw_payload.get("start")
-    if isinstance(start, dict):
-        sources.append(start)
-        custom_parameters = start.get("customParameters")
-        if isinstance(custom_parameters, dict):
-            sources.append(custom_parameters)
-    metadata = raw_payload.get("metaData")
-    if isinstance(metadata, dict):
-        sources.append(metadata)
-    metadata = raw_payload.get("metadata")
-    if isinstance(metadata, dict):
-        sources.append(metadata)
-    comments = raw_payload.get("comments")
-    if isinstance(comments, str) and comments.strip():
-        try:
-            parsed_comments = json.loads(comments)
-        except json.JSONDecodeError:
-            parsed_comments = None
-        if isinstance(parsed_comments, dict):
-            sources.append(parsed_comments)
+    start_payload = start if isinstance(start, dict) else {}
+    custom_parameters = start_payload.get("customParameters")
+    custom_payload = custom_parameters if isinstance(custom_parameters, dict) else {}
+    metadata_payload = raw_payload.get("metadata") or raw_payload.get("metaData")
+    metadata_payload = metadata_payload if isinstance(metadata_payload, dict) else {}
+    comments_payload: dict[str, str] = {}
+    comments_raw = raw_payload.get("comments")
+    if isinstance(comments_raw, str) and comments_raw.strip():
+        with contextlib.suppress(json.JSONDecodeError):
+            parsed_comments = json.loads(comments_raw)
+            if isinstance(parsed_comments, dict):
+                comments_payload = {str(key): str(value) for key, value in parsed_comments.items() if value is not None}
 
-    flattened: dict[str, str] = {}
-    for source in sources:
-        for key, value in source.items():
-            if value is None:
-                continue
-            flattened[str(key)] = str(value)
-    return flattened
+    def value(*keys: str) -> str:
+        for source in (custom_payload, metadata_payload, start_payload, comments_payload, raw_payload):
+            for key in keys:
+                item = source.get(key)
+                if item is not None:
+                    rendered = str(item).strip()
+                    if rendered:
+                        return rendered
+        return ""
+
+    return {
+        "event": value("event", "eventType", "eventname", "status") or "start",
+        "stream_sid": value("streamSid", "stream_sid", "streamId"),
+        "call_sid": value("callSid", "call_sid", "callId", "callerChannelId"),
+        "account_sid": value("accountSid", "account_sid"),
+        "caller_number": value("callerNumber", "caller_number", "participantAddress", "from_number"),
+        "called_number": value("calledNumber", "called_number", "to", "destination", "dialedNumber"),
+        "pending_id": value("pending_id", "pendingId", "session_id", "sessionId", "conversation_id"),
+        "custom_parameters_json": json.dumps(custom_payload, ensure_ascii=True),
+        "metadata_json": json.dumps(metadata_payload, ensure_ascii=True),
+        "comments_json": json.dumps(comments_payload, ensure_ascii=True),
+    }
 
 
 def _payload_value(payload: dict[str, str], *keys: str) -> str:
@@ -798,6 +902,7 @@ class StartPhoneCallRequest(BaseModel):
 class BatchCallLead(BaseModel):
     customer_name: str
     to_number: str
+    contact_details: dict[str, str] = Field(default_factory=dict)
 
 
 class BatchCallRequest(BaseModel):
@@ -1126,7 +1231,7 @@ def _build_client_builder_payload(request: ClientBuilderRequest, workspace_clien
                     "structured_model": None,
                     "tts_model": None,
                     "outreach_mode": "call_only",
-                    "outbound_call_provider": settings.telephony_provider,
+                    "outbound_call_provider": os.getenv("TELEPHONY_PROVIDER", "piopiy").strip().lower() or "piopiy",
                     "whatsapp_consent_message": None,
                     "whatsapp_chat_opening_message": None,
                 },
@@ -1157,7 +1262,15 @@ class BrowserAudioBridge:
         self._playback_idle = asyncio.Event()
         self._playback_idle.set()
         self._playback_clear_task: asyncio.Task[None] | None = None
+        self._playback_deadline = 0.0
         self._incoming_chunk_count = 0
+        self._dropped_chunk_count = 0
+        self._speech_hangover = 0
+        self._noise_floor = 0.0
+        self._calibration_chunks = 0
+        self._consecutive_voice_chunks = 0
+        self._speech_tail_chunks_remaining = 0
+        self.client_requested_stop = False
 
     def open(self) -> None:
         """WebSocket transport is already open."""
@@ -1173,7 +1286,7 @@ class BrowserAudioBridge:
             raw = base64.b64decode(payload)
             if sample_rate != INPUT_SAMPLE_RATE:
                 raw = _resample_linear(raw, sample_rate, INPUT_SAMPLE_RATE)
-            if raw:
+            if raw and self._is_voice_like_chunk(raw):
                 self._incoming_chunk_count += 1
                 if self._incoming_chunk_count == 1:
                     logger.info(
@@ -1194,6 +1307,7 @@ class BrowserAudioBridge:
                 await self._incoming_audio.put(raw)
             return
         if event == "stop":
+            self.client_requested_stop = True
             await self._incoming_audio.put(None)
             self._closed = True
             return
@@ -1210,6 +1324,10 @@ class BrowserAudioBridge:
             return
         self._playback_active = True
         self._playback_idle.clear()
+        duration_seconds = max(0.08, len(audio_bytes) / (2 * OUTPUT_SAMPLE_RATE))
+        now = time.monotonic()
+        playback_start = max(now, self._playback_deadline)
+        self._playback_deadline = playback_start + duration_seconds
         async with self._send_lock:
             await self.websocket.send_text(
                 json.dumps(
@@ -1224,8 +1342,9 @@ class BrowserAudioBridge:
             self._playback_clear_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._playback_clear_task
-        duration_seconds = max(0.08, len(audio_bytes) / (2 * OUTPUT_SAMPLE_RATE))
-        self._playback_clear_task = asyncio.create_task(self._clear_playback_after(duration_seconds))
+        self._playback_clear_task = asyncio.create_task(
+            self._clear_playback_after(max(0.08, self._playback_deadline - time.monotonic()))
+        )
 
     async def _clear_playback_after(self, seconds: float) -> None:
         try:
@@ -1238,6 +1357,7 @@ class BrowserAudioBridge:
     async def flush_playback(self) -> None:
         self._playback_active = False
         self._playback_idle.set()
+        self._playback_deadline = 0.0
         if self._closed:
             return
         async with self._send_lock:
@@ -1247,10 +1367,9 @@ class BrowserAudioBridge:
         return self._playback_active
 
     def should_drop_input_while_playing(self) -> bool:
-        # Browser sessions rely on the client's echo cancellation and server-side
-        # turn detection. Dropping all input during playback can swallow the
-        # user's first response right after the greeting.
-        return False
+        # Website demos should not feed speaker echo back into Gemini. The
+        # browser still captures immediately after playback ends.
+        return True
 
     async def wait_for_playback_idle(self) -> None:
         await self._playback_idle.wait()
@@ -1269,9 +1388,98 @@ class BrowserAudioBridge:
             self._playback_clear_task = None
         self._playback_active = False
         self._playback_idle.set()
+        self._playback_deadline = 0.0
         await self._incoming_audio.put(None)
         with contextlib.suppress(Exception):
             await self.websocket.close()
+
+    @staticmethod
+    def _pcm16_energy(chunk: bytes) -> float:
+        if not chunk:
+            return 0.0
+        samples = array("h")
+        samples.frombytes(chunk)
+        if not samples:
+            return 0.0
+        return sum(abs(sample) for sample in samples) / len(samples)
+
+    @staticmethod
+    def _speech_tail_chunks_for(chunk: bytes) -> int:
+        # Gemini automatic VAD needs to hear a little post-speech silence. The
+        # browser can send either tiny AudioWorklet chunks or larger fallback
+        # ScriptProcessor chunks, so calculate a roughly 600 ms tail.
+        sample_count = max(len(chunk) // 2, 1)
+        chunk_seconds = sample_count / float(INPUT_SAMPLE_RATE)
+        return max(4, min(80, int(0.6 / max(chunk_seconds, 0.001))))
+
+    def _is_voice_like_chunk(self, chunk: bytes) -> bool:
+        """Keep browser capture biased toward the user's own speech.
+
+        We use a small adaptive noise floor so faint background chatter and
+        room noise get ignored, while real speech still opens the gate.
+        """
+        energy = self._pcm16_energy(chunk)
+        if energy <= 0:
+            return False
+        if self._calibration_chunks < 5:
+            self._calibration_chunks += 1
+            if self._noise_floor <= 0:
+                self._noise_floor = energy
+            else:
+                self._noise_floor = (0.85 * self._noise_floor) + (0.15 * energy)
+            self._dropped_chunk_count += 1
+            return False
+        if self._noise_floor <= 0:
+            self._noise_floor = energy
+        else:
+            # Keep a slowly moving baseline so we can ignore quieter background audio.
+            # Browser AGC/noise suppression can make soft human speech look only
+            # slightly louder than the baseline, so avoid teaching the gate that
+            # active speech is "noise" too quickly.
+            if energy < self._noise_floor:
+                self._noise_floor = (0.90 * self._noise_floor) + (0.10 * energy)
+            else:
+                self._noise_floor = (0.998 * self._noise_floor) + (0.002 * energy)
+
+        threshold = max(220.0, self._noise_floor * 2.6)
+        if energy >= threshold:
+            self._consecutive_voice_chunks += 1
+            if self._consecutive_voice_chunks < 4:
+                self._dropped_chunk_count += 1
+                return False
+            self._speech_hangover = 3
+            if self._incoming_chunk_count == 0 or self._incoming_chunk_count % 100 == 0:
+                logger.info(
+                    "Browser audio gate accepting speech accepted=%s dropped=%s energy=%.1f noise_floor=%.1f threshold=%.1f",
+                    self._incoming_chunk_count + 1,
+                    self._dropped_chunk_count,
+                    energy,
+                    self._noise_floor,
+                    threshold,
+                )
+            self._speech_tail_chunks_remaining = self._speech_tail_chunks_for(chunk)
+            return True
+        self._consecutive_voice_chunks = 0
+        if self._speech_hangover > 0:
+            self._speech_hangover -= 1
+            keep = energy >= max(180.0, self._noise_floor * 1.45)
+            if not keep:
+                self._dropped_chunk_count += 1
+            return keep
+        if self._speech_tail_chunks_remaining > 0:
+            self._speech_tail_chunks_remaining -= 1
+            return True
+        self._dropped_chunk_count += 1
+        if self._dropped_chunk_count in {25, 100} or self._dropped_chunk_count % 250 == 0:
+            logger.info(
+                "Browser audio gate dropping background chunks dropped=%s accepted=%s energy=%.1f noise_floor=%.1f threshold=%.1f",
+                self._dropped_chunk_count,
+                self._incoming_chunk_count,
+                energy,
+                self._noise_floor,
+                threshold,
+            )
+        return False
 
 
 def _meta_whatsapp_signature_valid(settings: AppSettings, body: bytes, signature_header: str | None) -> bool:
@@ -1595,7 +1803,114 @@ def _normalize_lead_name(value: object) -> str:
 
 
 def _normalize_phone_number(value: object) -> str:
-    return "".join(ch for ch in str(value or "").strip() if ch in "+0123456789")
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.startswith("[") or text.startswith("{"):
+        with contextlib.suppress(Exception):
+            parsed = json.loads(text)
+            candidates = parsed if isinstance(parsed, list) else [parsed]
+            for candidate in candidates:
+                if isinstance(candidate, dict):
+                    phone_value = candidate.get("phone_number") or candidate.get("phone") or candidate.get("number")
+                else:
+                    phone_value = candidate
+                normalized = _normalize_phone_number(phone_value)
+                digits = "".join(ch for ch in normalized if ch.isdigit())
+                if 7 <= len(digits) <= 15:
+                    return normalized
+    match = re.search(r"\+?\d[\d\s().-]{6,20}\d", text)
+    if match:
+        text = match.group(0)
+    return "".join(ch for ch in text if ch in "+0123456789")
+
+
+def _normalize_header_key(value: object) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").strip().lower())
+
+
+def _stringify_tabular_value(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        text = f"{value:.12g}"
+        return text.rstrip("0").rstrip(".") if "." in text else text
+    return " ".join(str(value).split()).strip()
+
+
+def _lookup_row_value(row: dict[str, str], candidates: tuple[str, ...]) -> str:
+    normalized = {_normalize_header_key(key): str(value or "").strip() for key, value in row.items()}
+    for candidate in candidates:
+        value = normalized.get(_normalize_header_key(candidate), "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _extract_contact_details_from_row(row: dict[str, str]) -> dict[str, str]:
+    field_candidates: dict[str, tuple[str, ...]] = {
+        "loan_id": ("loan_id", "loan id", "account_number", "account number"),
+        "external_loan_id": ("external_loan_id", "external loan id"),
+        "nbfc_name": ("nbfc_name", "nbfc name"),
+        "lender": ("lender", "lender name"),
+        "agency_name": ("agency_name", "agency name"),
+        "loan_type": ("loan_type", "loan type"),
+        "beneficiary_name": ("beneficiary_name", "beneficiary name"),
+        "onboarding_business_name": ("onboarding_business_name", "onboarding business name"),
+        "loan_application_business_name": ("loan_application_business_name", "loan application business name"),
+        "due_amount": ("due_amount", "due amount", "amount_due", "amount due", "outstanding_amount", "outstanding amount"),
+        "total_payable_amount": ("total_payable_amount", "total payable amount", "payable amount"),
+        "principal_outstanding_amount": ("principal_outstanding_amount", "principal outstanding amount"),
+        "current_dpd": ("current_dpd", "current dpd"),
+        "dpd_slab": ("dpd_slab", "dpd slab"),
+        "business_category": ("business_category", "business category"),
+        "city": ("city",),
+        "state": ("state",),
+        "area": ("area",),
+        "pincode": ("pincode", "pin code"),
+        "father_name": ("father_name", "father name"),
+        "residence_address": ("residence_address", "residence address"),
+        "resi_city": ("resi_city", "resi city"),
+        "resi_state": ("resi_state", "resi state"),
+        "resi_pincode": ("resi_pincode", "resi pincode"),
+        "allocated_amount": ("allocated_amount", "allocated amount"),
+        "prospect_first_name": ("prospect_first_name", "prospect first name", "first name"),
+        "prospect_last_name": ("prospect_last_name", "prospect last name", "last name"),
+        "prospect_full_name": ("prospect_full_name", "prospect full name", "prospect name"),
+        "prospect_job_title": ("prospect_job_title", "prospect job title", "job title", "title"),
+        "prospect_job_seniority_level": ("prospect_job_seniority_level", "prospect seniority", "seniority"),
+        "prospect_job_department": ("prospect_job_department", "prospect department", "department"),
+        "prospect_country_name": ("prospect_country_name", "prospect country", "country"),
+        "prospect_region_name": ("prospect_region_name", "prospect region", "region"),
+        "prospect_city": ("prospect_city", "prospect city"),
+        "prospect_company_name": ("prospect_company_name", "company", "company name"),
+        "prospect_company_website": ("prospect_company_website", "company website", "website"),
+        "prospect_company_linkedin": ("prospect_company_linkedin", "company linkedin"),
+        "prospect_linkedin": ("prospect_linkedin", "linkedin", "prospect linkedin"),
+        "contact_professional_email": (
+            "contact_professional_email",
+            "contact_professions_email",
+            "professional email",
+            "email",
+        ),
+        "contact_professional_email_status": (
+            "contact_professional_email_status",
+            "contact email status",
+            "email status",
+        ),
+        "prospect_id": ("prospect_id", "prospect id"),
+        "business_id": ("business_id", "business id"),
+    }
+    details: dict[str, str] = {}
+    for field_key, candidates in field_candidates.items():
+        value = _lookup_row_value(row, candidates)
+        if value:
+            details[field_key] = value
+    return details
 
 
 def _extract_rows_from_csv(contents: bytes) -> list[dict[str, str]]:
@@ -1627,28 +1942,74 @@ def _extract_leads_from_tabular_rows(rows: list[dict[str, str]]) -> list[dict[st
     if not rows:
         return []
 
-    def pick(row: dict[str, str], candidates: tuple[str, ...]) -> str:
-        lowered = {str(key).strip().lower(): str(value or "").strip() for key, value in row.items()}
-        for candidate in candidates:
-            if candidate in lowered and lowered[candidate]:
-                return lowered[candidate]
-        return ""
-
     leads: list[dict[str, str]] = []
     for index, row in enumerate(rows, start=1):
         name = _normalize_lead_name(
-            pick(row, ("name", "full name", "customer name", "lead name", "prospect name"))
+            _lookup_row_value(
+                row,
+                (
+                    "beneficiary_name",
+                    "beneficiary name",
+                    "customer_name",
+                    "customer name",
+                    "name",
+                    "full name",
+                    "lead name",
+                    "prospect name",
+                    "prospect_full_name",
+                    "prospect full name",
+                    "prospect_first_name",
+                    "prospect first name",
+                    "borrower name",
+                    "account holder",
+                    "onboarding business name",
+                    "loan application business name",
+                ),
+            )
         )
         phone = _normalize_phone_number(
-            pick(row, ("phone", "mobile", "phone number", "mobile number", "number", "contact number"))
+            _lookup_row_value(
+                row,
+                (
+                    "mobile",
+                    "mobile number",
+                    "phone",
+                    "phone number",
+                    "number",
+                    "contact number",
+                    "contact_mobile_phone",
+                    "contact mobile phone",
+                    "contact_phone_numbers",
+                    "contact phone numbers",
+                    "prospect phone",
+                    "prospect_phone",
+                    "alt1",
+                    "alt2",
+                    "alt3",
+                    "alt4",
+                    "alt5",
+                    "alt6",
+                    "alt7",
+                    "alt8",
+                    "alt9",
+                    "alt10",
+                    "bureau contact 1",
+                    "bureau contact 2",
+                    "bureau contact 3",
+                ),
+            )
         )
         if not phone:
             continue
+        contact_details = _extract_contact_details_from_row(row)
+        if name:
+            contact_details.setdefault("beneficiary_name", name)
         leads.append(
             {
                 "row_number": str(index),
                 "customer_name": name or f"Lead {index}",
                 "to_number": phone,
+                "contact_details": contact_details,
             }
         )
     return leads
@@ -1971,6 +2332,7 @@ class TelephonyController:
         active_project = client_bundle.active_project
         pending_id = uuid4().hex
         metadata: dict[str, str | float | int | bool | None] = {
+            "pending_id": pending_id,
             "provider": provider,
             "direction": "inbound",
             "client_id": client_id,
@@ -2038,10 +2400,40 @@ class TelephonyController:
             or self.settings.telephony_provider
         )
         provider = selected_provider if outreach_mode != "chat_only" else "meta_whatsapp"
+        piopiy_caller_id: str | None = None
+        if provider == "piopiy":
+            piopiy_caller_id = (
+                (runtime.piopiy_caller_id if runtime is not None else None)
+                or self.settings.piopiy_caller_id
+                or ""
+            ).strip() or None
+            if not piopiy_caller_id:
+                raise RuntimeError(
+                    f"Project '{active_project.project_id if active_project else project_id or ''}' "
+                    "must define a client-owned Piopiy caller ID before placing Piopiy calls."
+                )
+            try:
+                assert_piopiy_number_owned_by_client(
+                    did=piopiy_caller_id,
+                    client_id=client_id,
+                    project_id=active_project.project_id if active_project else project_id,
+                )
+            except TenantRoutingError as exc:
+                logger.error(
+                    "Blocked cross-tenant Piopiy outbound call client_id=%s project_id=%s caller_id=%s error=%s",
+                    client_id,
+                    active_project.project_id if active_project else project_id,
+                    piopiy_caller_id,
+                    exc,
+                )
+                raise RuntimeError(str(exc)) from exc
         self._ensure_provider_configured(provider)
         pending_id = uuid4().hex
         metadata: dict[str, str | float | int | bool | None] = {
+            "pending_id": pending_id,
             "provider": provider,
+            "direction": "outbound",
+            "call_direction": "outbound",
             "outreach_mode": outreach_mode,
             "selected_provider": selected_provider,
             "client_id": client_id,
@@ -2049,6 +2441,7 @@ class TelephonyController:
             "project_name": active_project.name if active_project else None,
             "customer_name": customer_name,
             "to_number": to_number,
+            "from_number": piopiy_caller_id if provider == "piopiy" else None,
             "lead_source": lead_source,
             "call_status": "queued",
             "call_requested_at_epoch": time.time(),
@@ -2227,13 +2620,13 @@ class TelephonyController:
             airtel_metadata: dict[str, str | float | int | bool | None] = {
                 "pending_id": pending_id,
                 "client_id": client_id,
-                "project_id": project_id,
+                "project_id": project_id or "",
                 "provider": "airtel_iq",
                 "direction": "outbound",
                 "call_direction": "outbound",
                 "outreach_mode": "voicebot",
                 "to_number": to_number,
-                "caller_id": self.settings.airtel_iq_caller_id,
+                "caller_id": self.settings.airtel_iq_caller_id or "",
             }
             call = await self.airtel_iq.create_call(
                 to_number=to_number,
@@ -2271,11 +2664,27 @@ class TelephonyController:
                 sdp=sdp,
             )
         elif provider == "piopiy":
+            piopiy_options: dict[str, Any] = {"record": True}
+            ring_timeout_raw = os.getenv("PIOPIY_OUTBOUND_RING_TIMEOUT_SECS", "").strip()
+            if ring_timeout_raw:
+                with contextlib.suppress(ValueError):
+                    piopiy_options["ring_timeout_sec"] = max(5, min(120, int(ring_timeout_raw)))
+            piopiy_variables: dict[str, Any] = {
+                "pending_id": pending_id,
+                "client_id": client_id,
+                "project_id": project_id or "",
+                "direction": "outbound",
+                "to_number": to_number,
+            }
+            if runtime is not None and runtime.piopiy_caller_id:
+                piopiy_variables["from_number"] = runtime.piopiy_caller_id
             call = await self.piopiy.create_call(
                 to_number=to_number,
                 agent_id=(runtime.piopiy_agent_id if runtime is not None else None),
                 caller_id=(runtime.piopiy_caller_id if runtime is not None else None),
                 app_id=(runtime.piopiy_app_id if runtime is not None else None),
+                options=piopiy_options,
+                variables=piopiy_variables,
             )
         else:
             base_url = validate_public_base_url(self.settings.public_base_url or "")
@@ -2634,6 +3043,127 @@ class TelephonyController:
         pending_id, _ = match
         return pending_id
 
+    async def find_recent_pending_piopiy_by_numbers(
+        self,
+        *,
+        caller_id: str | None,
+        to_number: str | None,
+        direction: str | None = None,
+        max_age_seconds: int = 6 * 60 * 60,
+    ) -> str | None:
+        """Fallback-match Piopiy AI outbound events when the API returns no call id.
+
+        Piopiy AI outbound calls can enqueue successfully with an empty initial
+        sid, then later emit events/CDRs under conversation/leg ids we did not
+        know at call-placement time. Match the freshest pending Piopiy call by
+        destination number so metadata, recordings, and aliases attach to the
+        correct dashboard session.
+        """
+        target_to = _normalize_phone_for_match(to_number)
+        target_from = _normalize_phone_for_match(caller_id)
+        if not target_to:
+            return None
+        normalized_direction = str(direction or "").strip().lower()
+        now = time.time()
+        matches: list[tuple[float, str]] = []
+        for pending_id in reversed(await self._store.list_pending_ids(provider="piopiy")):
+            pending_payload = await self._store.get_call(pending_id)
+            pending_call = self._deserialize_pending_call(pending_payload)
+            if pending_call is None:
+                continue
+            context = await self._store.get_context(pending_id) or {}
+            metadata = pending_call.metadata or {}
+            pending_to = _normalize_phone_for_match(
+                pending_call.to_number
+                or str(context.get("to_number") or "")
+                or str(metadata.get("to_number") or "")
+            )
+            if pending_to != target_to:
+                continue
+            pending_direction = str(
+                context.get("direction")
+                or context.get("call_direction")
+                or metadata.get("direction")
+                or metadata.get("call_direction")
+                or ""
+            ).strip().lower()
+            if normalized_direction and pending_direction and pending_direction != normalized_direction:
+                continue
+            pending_from = _normalize_phone_for_match(
+                str(context.get("from_number") or metadata.get("from_number") or metadata.get("caller_id") or "")
+            )
+            if target_from and pending_from and pending_from != target_from:
+                continue
+            requested_at = context.get("call_requested_at_epoch") or metadata.get("call_requested_at_epoch") or 0
+            try:
+                requested_epoch = float(requested_at or 0)
+            except (TypeError, ValueError):
+                requested_epoch = 0
+            if requested_epoch and now - requested_epoch > max_age_seconds:
+                continue
+            matches.append((requested_epoch, pending_id))
+        if not matches:
+            return None
+        matches.sort(reverse=True)
+        return matches[0][1]
+
+    async def find_recent_pending_call_by_numbers(
+        self,
+        provider: str,
+        *,
+        caller_id: str | None,
+        to_number: str | None,
+        direction: str | None = None,
+        max_age_seconds: int = 6 * 60 * 60,
+    ) -> str | None:
+        target_to = _normalize_phone_for_match(to_number)
+        target_from = _normalize_phone_for_match(caller_id)
+        if not target_to:
+            return None
+        normalized_direction = str(direction or "").strip().lower()
+        now = time.time()
+        matches: list[tuple[float, str]] = []
+        for pending_id in reversed(await self._store.list_pending_ids(provider=provider)):
+            pending_payload = await self._store.get_call(pending_id)
+            pending_call = self._deserialize_pending_call(pending_payload)
+            if pending_call is None:
+                continue
+            context = await self._store.get_context(pending_id) or {}
+            metadata = pending_call.metadata or {}
+            pending_to = _normalize_phone_for_match(
+                pending_call.to_number
+                or str(context.get("to_number") or "")
+                or str(metadata.get("to_number") or "")
+            )
+            if pending_to != target_to:
+                continue
+            pending_direction = str(
+                context.get("direction")
+                or context.get("call_direction")
+                or metadata.get("direction")
+                or metadata.get("call_direction")
+                or ""
+            ).strip().lower()
+            if normalized_direction and pending_direction and pending_direction != normalized_direction:
+                continue
+            pending_from = _normalize_phone_for_match(
+                str(context.get("from_number") or metadata.get("from_number") or metadata.get("caller_id") or "")
+            )
+            if target_from and pending_from and pending_from != target_from:
+                continue
+            requested_at = context.get("call_requested_at_epoch") or metadata.get("call_requested_at_epoch") or 0
+            try:
+                requested_epoch = float(requested_at or 0)
+            except (TypeError, ValueError):
+                requested_epoch = 0
+            if requested_epoch and now - requested_epoch > max_age_seconds:
+                continue
+            matches.append((requested_epoch, pending_id))
+        if not matches:
+            return None
+        matches.sort(reverse=True)
+        return matches[0][1]
+
     async def get_call_context(self, pending_id: str) -> dict[str, str | float | int | bool | None] | None:
         context = await self._store.get_context(pending_id)
         if context is None:
@@ -2743,6 +3273,14 @@ class TelephonyController:
 def create_app() -> FastAPI:
     settings = load_settings()
     app = FastAPI(title="Gemini Voice Sales Agent Dashboard")
+    piopiy_test_allowlist = _normalize_ip_allowlist(
+        os.getenv("PIOPIY_TEST_ALLOWED_IPS") or os.getenv("PIOPIY_ALLOWED_IPS")
+    )
+    airtel_iq_test_allowlist = _normalize_ip_allowlist(
+        os.getenv("AIRTEL_IQ_TEST_ALLOWED_IPS")
+        or os.getenv("VOICE_BOT_TEST_ALLOWED_IPS")
+        or os.getenv("PIOPIY_TEST_ALLOWED_IPS")
+    )
 
     def _trusted_hosts() -> list[str]:
         env_value = os.getenv("TRUSTED_HOSTS", "").strip()
@@ -2759,6 +3297,99 @@ def create_app() -> FastAPI:
         return hosts
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts())
+
+    def _piopiy_ws_public_base_url() -> str:
+        explicit_ws_base = str(os.getenv("PIOPIY_WS_PUBLIC_BASE_URL") or "").strip()
+        if explicit_ws_base:
+            return explicit_ws_base
+        if settings.public_base_url:
+            return settings.public_base_url
+        return ""
+
+    def _piopiy_ws_public_port() -> int | None:
+        base_url = _piopiy_ws_public_base_url()
+        if not base_url:
+            return None
+        parsed = urllib.parse.urlparse(base_url)
+        if parsed.port:
+            return parsed.port
+        if parsed.scheme in {"https", "wss"}:
+            return 443
+        if parsed.scheme in {"http", "ws"}:
+            return 80
+        return None
+
+    def _piopiy_ws_public_pattern(base_url: str, path: str) -> str:
+        parsed = urllib.parse.urlparse(base_url)
+        if parsed.scheme in {"ws", "wss"} and parsed.netloc:
+            base_path = parsed.path.rstrip("/")
+            joined_path = f"{base_path}{path}" if base_path else path
+            return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, joined_path, "", "", ""))
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return build_ws_url(base_url, path)
+        if base_url:
+            return build_ws_url(base_url, path)
+        return ""
+
+    def _airtel_iq_ws_public_base_url() -> str:
+        explicit_ws_base = str(os.getenv("AIRTEL_IQ_WS_PUBLIC_BASE_URL") or "").strip()
+        if explicit_ws_base:
+            return explicit_ws_base
+        return settings.public_base_url or ""
+
+    def _airtel_iq_ws_public_port() -> int | None:
+        base_url = _airtel_iq_ws_public_base_url()
+        if not base_url:
+            return None
+        parsed = urllib.parse.urlparse(base_url)
+        if parsed.port:
+            return parsed.port
+        if parsed.scheme in {"https", "wss"}:
+            return 443
+        if parsed.scheme in {"http", "ws"}:
+            return 80
+        return None
+
+    def _airtel_iq_ws_public_pattern(base_url: str, path: str) -> str:
+        parsed = urllib.parse.urlparse(base_url)
+        if parsed.scheme in {"ws", "wss"} and parsed.netloc:
+            base_path = parsed.path.rstrip("/")
+            joined_path = f"{base_path}{path}" if base_path else path
+            return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, joined_path, "", "", ""))
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return build_ws_url(base_url, path)
+        if base_url:
+            return build_ws_url(base_url, path)
+        return ""
+
+    def _piopiy_test_ip_allowed(websocket: WebSocket) -> bool:
+        enforce_allowlist = _env_bool("PIOPIY_ENFORCE_TEST_IP_ALLOWLIST", False)
+        if not enforce_allowlist or not piopiy_test_allowlist:
+            return True
+        client_ip = _extract_client_ip(websocket.headers, getattr(websocket.client, "host", None))
+        if _ip_in_allowlist(client_ip, piopiy_test_allowlist):
+            return True
+        logger.warning(
+            "Rejecting Piopiy test websocket from disallowed IP=%s pending_id=%s",
+            client_ip or "unknown",
+            getattr(websocket, "path_params", {}).get("pending_id"),
+        )
+        return False
+
+    def _airtel_iq_test_ip_allowed(websocket: WebSocket) -> bool:
+        enforce_allowlist = _env_bool("AIRTEL_IQ_ENFORCE_TEST_IP_ALLOWLIST", False)
+        if not enforce_allowlist or not airtel_iq_test_allowlist:
+            return True
+        client_ip = _extract_client_ip(websocket.headers, getattr(websocket.client, "host", None))
+        if _ip_in_allowlist(client_ip, airtel_iq_test_allowlist):
+            return True
+        logger.warning(
+            "Rejecting Airtel IQ test websocket from disallowed IP=%s pending_id=%s",
+            client_ip or "unknown",
+            getattr(websocket, "path_params", {}).get("pending_id"),
+        )
+        return False
+
     live_preview_structured = build_structured_client(
         settings,
         api_key=settings.gemini_api_key,
@@ -2779,6 +3410,11 @@ def create_app() -> FastAPI:
 
     controller = SessionController(settings, on_session_finished=_handle_finished_session)
     telephony = TelephonyController(settings, controller)
+    post_call_pipeline = PostCallTranscriptionPipeline(
+        settings=settings,
+        store=SqliteCallTranscriptionStore(settings.call_transcripts_db_path),
+        telephony=telephony,
+    )
     piopiy_capture: dict[str, Any] = {
         "last_request": None,
         "last_answer": None,
@@ -2801,6 +3437,81 @@ def create_app() -> FastAPI:
         "history": [],
     }
     browser_audio_bridges: dict[str, BrowserAudioBridge] = {}
+    browser_audio_disconnect_stop_tasks: dict[str, asyncio.Task[None]] = {}
+    batch_campaigns: dict[str, dict[str, Any]] = {}
+
+    @app.on_event("startup")
+    async def _startup_post_call_transcription() -> None:
+        await post_call_pipeline.start()
+        recovered = await post_call_pipeline.recover_pending_jobs(settings.session_output_dir)
+        if recovered:
+            logger.info("Recovered %s pending saved-recording transcription jobs.", recovered)
+
+    @app.on_event("shutdown")
+    async def _shutdown_post_call_transcription() -> None:
+        await post_call_pipeline.stop()
+
+    async def _piopiy_ai_hangup_from_context(context: dict[str, Any] | None) -> dict[str, Any]:
+        context = context or {}
+        candidates: list[str] = []
+        for key in ("provider_call_sid", "call_id", "conversation_id"):
+            value = str(context.get(key) or "").strip()
+            if value and value not in candidates:
+                candidates.append(value)
+        aliases = context.get("provider_call_sids")
+        if isinstance(aliases, list):
+            for alias in aliases:
+                value = str(alias or "").strip()
+                if value and value not in candidates:
+                    candidates.append(value)
+        raw_cdr = str(context.get("piopiy_last_cdr_json") or "").strip()
+        if raw_cdr:
+            with contextlib.suppress(Exception):
+                parsed = json.loads(raw_cdr)
+                if isinstance(parsed, dict):
+                    for value in _piopiy_payload_call_ids(parsed):
+                        if value and value not in candidates:
+                            candidates.append(value)
+        token = str(settings.piopiy_api_token or os.getenv("PIOPIY_API_TOKEN") or os.getenv("AGENT_TOKEN") or "").strip()
+        if not token:
+            return {"ok": False, "error": "missing_piopiy_token", "candidates": candidates}
+        if not candidates:
+            return {"ok": False, "error": "missing_piopiy_call_id", "candidates": candidates}
+        url = os.getenv("PIOPIY_AI_HANGUP_URL", "https://rest.piopiy.com/v3/voice/call/hangup").strip()
+        errors: list[dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=8) as client:
+            for call_id in candidates:
+                payload = {
+                    "call_id": call_id,
+                    "cause": "NORMAL_CLEARING",
+                    "reason": "Campaign stopped by user",
+                }
+                try:
+                    response = await client.post(
+                        url,
+                        json=payload,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": "application/json",
+                        },
+                    )
+                    if 200 <= response.status_code < 300:
+                        return {
+                            "ok": True,
+                            "call_id": call_id,
+                            "status_code": response.status_code,
+                            "body": response.text[:1000],
+                        }
+                    errors.append(
+                        {
+                            "call_id": call_id,
+                            "status_code": response.status_code,
+                            "body": response.text[:1000],
+                        }
+                    )
+                except Exception as exc:
+                    errors.append({"call_id": call_id, "error": repr(exc)})
+        return {"ok": False, "errors": errors, "candidates": candidates}
 
     async def _capture_piopiy_request(request: Request) -> dict[str, Any]:
         raw_body = await request.body()
@@ -3262,7 +3973,15 @@ def create_app() -> FastAPI:
             recording_type = (
                 "ai_leg" if leg == "ai" else "caller_leg" if leg in {"a", "caller"} else "full_or_unknown"
             )
-            type_score = 100 if recording_type == "full_or_unknown" else 10
+            # Prefer caller-side audio for saved-call transcription so the user
+            # voice is preserved when Piopiy publishes separate legs.
+            type_score = (
+                200
+                if recording_type == "caller_leg"
+                else 100
+                if recording_type == "full_or_unknown"
+                else 10
+            )
             matched_rows.append((type_score + min(row_duration, 10_000), row, recording_type))
 
         if matched_rows:
@@ -3509,6 +4228,8 @@ def create_app() -> FastAPI:
 
     def _workspace_client_id_for_user(user: dict[str, str]) -> str:
         email_local = str(user.get("email") or "").split("@", 1)[0]
+        if email_local == "yashenterprise":
+            return "yash_enterprise"
         uid_tail = _slug_token(str(user.get("id") or ""), fallback="uid", max_length=8)
         return f"user_{_slug_token(email_local, fallback='workspace', max_length=24)}_{uid_tail}"
 
@@ -3536,40 +4257,16 @@ def create_app() -> FastAPI:
         return configured_client_id, configured_project_id
 
     def _resolve_inbound_piopiy_target(to_number: str | None) -> tuple[str, str | None]:
-        """Pick the Piopiy client/project from the inbound DID.
-
-        We keep a number-specific route for Janjal's public inbound line so calls
-        to that DID always open the exact Janjal grievance script instead of the
-        generic Piopiy fallback project. The helper also supports future
-        number-to-client overrides via `PIOPIY_INBOUND_ROUTING_JSON`.
-        """
-        normalized_to = "".join(ch for ch in str(to_number or "").strip() if ch.isdigit())
-        routing_overrides_raw = os.getenv("PIOPIY_INBOUND_ROUTING_JSON", "").strip()
-        if routing_overrides_raw:
-            with contextlib.suppress(Exception):
-                routing_overrides = json.loads(routing_overrides_raw)
-                if isinstance(routing_overrides, dict):
-                    for candidate_key in (
-                        normalized_to,
-                        normalized_to[-12:] if len(normalized_to) >= 12 else "",
-                        normalized_to[-10:] if len(normalized_to) >= 10 else "",
-                    ):
-                        route = routing_overrides.get(candidate_key)
-                        if isinstance(route, dict):
-                            client_id = str(route.get("client_id") or "").strip()
-                            project_id = str(route.get("project_id") or "").strip() or None
-                            if client_id:
-                                return client_id, project_id
-                        elif isinstance(route, str) and route.strip():
-                            return route.strip(), None
-
-        janjal_did = "917943446880"
-        if normalized_to == janjal_did or normalized_to.endswith(janjal_did):
-            return "user_janjal_voicebot_12c92bbc", "janjal_ward22_inbound_918065254654"
-
-        configured_client_id = os.getenv("PIOPIY_INBOUND_CLIENT_ID", "").strip() or os.getenv("PIOPIY_DEFAULT_CLIENT_ID", "").strip() or settings.default_client_id
-        configured_project_id = os.getenv("PIOPIY_INBOUND_PROJECT_ID", "").strip() or os.getenv("PIOPIY_DEFAULT_PROJECT_ID", "").strip() or None
-        return configured_client_id, configured_project_id
+        """Pick the Piopiy client/project only from configured DID ownership."""
+        try:
+            route = resolve_piopiy_number_route(to_number)
+        except DuplicatePiopiyNumberError as exc:
+            logger.error("Piopiy inbound DID ownership conflict: %s", exc)
+            raise HTTPException(status_code=500, detail="Piopiy DID ownership conflict.") from exc
+        except UnknownPiopiyNumberError as exc:
+            logger.error("Rejected unassigned Piopiy inbound DID to_number=%r error=%s", to_number, exc)
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return route.client_id, route.project_id
 
     def _ensure_user_workspace_client(user: dict[str, str]) -> tuple[str, bool]:
         workspace_client_id = _workspace_client_id_for_user(user)
@@ -3588,6 +4285,8 @@ def create_app() -> FastAPI:
             raise RuntimeError("No base client template exists. Add at least one client template first.")
 
         user_email = str(user.get("email") or "").strip().lower()
+        if workspace_client_id == "yash_enterprise" and workspace_client_id in existing_ids:
+            return workspace_client_id, False
         template_client_id: str | None = None
         if user_email == "guest@aivoicebot4u.local" and "nova_security" in existing_ids:
             template_client_id = "nova_security"
@@ -4021,6 +4720,8 @@ def create_app() -> FastAPI:
         piopiy_filename = ""
         recording_status = ""
         recording_error = ""
+        selected_recording_type = ""
+        cdr_leg = ""
         recording_duration_seconds = None
         if isinstance(piopiy_recording_meta, dict):
             recording_url = str(piopiy_recording_meta.get("recording_url") or "").strip()
@@ -4028,6 +4729,7 @@ def create_app() -> FastAPI:
             recording_status = str(piopiy_recording_meta.get("recording_status") or "").strip()
             recording_error = str(piopiy_recording_meta.get("recording_error") or "").strip()
             selected_recording_type = str(piopiy_recording_meta.get("selected_recording_type") or "").strip()
+            cdr_leg = str(piopiy_recording_meta.get("cdr_leg") or "").strip().lower()
             partial_reason = str(piopiy_recording_meta.get("recording_partial_reason") or "").strip()
             if recording_status == "partial":
                 if partial_reason:
@@ -4134,6 +4836,17 @@ def create_app() -> FastAPI:
             recording_message = "Recording saved, but duration looks shorter than the call."
         elif provider == "piopiy" and not files and recording_status in {"failed", "unavailable"}:
             recording_message = f"Recording unavailable: {recording_error or recording_status}."
+        recording_coverage = "unknown"
+        if selected_recording_type == "ai_leg" or cdr_leg == "ai":
+            recording_coverage = "piopiy_ai_leg"
+            if not recording_message and provider == "piopiy":
+                recording_message = "Piopiy labeled this saved file as an AI leg recording."
+        elif selected_recording_type == "caller_leg" or cdr_leg in {"a", "caller"}:
+            recording_coverage = "piopiy_caller_leg"
+            if not recording_message and provider == "piopiy":
+                recording_message = "Piopiy labeled this saved file as a caller leg recording."
+        elif files:
+            recording_coverage = "full_conversation" if len(files) > 1 else "single_leg_unknown"
         return {
             "client_id": client_id,
             "session_id": str(artifacts.get("session_id") or session_dir.name),
@@ -4159,6 +4872,8 @@ def create_app() -> FastAPI:
             "recording_duration_seconds": round(recording_duration_seconds, 3) if recording_duration_seconds is not None else None,
             "recording_pending": recording_pending,
             "recording_pending_message": recording_message,
+            "recording_coverage": recording_coverage,
+            "recording_note": recording_message,
         }
 
     def _list_workspace_recordings(client_id: str) -> list[dict[str, Any]]:
@@ -4482,7 +5197,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def landing_page() -> str:
-        return _html("landing.html")
+        return HTMLResponse(content=_html("landing.html"), headers={"Cache-Control": "no-store, max-age=0"})
 
     @app.get("/logo.png")
     async def logo_asset() -> Response:
@@ -4505,27 +5220,27 @@ def create_app() -> FastAPI:
         user = getattr(request.state, "auth_user", None)
         if user is not None and not auth_manager.is_guest_user(user):
             return RedirectResponse(url="/app", status_code=303)
-        return HTMLResponse(content=_html("login.html"))
+        return HTMLResponse(content=_html("login.html"), headers={"Cache-Control": "no-store, max-age=0"})
 
     @app.get("/signup", response_class=HTMLResponse)
     async def signup_page(request: Request) -> Response:
         user = getattr(request.state, "auth_user", None)
         if user is not None and not auth_manager.is_guest_user(user):
             return RedirectResponse(url="/app", status_code=303)
-        return HTMLResponse(content=_html("signup.html"))
+        return HTMLResponse(content=_html("signup.html"), headers={"Cache-Control": "no-store, max-age=0"})
 
     @app.get("/forgot-password", response_class=HTMLResponse)
     async def forgot_password_page(request: Request) -> Response:
         user = getattr(request.state, "auth_user", None)
         if user is not None and not auth_manager.is_guest_user(user):
             return RedirectResponse(url="/app", status_code=303)
-        return HTMLResponse(content=_html("forgot-password.html"))
+        return HTMLResponse(content=_html("forgot-password.html"), headers={"Cache-Control": "no-store, max-age=0"})
 
     @app.get("/admin/login", response_class=HTMLResponse)
     async def admin_login_page(request: Request) -> Response:
         if auth_manager.is_admin(getattr(request.state, "auth_user", None)):
             return RedirectResponse(url="/admin/leads", status_code=303)
-        return HTMLResponse(content=_html("admin_login.html"))
+        return HTMLResponse(content=_html("admin_login.html"), headers={"Cache-Control": "no-store, max-age=0"})
 
     @app.get("/admin")
     async def admin_redirect() -> Response:
@@ -4534,11 +5249,11 @@ def create_app() -> FastAPI:
     @app.get("/admin/leads", response_class=HTMLResponse)
     async def admin_leads_page(request: Request) -> Response:
         _require_admin_user(request)
-        return HTMLResponse(content=_html("admin_leads.html"))
+        return HTMLResponse(content=_html("admin_leads.html"), headers={"Cache-Control": "no-store, max-age=0"})
 
     @app.get("/app", response_class=HTMLResponse)
     async def app_page() -> str:
-        return _html("index.html")
+        return HTMLResponse(content=_html("index.html"), headers={"Cache-Control": "no-store, max-age=0"})
 
     @app.get("/dashboard")
     async def dashboard_redirect() -> Response:
@@ -4784,10 +5499,435 @@ def create_app() -> FastAPI:
             ),
         }
 
+    def _build_recording_faster_transcriber() -> FasterWhisperRecordingTranscriber:
+        return FasterWhisperRecordingTranscriber(settings)
+
+    def _resolve_recording_transcript_sources(
+        session_dir: Path, recording_entry: dict[str, Any]
+    ) -> list[tuple[Path, str]]:
+        files = recording_entry.get("files") if isinstance(recording_entry.get("files"), list) else []
+        sources: list[tuple[Path, str]] = []
+
+        def _add_source(label: str, filename: str) -> None:
+            candidate = (session_dir / filename).resolve()
+            if candidate.exists() and candidate.is_file():
+                sources.append((candidate, label))
+
+        caller_path = (session_dir / "caller_audio.wav").resolve()
+        agent_path = (session_dir / "agent_audio.wav").resolve()
+        caller_exists = caller_path.exists() and caller_path.is_file()
+        agent_exists = agent_path.exists() and agent_path.is_file()
+        if caller_exists and agent_exists:
+            return [(caller_path, "Caller"), (agent_path, "Agent")]
+
+        conversation_path = (session_dir / "conversation_audio.wav").resolve()
+        if conversation_path.exists() and conversation_path.is_file():
+            return [(conversation_path, "Full Conversation")]
+
+        for label, filename in (
+            ("Caller", "caller_audio.wav"),
+            ("Agent", "agent_audio.wav"),
+        ):
+            _add_source(label, filename)
+        if len(sources) >= 2:
+            return sources
+
+        for preferred_name in ("piopiy_recording.wav",):
+            candidate = (session_dir / preferred_name).resolve()
+            if candidate.exists() and candidate.is_file():
+                return [(candidate, "Piopiy Recording")]
+
+        for file_entry in files:
+            if not isinstance(file_entry, dict):
+                continue
+            filename = str(file_entry.get("filename") or "").strip()
+            if not filename:
+                continue
+            candidate = (session_dir / filename).resolve()
+            if candidate.exists() and candidate.is_file():
+                sources.append((candidate, str(file_entry.get("label") or filename)))
+                return sources
+        recording_meta = _read_json_file(session_dir / "piopiy_recording.json")
+        if isinstance(recording_meta, dict):
+            original_filename = str(recording_meta.get("recording_filename") or "").strip()
+            playback_filename = str(recording_meta.get("recording_playback_filename") or "").strip()
+            for filename in (original_filename, playback_filename):
+                if not filename:
+                    continue
+                candidate = (session_dir / filename).resolve()
+                if candidate.exists() and candidate.is_file():
+                    label = "Piopiy Original Recording" if filename == original_filename else "Piopiy Recording"
+                    return [(candidate, label)]
+        return []
+
+    def _recording_transcript_cache_path(session_dir: Path) -> Path:
+        return (session_dir / "recording_transcript.json").resolve()
+
+    def _recording_transcript_state_path(session_dir: Path) -> Path:
+        return (session_dir / "recording_transcript_state.json").resolve()
+
+    def _read_cached_recording_transcript(session_dir: Path) -> dict[str, Any] | None:
+        cached = _read_json_file(_recording_transcript_cache_path(session_dir))
+        return cached if isinstance(cached, dict) else None
+
+    def _write_cached_recording_transcript(session_dir: Path, payload: dict[str, Any]) -> None:
+        _recording_transcript_cache_path(session_dir).write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def _read_recording_transcript_state(session_dir: Path) -> dict[str, Any] | None:
+        state = _read_json_file(_recording_transcript_state_path(session_dir))
+        return state if isinstance(state, dict) else None
+
+    def _write_recording_transcript_state(session_dir: Path, payload: dict[str, Any]) -> None:
+        _recording_transcript_state_path(session_dir).write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def _split_transcript_sentences(text: str) -> list[str]:
+        normalized = " ".join(str(text or "").split()).strip()
+        if not normalized:
+            return []
+        sentences = [segment.strip() for segment in re.split(r"(?<=[.!?])\s+|\n+", normalized) if segment.strip()]
+        if not sentences:
+            return [normalized]
+        return sentences
+
+    def _recording_language_hints(recording_entry: dict[str, Any]) -> list[str | None]:
+        recording_type = str(recording_entry.get("selected_recording_type") or recording_entry.get("cdr_leg") or "").strip().lower()
+        hints: list[str | None] = [None]
+        if recording_type in {"ai_leg", "caller_leg", "full_or_unknown", "unknown"}:
+            hints[:0] = ["hindi", "marathi"]
+        return hints
+
+    def _recording_transcript_quality_score(text: str) -> float:
+        normalized = " ".join(str(text or "").split()).strip()
+        if not normalized:
+            return float("-inf")
+        tokens = [token for token in re.findall(r"\S+", normalized) if token]
+        token_count = len(tokens)
+        unique_token_ratio = len(set(tokens)) / max(token_count, 1)
+        alpha_token_count = sum(1 for token in tokens if re.search(r"[A-Za-z\u0900-\u097F\u0600-\u06FF]", token))
+        repeated_run_count = len(re.findall(r"(.)\1{4,}", normalized))
+        punctuation_run_count = len(re.findall(r"[۔.]{4,}", normalized))
+        weird_symbol_count = len(re.findall(r"[^\w\s\u0900-\u097F\u0600-\u06FF,.!?।،;:'\"()\-\u2019]", normalized))
+        return (
+            token_count
+            + alpha_token_count * 1.5
+            + unique_token_ratio * 25.0
+            - repeated_run_count * 12.0
+            - punctuation_run_count * 4.0
+            - weird_symbol_count * 2.0
+        )
+
+    def _chunk_transcript_text(text: str, words_per_chunk: int = 10) -> list[str]:
+        normalized = " ".join(str(text or "").split()).strip()
+        if not normalized:
+            return []
+        words = normalized.split()
+        if len(words) <= words_per_chunk:
+            return [normalized]
+        chunks: list[str] = []
+        for index in range(0, len(words), words_per_chunk):
+            chunk = " ".join(words[index : index + words_per_chunk]).strip()
+            if chunk:
+                chunks.append(chunk)
+        return chunks or [normalized]
+
+    def _format_turn_timestamp(ms: int | None) -> str | None:
+        if ms is None:
+            return None
+        total_seconds = max(0, int(ms // 1000))
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    def _recording_role_hint(source_name: str, recording_type: str | None) -> str:
+        lowered = str(source_name or "").strip().lower()
+        normalized_type = str(recording_type or "").strip().lower()
+        if "caller" in lowered:
+            return "user"
+        if "agent" in lowered:
+            return "ai"
+        if normalized_type == "caller_leg":
+            return "user"
+        if normalized_type == "ai_leg":
+            return "ai"
+        return "unknown"
+
+    def _build_recording_turns(
+        source_payloads: list[dict[str, Any]],
+        recording_entry: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        merged_turns: list[dict[str, Any]] = []
+        recording_type = str(recording_entry.get("selected_recording_type") or recording_entry.get("cdr_leg") or "").strip().lower()
+        for source_index, payload in enumerate(source_payloads):
+            source_name = str(payload.get("name") or "").strip() or f"Source {source_index + 1}"
+            source_turns = list(payload.get("speaker_turns") or [])
+            role_hint = _recording_role_hint(source_name, recording_type)
+            raw_label_order: list[str] = []
+            for turn in source_turns:
+                if not isinstance(turn, dict):
+                    continue
+                label = str(turn.get("speaker_label") or "").strip()
+                if label and label not in raw_label_order:
+                    raw_label_order.append(label)
+            if source_turns:
+                for turn in source_turns:
+                    if not isinstance(turn, dict):
+                        continue
+                    text = " ".join(str(turn.get("text") or "").split()).strip()
+                    if not text:
+                        continue
+                    raw_label = str(turn.get("speaker_label") or "").strip() or "unknown"
+                    mapped_role = role_hint
+                    if len(raw_label_order) > 1:
+                        if raw_label == raw_label_order[1]:
+                            mapped_role = "user" if role_hint == "ai" else "ai"
+                        elif raw_label == raw_label_order[0]:
+                            mapped_role = role_hint
+                    elif len(raw_label_order) == 1:
+                        mapped_role = role_hint
+                    start_ms = turn.get("start_offset_ms")
+                    end_ms = turn.get("end_offset_ms")
+                    merged_turns.append(
+                        {
+                            "speaker": mapped_role,
+                            "speaker_label": raw_label,
+                            "text": text,
+                            "timestamp_ms": int(start_ms) if start_ms is not None else None,
+                            "start_offset_ms": int(start_ms) if start_ms is not None else None,
+                            "end_offset_ms": int(end_ms) if end_ms is not None else None,
+                            "timestamp": _format_turn_timestamp(int(start_ms)) if start_ms is not None else None,
+                            "source": source_name,
+                        }
+                    )
+                continue
+            transcript_text = str(payload.get("transcript_text") or "").strip()
+            if not transcript_text:
+                continue
+            sentences = _split_transcript_sentences(transcript_text)
+            if len(sentences) == 1:
+                word_chunks = _chunk_transcript_text(transcript_text)
+                if len(word_chunks) > 1:
+                    sentences = word_chunks
+            for sentence_index, sentence in enumerate(sentences):
+                merged_turns.append(
+                    {
+                        "speaker": role_hint,
+                        "speaker_label": f"{source_index + 1}",
+                        "text": sentence,
+                        "timestamp_ms": None,
+                        "start_offset_ms": None,
+                        "end_offset_ms": None,
+                        "timestamp": None,
+                        "source": source_name,
+                    }
+                )
+        merged_turns.sort(
+            key=lambda item: (
+                item.get("start_offset_ms") is None,
+                item.get("start_offset_ms") if item.get("start_offset_ms") is not None else 0,
+                str(item.get("source") or ""),
+            )
+        )
+        return merged_turns
+
+    async def _generate_recording_transcript(
+        *,
+        workspace_client_id: str,
+        session_id: str,
+        session_dir: Path,
+        source_paths: list[tuple[Path, str]],
+        recording_entry: dict[str, Any],
+    ) -> None:
+        started_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            faster_transcriber = _build_recording_faster_transcriber()
+            transcript_parts: list[str] = []
+            source_payloads: list[dict[str, Any]] = []
+            final_meta: dict[str, Any] = {}
+            for source_path, source_label in source_paths:
+                faster_text = ""
+                faster_meta: dict[str, Any] = {
+                    "language": None,
+                    "language_probability": None,
+                    "language_hint": None,
+                    "model": str(getattr(settings, "recording_audio_model", "gemini-2.5-flash") or "gemini-2.5-flash"),
+                    "provider": "gemini_audio",
+                    "strategy": "disabled",
+                    "candidates": [],
+                }
+                if faster_transcriber.enabled:
+                    with contextlib.suppress(Exception):
+                        faster_text, faster_meta = await faster_transcriber.transcribe_wav_best_async(
+                            source_path,
+                            _recording_language_hints(recording_entry),
+                            chunk_seconds=15,
+                        )
+                faster_text = " ".join(str(faster_text or "").split()).strip()
+
+                transcript_text = faster_text
+                transcript_meta = {
+                    "language": faster_meta.get("language"),
+                    "confidence": None,
+                    "model": str(faster_meta.get("model") or getattr(settings, "recording_audio_model", "gemini-2.5-flash") or "gemini-2.5-flash"),
+                    "provider": "gemini_audio",
+                    "strategy": faster_meta.get("strategy"),
+                    "language_hint": faster_meta.get("language_hint"),
+                }
+                final_meta = transcript_meta
+                source_payloads.append(
+                    {
+                        "name": source_label,
+                        "path": str(source_path),
+                        "transcript_text": transcript_text,
+                        "transcription": transcript_meta,
+                        "speaker_turns": [],
+                        "alternates": {
+                            "gemini_audio": faster_text or None,
+                            "gemini_audio_candidates": faster_meta.get("candidates"),
+                        },
+                    }
+                )
+                if transcript_text:
+                    transcript_parts.append(f"{source_label}: {transcript_text}")
+            speaker_turns = _build_recording_turns(source_payloads, recording_entry)
+            transcript_text = "\n".join(
+                f"{'AI' if str(turn.get('speaker') or '').strip().lower() == 'ai' else 'User' if str(turn.get('speaker') or '').strip().lower() == 'user' else str(turn.get('speaker_label') or 'Unknown')}: {turn.get('text') or ''}"
+                for turn in speaker_turns
+                if str(turn.get("text") or "").strip()
+            ).strip()
+            if not transcript_text:
+                transcript_text = "\n".join(transcript_parts).strip()
+            recording_type = str(recording_entry.get("selected_recording_type") or recording_entry.get("cdr_leg") or "").strip().lower()
+            recording_note = ""
+            recording_coverage = "unknown"
+            if len(source_payloads) == 1:
+                if recording_type == "ai_leg":
+                    recording_coverage = "ai_leg_only"
+                    recording_note = "Only the AI-leg Piopiy recording is available for this session, so the caller side cannot be recovered from the saved audio."
+                elif recording_type == "caller_leg":
+                    recording_coverage = "caller_leg_only"
+                    recording_note = "Only the caller-leg Piopiy recording is available for this session."
+                else:
+                    recording_coverage = "single_leg_unknown"
+            elif len(source_payloads) > 1:
+                recording_coverage = "full_conversation"
+            if final_meta.get("strategy") or final_meta.get("language_hint"):
+                strategy_note = f"Transcribed with Faster-Whisper {settings.faster_stt_model}"
+                if final_meta.get("strategy"):
+                    strategy_note += f" via {final_meta.get('strategy')} fallback"
+                if final_meta.get("language_hint"):
+                    strategy_note += f" using a {final_meta.get('language_hint')} hint"
+                recording_note = (f"{recording_note} " if recording_note else "") + strategy_note + "."
+            summary_payload = build_transcript_summary(transcript_text)
+            completed_iso = datetime.now(timezone.utc).isoformat()
+            payload = {
+                "ok": True,
+                "status": "completed",
+                "transcription_engine_version": RECORDING_TRANSCRIPT_ENGINE_VERSION,
+                "client_id": workspace_client_id,
+                "session_id": session_id,
+                "recording_path": str(source_paths[0][0]) if source_paths else "",
+                "recording_name": ", ".join(source_label for _path, source_label in source_paths),
+                "recording_sources": source_payloads,
+                "speaker_turns": speaker_turns,
+                "transcript_text": transcript_text,
+                "recording_note": recording_note or None,
+                "recording_coverage": recording_coverage,
+                "summary": summary_payload.get("summary"),
+                "keywords": summary_payload.get("keywords") or [],
+                "sentiment": summary_payload.get("sentiment") or "neutral",
+                "action_items": summary_payload.get("action_items") or [],
+                "csv_url": f"/api/recordings/{urllib.parse.quote(workspace_client_id)}/{urllib.parse.quote(session_id)}/transcript.csv",
+                "transcription": {
+                    "provider": final_meta.get("provider"),
+                    "model": final_meta.get("model"),
+                    "language": final_meta.get("language"),
+                    "confidence": final_meta.get("confidence"),
+                    "created_at": completed_iso,
+                },
+            }
+            _write_cached_recording_transcript(session_dir, payload)
+            _write_recording_transcript_state(
+                session_dir,
+                {
+                    "status": "completed",
+                    "started_at": started_iso,
+                    "completed_at": completed_iso,
+                },
+            )
+            with contextlib.suppress(Exception):
+                transcript_store = SqliteCallTranscriptionStore(settings.call_transcripts_db_path)
+                transcript_store.upsert_transcript(
+                    session_id=session_id,
+                    account_id=workspace_client_id,
+                    caller_number=str(recording_entry.get("from_number") or "").strip() or None,
+                    recording_path=str(source_paths[0][0]) if source_paths else "",
+                    transcript_text=transcript_text,
+                    language=str(final_meta.get("language") or "").strip() or None,
+                    transcription_provider=str(final_meta.get("provider") or "google_cloud_speech_v2"),
+                    transcription_model=str(final_meta.get("model") or ""),
+                    confidence=final_meta.get("confidence"),
+                    transcription_status="completed" if transcript_text else "completed_empty",
+                    started_at=str(recording_entry.get("started_at") or completed_iso),
+                    completed_at=completed_iso,
+                )
+                transcript_store.upsert_turns(
+                    session_id=session_id,
+                    account_id=workspace_client_id,
+                    turns=[
+                        {
+                            "speaker_role": str(turn.get("speaker") or "").strip().lower() or "unknown",
+                            "speaker_label": str(turn.get("speaker_label") or "").strip() or None,
+                            "text": str(turn.get("text") or "").strip(),
+                            "timestamp_ms": turn.get("timestamp_ms"),
+                            "start_offset_ms": turn.get("start_offset_ms"),
+                            "end_offset_ms": turn.get("end_offset_ms"),
+                            "confidence": turn.get("confidence"),
+                            "source_name": turn.get("source"),
+                        }
+                        for turn in speaker_turns
+                    ],
+                )
+                transcript_store.upsert_summary(
+                    session_id=session_id,
+                    account_id=workspace_client_id,
+                    summary=str(summary_payload.get("summary") or "").strip() or "No transcript text was produced.",
+                    keywords=[str(item) for item in summary_payload.get("keywords") or [] if str(item).strip()],
+                    sentiment=str(summary_payload.get("sentiment") or "neutral"),
+                    action_items=[str(item) for item in summary_payload.get("action_items") or [] if str(item).strip()],
+                )
+        except Exception as exc:
+            logger.exception(
+                "Failed to transcribe saved recording client_id=%s session_id=%s",
+                workspace_client_id,
+                session_id,
+            )
+            _write_recording_transcript_state(
+                session_dir,
+                {
+                    "status": "failed",
+                    "started_at": started_iso,
+                    "failed_at": datetime.now(timezone.utc).isoformat(),
+                    "error": str(exc),
+                },
+            )
+        finally:
+            pending_path = _recording_transcript_state_path(session_dir)
+            with contextlib.suppress(Exception):
+                if pending_path.exists():
+                    state = _read_recording_transcript_state(session_dir) or {}
+                    if str(state.get("status") or "").strip().lower() == "processing":
+                        pending_path.unlink(missing_ok=True)
+
     @app.get("/api/recordings")
     async def workspace_recordings(
         request: Request,
-        limit: int = Query(default=50, ge=1, le=200),
+        limit: int = Query(default=5, ge=1, le=200),
     ) -> dict[str, object]:
         user = getattr(request.state, "auth_user", None)
         if user is None:
@@ -4799,6 +5939,166 @@ def create_app() -> FastAPI:
             "total": len(items),
             "items": items[:limit],
         }
+
+    @app.post("/api/recordings/{client_id}/{session_id}/transcript")
+    async def workspace_recording_transcript(
+        client_id: str,
+        session_id: str,
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ) -> dict[str, object]:
+        user = getattr(request.state, "auth_user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        workspace_client_id, _ = _ensure_user_workspace_client(user)
+        if client_id != workspace_client_id:
+            raise HTTPException(status_code=403, detail="Access denied for this recording.")
+        client_root = (settings.session_output_dir / workspace_client_id).resolve()
+        session_dir = (client_root / session_id).resolve()
+        try:
+            session_dir.relative_to(client_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=403, detail="Invalid recording path.") from exc
+        if not session_dir.exists() or not session_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Recording session not found.")
+
+        cached = _read_cached_recording_transcript(session_dir)
+        cached_provider = ""
+        if isinstance(cached, dict):
+            cached_provider = str(
+                (cached.get("transcription") or {}).get("provider")
+                if isinstance(cached.get("transcription"), dict)
+                else cached.get("transcription_provider")
+                or ""
+            ).strip().lower()
+        if (
+            cached
+            and str(cached.get("transcript_text") or "").strip()
+            and str(cached.get("transcription_engine_version") or "").strip() == RECORDING_TRANSCRIPT_ENGINE_VERSION
+            and cached_provider == "gemini_audio"
+        ):
+            cached["source"] = "cache"
+            return cached
+
+        state = _read_recording_transcript_state(session_dir)
+        if state and str(state.get("status") or "").strip().lower() == "processing":
+            started_at = _parse_iso_datetime(state.get("started_at"))
+            if started_at is not None:
+                elapsed_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
+                if elapsed_seconds > RECORDING_TRANSCRIPT_PROCESSING_TIMEOUT_SECONDS:
+                    logger.warning(
+                        "Resetting stale recording transcript state client_id=%s session_id=%s elapsed_seconds=%s",
+                        workspace_client_id,
+                        session_id,
+                        round(elapsed_seconds, 1),
+                    )
+                    with contextlib.suppress(Exception):
+                        _recording_transcript_state_path(session_dir).unlink(missing_ok=True)
+                    state = None
+            if state and str(state.get("status") or "").strip().lower() == "processing":
+                return {
+                    "ok": True,
+                    "status": "processing",
+                    "client_id": workspace_client_id,
+                    "session_id": session_id,
+                    "message": "Transcription is still running. Please wait a moment and try again.",
+                }
+        if state and str(state.get("status") or "").strip().lower() == "failed":
+            with contextlib.suppress(Exception):
+                _recording_transcript_state_path(session_dir).unlink(missing_ok=True)
+
+        recording_entry = _build_recording_entry(workspace_client_id, session_dir)
+        if not recording_entry:
+            raise HTTPException(status_code=404, detail="Recording session metadata not found.")
+        source_paths = _resolve_recording_transcript_sources(session_dir, recording_entry)
+        if not source_paths:
+            raise HTTPException(status_code=404, detail="No saved audio recording found for this session.")
+
+        _write_recording_transcript_state(
+            session_dir,
+            {
+                "status": "processing",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        background_tasks.add_task(
+            _generate_recording_transcript,
+            workspace_client_id=workspace_client_id,
+            session_id=session_id,
+            session_dir=session_dir,
+            source_paths=source_paths,
+            recording_entry=recording_entry,
+        )
+        return {
+            "ok": True,
+            "status": "processing",
+            "transcription_engine_version": RECORDING_TRANSCRIPT_ENGINE_VERSION,
+            "client_id": workspace_client_id,
+            "session_id": session_id,
+            "recording_name": ", ".join(source_label for _path, source_label in source_paths),
+            "message": "Transcription is running in the background.",
+        }
+
+    @app.get("/api/recordings/{client_id}/{session_id}/transcript.csv")
+    async def workspace_recording_transcript_csv(
+        client_id: str,
+        session_id: str,
+        request: Request,
+    ) -> Response:
+        user = getattr(request.state, "auth_user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        workspace_client_id, _ = _ensure_user_workspace_client(user)
+        if client_id != workspace_client_id:
+            raise HTTPException(status_code=403, detail="Access denied for this recording.")
+        client_root = (settings.session_output_dir / workspace_client_id).resolve()
+        session_dir = (client_root / session_id).resolve()
+        try:
+            session_dir.relative_to(client_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=403, detail="Invalid recording path.") from exc
+        if not session_dir.exists() or not session_dir.is_dir():
+            raise HTTPException(status_code=404, detail="Recording session not found.")
+
+        cached = _read_cached_recording_transcript(session_dir) or {}
+        turns = list(cached.get("speaker_turns") or [])
+        if not turns:
+            transcript_store = SqliteCallTranscriptionStore(settings.call_transcripts_db_path)
+            db_turns = transcript_store.get_turns(session_id, workspace_client_id)
+            turns = [
+                {
+                    "timestamp_ms": turn.get("timestamp_ms"),
+                    "timestamp": _format_turn_timestamp(int(float(turn.get("timestamp_ms") or turn.get("start_offset_ms") or 0))) if (turn.get("timestamp_ms") is not None or turn.get("start_offset_ms") is not None) else "",
+                    "speaker": str(turn.get("speaker_role") or turn.get("speaker_label") or "unknown").strip() or "unknown",
+                    "text": str(turn.get("text") or "").strip(),
+                }
+                for turn in db_turns
+                if str(turn.get("text") or "").strip()
+            ]
+        if not turns:
+            raise HTTPException(status_code=404, detail="No transcript turns available for CSV export.")
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Timestamp", "Speaker", "Text"])
+        for turn in turns:
+            timestamp = str(turn.get("timestamp") or "").strip()
+            if not timestamp:
+                with contextlib.suppress(Exception):
+                    timestamp = _format_turn_timestamp(int(float(turn.get("timestamp_ms") or turn.get("start_offset_ms") or 0))) or ""
+            speaker = str(turn.get("speaker") or turn.get("speaker_role") or turn.get("speaker_label") or "unknown").strip() or "unknown"
+            text = " ".join(str(turn.get("text") or "").split()).strip()
+            if text:
+                writer.writerow([timestamp, speaker.upper() if speaker in {"ai", "user"} else speaker, text])
+        csv_name = f"{session_id}-transcript.csv"
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{csv_name}"',
+                "Cache-Control": "no-store, max-age=0",
+            },
+        )
 
     @app.get("/api/recordings/{client_id}/{session_id}/{filename}")
     async def workspace_recording_file(
@@ -4834,6 +6134,7 @@ def create_app() -> FastAPI:
         piopiy_meta_path = (client_root / session_id / "piopiy_recording.json").resolve()
         recording_url = ""
         recording_filename = ""
+        telephony_context: dict[str, Any] = {}
         if piopiy_meta_path.exists() and piopiy_meta_path.is_file():
             meta = _read_json_file(piopiy_meta_path)
             if isinstance(meta, dict):
@@ -4844,7 +6145,6 @@ def create_app() -> FastAPI:
                     recording_filename = Path(parsed.path).name
         if not recording_url:
             artifacts = _read_json_file(client_root / session_id / "artifacts.json")
-            telephony_context = {}
             if isinstance(artifacts, dict) and isinstance(artifacts.get("telephony_context"), dict):
                 telephony_context = artifacts["telephony_context"]
             recording_url = str(telephony_context.get("piopiy_recording_url") or "").strip()
@@ -5031,7 +6331,7 @@ def create_app() -> FastAPI:
         if not leads:
             raise HTTPException(
                 status_code=400,
-                detail="Could not find name/phone columns. Use headers like Name and Phone or Mobile.",
+                detail="Could not find a customer name and phone column. Use headers like BENEFICIARY_NAME and MOBILE.",
             )
         ingestion = record_leads(
             client_id=workspace_client_id,
@@ -5351,9 +6651,14 @@ def create_app() -> FastAPI:
         if transport == "browser":
             bridge = browser_audio_bridges.get(session_key)
             if bridge is None:
+                deadline = time.monotonic() + 3.0
+                while bridge is None and time.monotonic() < deadline:
+                    await asyncio.sleep(0.1)
+                    bridge = browser_audio_bridges.get(session_key)
+            if bridge is None:
                 raise HTTPException(
                     status_code=409,
-                    detail="Browser audio channel is not connected. Open audio WebSocket first.",
+                    detail="Browser audio channel is not connected yet. Open audio WebSocket first, then try Start Demo again.",
                 )
             try:
                 await controller.start_with_audio(
@@ -5441,6 +6746,13 @@ def create_app() -> FastAPI:
             return
         logger.info("Browser audio websocket connected session_key=%s", session_key)
         await websocket.accept()
+        pending_disconnect_stop = browser_audio_disconnect_stop_tasks.pop(session_key, None)
+        if pending_disconnect_stop is not None:
+            pending_disconnect_stop.cancel()
+            logger.info(
+                "Cancelled pending browser audio disconnect stop after reconnect session_key=%s",
+                session_key,
+            )
         bridge = BrowserAudioBridge(websocket)
         browser_audio_bridges[session_key] = bridge
         try:
@@ -5451,15 +6763,68 @@ def create_app() -> FastAPI:
                 except json.JSONDecodeError:
                     continue
                 await bridge.handle_ws_message(message if isinstance(message, dict) else {})
-        except WebSocketDisconnect:
-            logger.info("Browser audio websocket disconnected session_key=%s", session_key)
+        except WebSocketDisconnect as exc:
+            logger.info(
+                "Browser audio websocket disconnected session_key=%s code=%s reason=%s",
+                session_key,
+                getattr(exc, "code", None),
+                getattr(exc, "reason", None),
+            )
         except RuntimeError as exc:
-            logger.info("Browser audio websocket closed during receive session_key=%s error=%s", session_key, exc)
+                logger.info("Browser audio websocket closed during receive session_key=%s error=%s", session_key, exc)
         finally:
+            client_requested_stop = bridge.client_requested_stop
             if browser_audio_bridges.get(session_key) is bridge:
                 browser_audio_bridges.pop(session_key, None)
             await bridge.close()
-            await _safe_stop_session(session_key=session_key)
+            if client_requested_stop:
+                logger.info("Browser audio client requested stop session_key=%s", session_key)
+                await _safe_stop_session(session_key=session_key)
+                return
+
+            async def _stop_if_browser_audio_not_reconnected() -> None:
+                try:
+                    await asyncio.sleep(BROWSER_AUDIO_RECONNECT_GRACE_SECONDS)
+                    if session_key in browser_audio_bridges:
+                        return
+                    logger.info(
+                        "Browser audio reconnect grace expired; stopping session session_key=%s grace_seconds=%s",
+                        session_key,
+                        BROWSER_AUDIO_RECONNECT_GRACE_SECONDS,
+                    )
+                    await _safe_stop_session(session_key=session_key)
+                except asyncio.CancelledError:
+                    return
+                finally:
+                    if browser_audio_disconnect_stop_tasks.get(session_key) is asyncio.current_task():
+                        browser_audio_disconnect_stop_tasks.pop(session_key, None)
+
+            browser_audio_disconnect_stop_tasks[session_key] = asyncio.create_task(
+                _stop_if_browser_audio_not_reconnected()
+            )
+
+    def _resolve_outbound_project_for_call(client_id: str, requested_project_id: str | None) -> str | None:
+        """Optionally route Janjal test outbound calls to the outbound script.
+
+        Production stays unchanged unless JANJAL_OUTBOUND_AUTO_ROUTE_ENABLED is
+        enabled in that environment.
+        """
+        if str(client_id or "").strip() != "user_janjal_voicebot_12c92bbc":
+            return requested_project_id
+        enabled = str(os.getenv("JANJAL_OUTBOUND_AUTO_ROUTE_ENABLED") or "").strip().lower()
+        if enabled not in {"1", "true", "yes", "on"}:
+            return requested_project_id
+        outbound_project_id = (
+            os.getenv("JANJAL_OUTBOUND_PROJECT_ID", "").strip()
+            or "janjal_ward22_outbound_917943446880"
+        )
+        if requested_project_id and requested_project_id != outbound_project_id:
+            logger.info(
+                "Routing Janjal outbound call from requested project %s to outbound project %s",
+                requested_project_id,
+                outbound_project_id,
+            )
+        return outbound_project_id
 
     @app.post("/api/telephony/call")
     async def start_phone_call(request: StartPhoneCallRequest, http_request: Request) -> dict[str, str]:
@@ -5469,12 +6834,28 @@ def create_app() -> FastAPI:
         workspace_client_id, _ = _ensure_user_workspace_client(user)
         if request.client_id != workspace_client_id:
             raise HTTPException(status_code=403, detail="Use your workspace client to place calls.")
+        owner_user_id = str(user.get("id") or "")
+        active_statuses = {"queued", "running", "cancelling"}
+        for campaign in batch_campaigns.values():
+            if str(campaign.get("owner_user_id") or "") != owner_user_id:
+                continue
+            if str(campaign.get("status") or "").strip().lower() not in active_statuses:
+                continue
+            campaign["cancel_requested"] = True
+            campaign["status"] = "cancelling" if campaign.get("status") == "running" else "cancelled"
+            campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+            pending_id = str(campaign.get("current_pending_id") or "").strip()
+            if pending_id:
+                context = await telephony.get_call_context(pending_id) or {}
+                campaign["cancel_hangup_result"] = await _piopiy_ai_hangup_from_context(context)
+                campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+        outbound_project_id = _resolve_outbound_project_for_call(request.client_id, request.project_id)
         try:
             return await telephony.create_outbound_call(
                 client_id=request.client_id,
                 customer_name=request.customer_name,
                 to_number=request.to_number,
-                project_id=request.project_id,
+                project_id=outbound_project_id,
                 lead_source=request.lead_source or "manual_single",
                 context_metadata={"workspace_session_key": _workspace_session_key_for_user(user)},
             )
@@ -5496,73 +6877,236 @@ def create_app() -> FastAPI:
         if len(request.leads) > 300:
             raise HTTPException(status_code=400, detail="Batch size too large. Keep it within 300 leads per request.")
 
-        bundle = load_client(request.client_id, project_id=request.project_id)
+        outbound_project_id = _resolve_outbound_project_for_call(request.client_id, request.project_id)
+        bundle = load_client(request.client_id, project_id=outbound_project_id)
         active_project = bundle.active_project
-        runtime_limit = active_project.runtime.max_concurrent_calls if active_project is not None else None
-        requested_limit = request.max_concurrent_calls if request.max_concurrent_calls is not None else runtime_limit
-        fallback_limit = settings.telephony_max_concurrent_sessions
-        concurrency_limit = max(1, min(100, int(requested_limit or fallback_limit or 1)))
+        del active_project
+        campaign_id = uuid4().hex
+        workspace_session_key = _workspace_session_key_for_user(user)
+        owner_user_id = str(user.get("id") or "")
+        requested_count = len(request.leads)
+        batch_campaigns[campaign_id] = {
+            "campaign_id": campaign_id,
+            "owner_user_id": owner_user_id,
+            "status": "queued",
+            "requested_count": requested_count,
+            "success_count": 0,
+            "failed_count": 0,
+            "concurrency_used": 1,
+            "current_index": None,
+            "current_lead": None,
+            "current_pending_id": None,
+            "cancel_requested": False,
+            "cancel_hangup_result": None,
+            "results": [],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "project_id": outbound_project_id,
+            "project_name": bundle.active_project.name if bundle.active_project is not None else "",
+        }
 
-        semaphore = asyncio.Semaphore(concurrency_limit)
-        results: list[dict[str, object]] = []
+        async def _wait_for_call_to_finish(pending_id: str, campaign: dict[str, Any]) -> str:
+            max_wait_secs = max(30, _env_int("PIOPIY_BATCH_CALL_WAIT_TIMEOUT_SECS", 240))
+            poll_secs = max(2, min(15, _env_int("PIOPIY_BATCH_CALL_POLL_SECS", 5)))
+            deadline = time.time() + max_wait_secs
+            last_status = "queued"
+            while time.time() < deadline:
+                context = await telephony.get_call_context(pending_id) or {}
+                if campaign.get("cancel_requested"):
+                    hangup_result = await _piopiy_ai_hangup_from_context(context)
+                    campaign["cancel_hangup_result"] = hangup_result
+                    campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    return "cancelled_by_user"
+                statuses = [
+                    str(context.get("call_status") or ""),
+                    str(context.get("piopiy_cdr_status") or ""),
+                    str(context.get("piopiy_event_status") or ""),
+                ]
+                raw_cdr = str(context.get("piopiy_last_cdr_json") or "").strip()
+                if raw_cdr:
+                    with contextlib.suppress(Exception):
+                        parsed = json.loads(raw_cdr)
+                        if isinstance(parsed, dict):
+                            statuses.append(str(parsed.get("status") or parsed.get("event") or ""))
+                last_status = next((status for status in statuses if status.strip()), last_status)
+                if any(_is_terminal_call_status(status) for status in statuses):
+                    return last_status.strip().lower() or "ended"
+                await asyncio.sleep(poll_secs)
+            return f"timeout_waiting_for_call_end:{last_status}"
 
-        async def _place_one(index: int, lead: BatchCallLead) -> None:
-            async with semaphore:
-                name = " ".join(str(lead.customer_name or "").split()).strip() or f"Lead {index + 1}"
-                number = "".join(ch for ch in str(lead.to_number or "").strip() if ch in "+0123456789")
-                if not number:
-                    results.append(
-                        {
+        async def _run_batch_campaign() -> None:
+            campaign = batch_campaigns[campaign_id]
+            campaign["status"] = "running"
+            campaign["started_at"] = datetime.now(timezone.utc).isoformat()
+            campaign["updated_at"] = campaign["started_at"]
+            lead_gap_secs = max(0, _env_int("PIOPIY_BATCH_BETWEEN_CALLS_SECS", 5))
+            try:
+                for index, lead in enumerate(request.leads):
+                    if campaign.get("cancel_requested"):
+                        campaign["status"] = "cancelled"
+                        break
+                    name = " ".join(str(lead.customer_name or "").split()).strip() or f"Lead {index + 1}"
+                    number = "".join(ch for ch in str(lead.to_number or "").strip() if ch in "+0123456789")
+                    lead_contact_details: dict[str, str] = {}
+                    for key, value in (lead.contact_details or {}).items():
+                        text = _stringify_tabular_value(value)
+                        if text:
+                            lead_contact_details[str(key)] = text
+                    campaign["current_index"] = index
+                    campaign["current_lead"] = {"customer_name": name, "to_number": number or str(lead.to_number or "")}
+                    campaign["current_pending_id"] = None
+                    campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    result: dict[str, object]
+                    if not number:
+                        result = {
                             "index": index,
                             "customer_name": name,
                             "to_number": str(lead.to_number or ""),
                             "status": "failed",
                             "error": "Missing phone number.",
                         }
-                    )
-                    return
-                try:
-                    outcome = await telephony.create_outbound_call(
-                        client_id=request.client_id,
-                        customer_name=name,
-                        to_number=number,
-                        project_id=request.project_id,
-                        lead_source=request.lead_source or "excel_batch",
-                        context_metadata={"workspace_session_key": _workspace_session_key_for_user(user)},
-                    )
-                    results.append(
-                        {
-                            "index": index,
-                            "customer_name": name,
-                            "to_number": number,
-                            "status": "queued",
-                            "provider": outcome.get("provider", ""),
-                            "call_sid": outcome.get("call_sid", ""),
-                            "pending_id": outcome.get("pending_id", ""),
-                        }
-                    )
-                except Exception as exc:
-                    results.append(
-                        {
-                            "index": index,
-                            "customer_name": name,
-                            "to_number": number,
-                            "status": "failed",
-                            "error": str(exc),
-                        }
-                    )
+                    else:
+                        try:
+                            outcome = await telephony.create_outbound_call(
+                                client_id=request.client_id,
+                                customer_name=name,
+                                to_number=number,
+                                project_id=outbound_project_id,
+                                lead_source=request.lead_source or "excel_batch",
+                                context_metadata={
+                                    "workspace_session_key": workspace_session_key,
+                                    **lead_contact_details,
+                                },
+                            )
+                            pending_id = str(outcome.get("pending_id", "")).strip()
+                            campaign["current_pending_id"] = pending_id or None
+                            campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+                            final_status = await _wait_for_call_to_finish(pending_id, campaign) if pending_id else "queued"
+                            result = {
+                                "index": index,
+                                "customer_name": name,
+                                "to_number": number,
+                                "status": "queued",
+                                "final_status": final_status,
+                                "provider": outcome.get("provider", ""),
+                                "call_sid": outcome.get("call_sid", ""),
+                                "pending_id": pending_id,
+                            }
+                        except Exception as exc:
+                            logger.exception(
+                                "Batch outbound call failed index=%s client_id=%s project_id=%s to_number=%s",
+                                index,
+                                request.client_id,
+                                outbound_project_id,
+                                number,
+                            )
+                            result = {
+                                "index": index,
+                                "customer_name": name,
+                                "to_number": number,
+                                "status": "failed",
+                                "error": str(exc),
+                            }
+                    campaign["results"].append(result)
+                    campaign["success_count"] = sum(1 for item in campaign["results"] if item.get("status") == "queued")
+                    campaign["failed_count"] = len(campaign["results"]) - int(campaign["success_count"])
+                    campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    if campaign.get("cancel_requested"):
+                        campaign["status"] = "cancelled"
+                        break
+                    if index < len(request.leads) - 1 and lead_gap_secs:
+                        await asyncio.sleep(lead_gap_secs)
+                if campaign.get("status") != "cancelled":
+                    campaign["status"] = "completed"
+                campaign["current_index"] = None
+                campaign["current_lead"] = None
+                campaign["current_pending_id"] = None
+                campaign["completed_at"] = datetime.now(timezone.utc).isoformat()
+                campaign["updated_at"] = campaign["completed_at"]
+            except Exception as exc:
+                campaign["status"] = "failed"
+                campaign["error"] = str(exc)
+                campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+                logger.exception("Batch outbound campaign failed campaign_id=%s", campaign_id)
 
-        await asyncio.gather(*[_place_one(i, lead) for i, lead in enumerate(request.leads)])
-        results.sort(key=lambda item: int(item.get("index", 0)))
-        success_count = sum(1 for item in results if item.get("status") == "queued")
-        failed_count = len(results) - success_count
+        asyncio.create_task(_run_batch_campaign(), name=f"piopiy_batch_campaign_{campaign_id}")
         return {
-            "status": "completed",
-            "requested_count": len(request.leads),
-            "success_count": success_count,
-            "failed_count": failed_count,
-            "concurrency_used": concurrency_limit,
+            "status": "queued",
+            "campaign_id": campaign_id,
+            "requested_count": requested_count,
+            "success_count": 0,
+            "failed_count": 0,
+            "concurrency_used": 1,
+            "results": [],
+        }
+
+    async def _cancel_batch_campaign(campaign: dict[str, Any]) -> dict[str, Any]:
+        campaign["cancel_requested"] = True
+        campaign["status"] = "cancelling" if campaign.get("status") == "running" else "cancelled"
+        campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+        pending_id = str(campaign.get("current_pending_id") or "").strip()
+        hangup_result: dict[str, Any] | None = None
+        if pending_id:
+            context = await telephony.get_call_context(pending_id) or {}
+            hangup_result = await _piopiy_ai_hangup_from_context(context)
+            campaign["cancel_hangup_result"] = hangup_result
+            campaign["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return {
+            "campaign_id": campaign.get("campaign_id"),
+            "status": campaign.get("status"),
+            "current_pending_id": pending_id or None,
+            "hangup_result": hangup_result,
+        }
+
+    @app.post("/api/telephony/call-batch/cancel-active")
+    async def cancel_active_phone_call_batches(http_request: Request) -> dict[str, object]:
+        user = getattr(http_request.state, "auth_user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        owner_user_id = str(user.get("id") or "")
+        active_statuses = {"queued", "running", "cancelling"}
+        matches = [
+            campaign
+            for campaign in batch_campaigns.values()
+            if str(campaign.get("owner_user_id") or "") == owner_user_id
+            and str(campaign.get("status") or "").strip().lower() in active_statuses
+        ]
+        results = [await _cancel_batch_campaign(campaign) for campaign in matches]
+        return {
+            "status": "cancelled" if results else "none_active",
+            "cancelled_count": len(results),
             "results": results,
+        }
+
+    @app.get("/api/telephony/call-batch/{campaign_id}")
+    async def get_phone_call_batch(campaign_id: str, http_request: Request) -> dict[str, object]:
+        user = getattr(http_request.state, "auth_user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        campaign = batch_campaigns.get(campaign_id)
+        if campaign is None:
+            raise HTTPException(status_code=404, detail="Batch campaign not found.")
+        if str(campaign.get("owner_user_id") or "") != str(user.get("id") or ""):
+            raise HTTPException(status_code=403, detail="Batch campaign belongs to another user.")
+        return {key: value for key, value in campaign.items() if key != "owner_user_id"}
+
+    @app.post("/api/telephony/call-batch/{campaign_id}/cancel")
+    async def cancel_phone_call_batch(campaign_id: str, http_request: Request) -> dict[str, object]:
+        user = getattr(http_request.state, "auth_user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+        campaign = batch_campaigns.get(campaign_id)
+        if campaign is None:
+            raise HTTPException(status_code=404, detail="Batch campaign not found.")
+        if str(campaign.get("owner_user_id") or "") != str(user.get("id") or ""):
+            raise HTTPException(status_code=403, detail="Batch campaign belongs to another user.")
+        result = await _cancel_batch_campaign(campaign)
+        return {
+            "status": result["status"],
+            "campaign_id": campaign_id,
+            "cancel_requested": True,
+            "current_pending_id": result["current_pending_id"],
+            "hangup_result": result["hangup_result"],
         }
 
     @app.post("/internal/telephony/call")
@@ -6208,31 +7752,24 @@ def create_app() -> FastAPI:
     @app.get("/airtel-iq/ws-url")
     @app.get("/airtel-iq/ws-url/{pending_id}")
     async def airtel_iq_ws_url(request: Request, pending_id: str | None = None) -> dict[str, str]:
-        base_url = settings.public_base_url or str(request.base_url).rstrip("/")
-        try:
-            ws_url = build_ws_url(base_url, "/airtel-iq/ws-airtel/")
-        except RuntimeError:
-            parsed_base = urllib.parse.urlparse(str(request.base_url).rstrip("/"))
-            ws_url = urllib.parse.urlunparse(("wss", parsed_base.netloc, "/airtel-iq/ws-airtel/", "", "", ""))
-        response: dict[str, str] = {"url": ws_url}
+        base_url = _airtel_iq_ws_public_base_url() or str(request.base_url).rstrip("/")
+        response: dict[str, str] = {"url": _airtel_iq_ws_public_pattern(base_url, "/airtel-iq/ws-airtel/")}
         if pending_id:
             response["pending_id"] = pending_id
         return response
 
     @app.get("/airtel-iq/debug-url")
     async def airtel_iq_debug_url(request: Request) -> dict[str, object]:
-        base_url = settings.public_base_url or str(request.base_url).rstrip("/")
-        try:
-            ws_url_pattern = build_ws_url(base_url, "/airtel-iq/ws-airtel/")
-        except RuntimeError:
-            parsed_base = urllib.parse.urlparse(str(request.base_url).rstrip("/"))
-            ws_url_pattern = urllib.parse.urlunparse(("wss", parsed_base.netloc, "/airtel-iq/ws-airtel/", "", "", ""))
+        base_url = str(request.base_url).rstrip("/")
+        ws_public_base = _airtel_iq_ws_public_base_url() or base_url
+        ws_url_pattern = _airtel_iq_ws_public_pattern(ws_public_base, "/airtel-iq/ws-airtel/")
         return {
             "ok": True,
-            "media_url_pattern": f"{base_url.rstrip('/')}/airtel-iq/ws-airtel/",
+            "media_url_pattern": f"{base_url}/airtel-iq/ws-airtel/",
             "ws_url_pattern": ws_url_pattern,
             "voice_bot_wss_url_pattern": ws_url_pattern,
-            "voice_bot_port": 443,
+            "voice_bot_port": _airtel_iq_ws_public_port(),
+            "voice_bot_ip_allowlist": sorted(airtel_iq_test_allowlist),
             "voice_bot_metadata_keys": [
                 "pending_id",
                 "client_id",
@@ -6564,79 +8101,218 @@ def create_app() -> FastAPI:
     async def exotel_media(websocket: WebSocket, pending_id: str) -> None:
         await _run_exotel_media_session(websocket, pending_id=pending_id)
 
-    async def _run_airtel_iq_media_session(websocket: WebSocket, pending_id: str | None = None) -> None:
-        logger.info(
-            "Airtel IQ media websocket connection requested for pending_id=%s",
-            pending_id or "<dynamic>",
+    async def _resolve_airtel_iq_pending_call(message: dict[str, Any]) -> tuple[str, PendingCall | None, dict[str, str]]:
+        start_details = _extract_airtel_iq_start_details(message)
+        resolved_pending_id = start_details.get("pending_id", "")
+        if resolved_pending_id:
+            pending_call = await telephony.consume_pending_call(resolved_pending_id)
+            if pending_call is not None:
+                logger.info(
+                    "Matched Airtel IQ start event using metadata pending_id=%s",
+                    resolved_pending_id,
+                )
+                return resolved_pending_id, pending_call, start_details
+            logger.warning(
+                "Airtel IQ start event referenced unknown pending_id=%s",
+                resolved_pending_id,
+            )
+
+        call_sid = start_details.get("call_sid", "")
+        if call_sid:
+            match_pending_id = await telephony.find_pending_id_by_provider_sid("airtel_iq", call_sid)
+            if match_pending_id:
+                pending_call = await telephony.consume_pending_call(match_pending_id)
+                if pending_call is not None:
+                    logger.info(
+                        "Matched Airtel IQ start event using call_sid=%s pending_id=%s",
+                        call_sid,
+                        match_pending_id,
+                    )
+                    return match_pending_id, pending_call, start_details
+
+        caller_number = start_details.get("caller_number", "")
+        called_number = start_details.get("called_number", "")
+        number_match_pending_id = await telephony.find_recent_pending_call_by_numbers(
+            "airtel_iq",
+            caller_id=caller_number or None,
+            to_number=called_number or None,
+            direction="outbound",
         )
+        if number_match_pending_id:
+            pending_call = await telephony.consume_pending_call(number_match_pending_id)
+            if pending_call is not None:
+                logger.info(
+                    "Matched Airtel IQ start event using caller=%s called=%s pending_id=%s",
+                    caller_number or "",
+                    called_number or "",
+                    number_match_pending_id,
+                )
+                return number_match_pending_id, pending_call, start_details
+
+        pending_ids = await telephony.list_pending_call_ids("airtel_iq")
+        available_pending_ids: list[str] = []
+        for candidate_pending_id in pending_ids:
+            if not await controller.is_busy(session_key=candidate_pending_id):
+                available_pending_ids.append(candidate_pending_id)
+        if len(available_pending_ids) == 1:
+            fallback_pending_id = available_pending_ids[0]
+            logger.info(
+                "Falling back to only pending Airtel IQ call pending_id=%s for static media websocket",
+                fallback_pending_id,
+            )
+            pending_call = await telephony.consume_pending_call(fallback_pending_id)
+            if pending_call is not None:
+                return fallback_pending_id, pending_call, start_details
+        if len(available_pending_ids) > 1:
+            logger.warning(
+                "Static Airtel IQ media websocket could not be resolved safely because %s unclaimed Airtel IQ pending calls exist",
+                len(available_pending_ids),
+            )
+        elif pending_ids:
+            logger.info(
+                "Static Airtel IQ media websocket skipped pending fallback because all %s candidate calls are already active",
+                len(pending_ids),
+            )
+        return "", None, start_details
+
+    async def _run_airtel_iq_media_session(websocket: WebSocket, pending_id: str | None = None) -> None:
+        if pending_id:
+            logger.info("Airtel IQ media websocket connection requested for pending_id=%s", pending_id)
+        else:
+            logger.info("Airtel IQ static media websocket connection requested.")
         await websocket.accept()
+        if not _airtel_iq_test_ip_allowed(websocket):
+            await websocket.close(code=1008)
+            return
+
         bridge = AirtelIQMediaBridge(websocket)
-        pending_call = await telephony.get_pending_call(pending_id) if pending_id else None
         session_started = False
         active_pending_id = pending_id or ""
+        pending_call: PendingCall | None = None
         try:
+            if active_pending_id:
+                pending_call = await telephony.consume_pending_call(active_pending_id)
+                if pending_call is None:
+                    logger.warning(
+                        "No pending Airtel IQ call found for media websocket pending_id=%s",
+                        active_pending_id,
+                    )
+                    await websocket.close()
+                    return
+
             while True:
-                if session_started and active_pending_id and not await controller.is_busy(session_key=active_pending_id):
+                if active_pending_id and session_started and not await controller.is_busy(session_key=active_pending_id):
                     logger.info(
                         "Voice session finished; closing Airtel IQ media stream pending_id=%s",
                         active_pending_id,
                     )
                     break
                 try:
-                    payload = await asyncio.wait_for(websocket.receive(), timeout=1.0)
+                    frame = await asyncio.wait_for(websocket.receive(), timeout=1.0)
                 except TimeoutError:
                     continue
-                raw_text = ""
-                if payload.get("text"):
-                    raw_text = str(payload.get("text") or "")
-                elif payload.get("bytes"):
-                    raw_text = bytes(payload.get("bytes") or b"").decode("utf-8", errors="replace")
-                if not raw_text.strip():
+                if frame.get("bytes") is not None:
+                    binary_payload = frame["bytes"] or b""
+                    if binary_payload:
+                        logger.info(
+                            "Airtel IQ binary websocket frame received pending_id=%s bytes=%s",
+                            active_pending_id or "<unresolved>",
+                            len(binary_payload),
+                        )
+                    continue
+                payload = str(frame.get("text") or "").strip()
+                if not payload:
                     continue
                 try:
-                    message = json.loads(raw_text)
+                    message = json.loads(payload)
                 except json.JSONDecodeError:
-                    logger.warning("Discarding non-JSON Airtel IQ websocket payload: %s", raw_text[:200])
+                    logger.debug(
+                        "Airtel IQ websocket received non-JSON text pending_id=%s payload=%r",
+                        active_pending_id or "<unresolved>",
+                        payload,
+                    )
                     continue
-                start_details = _extract_airtel_iq_start_details(message)
-                event = str(message.get("event", "") or message.get("eventType", "") or message.get("status", "")).strip().lower()
-                if event in {"connected", "start", "stop", "media", "clear", "streaminfo", "terminate"}:
-                    logger.info("Airtel IQ media event: pending_id=%s event=%s", active_pending_id or pending_id or "", event or "<missing>")
-                if not active_pending_id:
-                    active_pending_id = _payload_value(start_details, "pending_id", "pendingId", "biz_opaque_callback_data")
-                    if active_pending_id:
-                        pending_call = await telephony.get_pending_call(active_pending_id)
-                        if pending_call is None:
-                            pending_call = await telephony.consume_pending_call(active_pending_id)
-                    if not active_pending_id and pending_id:
-                        active_pending_id = pending_id
-                if event in {"stop", "terminate", "error"}:
-                    logger.info("Received Airtel IQ terminal event, closing media loop pending_id=%s", active_pending_id or pending_id or "")
-                    break
+                if not isinstance(message, dict):
+                    logger.debug(
+                        "Airtel IQ websocket received non-dict JSON pending_id=%s payload_type=%s",
+                        active_pending_id or "<unresolved>",
+                        type(message).__name__,
+                    )
+                    continue
+
+                event = str(
+                    message.get("event")
+                    or message.get("eventType")
+                    or message.get("eventname")
+                    or message.get("status")
+                    or ""
+                ).strip().lower()
+                if event in {"connected", "streaminfo", "streamstart", "start", "media", "stop", "terminate", "clear", "error", "end"}:
+                    logger.info(
+                        "Airtel IQ media event: pending_id=%s event=%s",
+                        active_pending_id or "<unresolved>",
+                        event or "<missing>",
+                    )
                 await bridge.handle_ws_message(message)
-                if pending_call is not None and not session_started and event in {"connected", "start", "media", "streaminfo"}:
-                    active_pending_id = active_pending_id or pending_id or ""
-                    if not active_pending_id:
-                        logger.warning("Airtel IQ start event did not include a pending_id; waiting for a resolvable session.")
+                if event in {"stop", "terminate", "error", "end"}:
+                    logger.info(
+                        "Received Airtel IQ terminal event, closing media loop pending_id=%s event=%s",
+                        active_pending_id or "<unresolved>",
+                        event or "<missing>",
+                    )
+                    break
+
+                if pending_call is None and event in {"connected", "streaminfo", "streamstart", "start"}:
+                    active_pending_id, pending_call, start_details = await _resolve_airtel_iq_pending_call(message)
+                    if pending_call is not None and active_pending_id:
+                        await telephony.update_call_context(
+                            active_pending_id,
+                            {
+                                "provider_call_sid": start_details.get("call_sid") or None,
+                                "airtel_iq_stream_sid": start_details.get("stream_sid") or None,
+                                "airtel_iq_account_sid": start_details.get("account_sid") or None,
+                                "airtel_iq_caller_number": start_details.get("caller_number") or None,
+                                "airtel_iq_called_number": start_details.get("called_number") or None,
+                                "airtel_iq_custom_parameters_json": start_details.get("custom_parameters_json") or None,
+                                "airtel_iq_metadata_json": start_details.get("metadata_json") or None,
+                                "airtel_iq_comments_json": start_details.get("comments_json") or None,
+                                "airtel_iq_start_payload": json.dumps(message, ensure_ascii=True),
+                                "airtel_iq_ws_url": "/airtel-iq/ws-airtel/",
+                            },
+                        )
+                        if start_details.get("call_sid"):
+                            await telephony.update_pending_call_provider_sid(active_pending_id, start_details["call_sid"])
+                    else:
                         continue
+
+                if pending_call is None:
+                    continue
+
+                if not session_started and event in {"connected", "streaminfo", "streamstart", "start", "media"}:
                     await controller.start_with_audio(
                         client_id=pending_call.client_id,
                         customer_name=pending_call.customer_name,
                         project_id=(pending_call.metadata or {}).get("project_id"),
                         audio=bridge,
                         telephony_context=pending_call.metadata,
-                        defer_initial_prompt=event == "connected",
+                        defer_initial_prompt=event in {"connected", "streaminfo"},
                         session_key=active_pending_id,
                     )
                     session_started = True
-                    if event == "connected":
-                        continue
-                if session_started and event == "start" and active_pending_id:
+                    continue
+
+                if session_started and event in {"streaminfo", "start"}:
                     await controller.release_initial_prompt(session_key=active_pending_id)
         except WebSocketDisconnect:
-            logger.info("Airtel IQ media websocket disconnected for pending_id=%s", active_pending_id or pending_id or "")
+            logger.info(
+                "Airtel IQ media websocket disconnected for pending_id=%s",
+                active_pending_id or "<unresolved>",
+            )
         except RuntimeError:
-            logger.exception("Airtel IQ media session failed for pending_id=%s", active_pending_id or pending_id or "")
+            logger.exception(
+                "Airtel IQ media session failed for pending_id=%s",
+                active_pending_id or "<unresolved>",
+            )
             await bridge.close()
         finally:
             if session_started and active_pending_id:
@@ -6644,8 +8320,11 @@ def create_app() -> FastAPI:
             await bridge.close()
 
     @app.websocket("/airtel-iq/ws-airtel/")
-    @app.websocket("/airtel-iq/ws-airtel")
     async def airtel_iq_media(websocket: WebSocket) -> None:
+        await _run_airtel_iq_media_session(websocket, pending_id=None)
+
+    @app.websocket("/airtel-iq/ws-airtel")
+    async def airtel_iq_media_no_slash(websocket: WebSocket) -> None:
         await _run_airtel_iq_media_session(websocket, pending_id=None)
 
     @app.websocket("/airtel-iq/media/{pending_id}")
@@ -7102,6 +8781,37 @@ def create_app() -> FastAPI:
                 context = await telephony.get_call_context(pending_id) or {}
                 client_id = str(context.get("client_id") or "").strip()
                 status = str(context.get("recording_status") or "").strip().lower()
+                if client_id and status == "saved":
+                    session_dir = (settings.session_output_dir / client_id / pending_id).resolve()
+                    meta = _read_json_file(session_dir / "piopiy_recording.json") or {}
+                    recording_path = str(meta.get("recording_path") or "").strip()
+                    if not recording_path:
+                        recording_filename = str(meta.get("recording_filename") or "").strip()
+                        if recording_filename:
+                            recording_path = str((session_dir / recording_filename).resolve())
+                    if recording_path:
+                        await post_call_pipeline.enqueue(
+                            RecordingTranscriptionJob(
+                                account_id=client_id,
+                                session_id=pending_id,
+                                caller_number=str(
+                                    context.get("caller_number")
+                                    or context.get("from_number")
+                                    or context.get("piopiy_from_number")
+                                    or ""
+                                ).strip()
+                                or None,
+                                recording_path=recording_path,
+                                recording_status="saved",
+                                language_hint=str(meta.get("language") or context.get("language") or "").strip() or None,
+                            )
+                        )
+                        _append_piopiy_trace(
+                            "recording_transcription_enqueued",
+                            pending_id=pending_id,
+                            source=source,
+                            recording_path=recording_path,
+                        )
                 if client_id:
                     meta = _read_json_file(settings.session_output_dir / client_id / pending_id / "piopiy_recording.json")
                     if isinstance(meta, dict):
@@ -7144,9 +8854,12 @@ def create_app() -> FastAPI:
 
     def _find_piopiy_session_for_payload(payload: dict[str, Any]) -> tuple[str | None, str | None]:
         to_number = str(payload.get("to") or payload.get("to_number") or "").strip()
-        client_id, _project_id = _resolve_inbound_piopiy_target(to_number)
-        if not client_id:
+        try:
+            route = resolve_piopiy_number_route(to_number)
+        except TenantRoutingError as exc:
+            logger.error("Skipping Piopiy payload with unassigned/conflicting DID to_number=%r error=%s", to_number, exc)
             return None, None
+        client_id = route.client_id
         call_ids = set(_piopiy_payload_call_ids(payload))
         if not call_ids:
             return client_id, None
@@ -7282,6 +8995,22 @@ def create_app() -> FastAPI:
         direction = str(payload.get("direction") or "").strip().lower()
         leg = str(payload.get("leg") or "").strip().lower()
         voice_ai = bool(payload.get("voice_ai"))
+        if pending_id is None and direction == "outbound":
+            pending_id = await telephony.find_recent_pending_piopiy_by_numbers(
+                caller_id=str(payload.get("caller_id") or payload.get("from") or "").strip(),
+                to_number=str(payload.get("to") or payload.get("to_number") or "").strip(),
+                direction="outbound",
+            )
+            if pending_id is not None:
+                _append_piopiy_trace(
+                    "events_matched_outbound_by_number",
+                    pending_id=pending_id,
+                    provider_call_sid=provider_call_sid or None,
+                    call_id_candidates=call_ids,
+                    caller_id=payload.get("caller_id"),
+                    to_number=payload.get("to") or payload.get("to_number"),
+                    status=status,
+                )
         if pending_id is None and direction == "inbound" and voice_ai and leg in {"", "ai"} and status in {"ringing", "incoming", "queued"}:
             logger.info(
                 "Piopiy events webhook is acting as the call-notification entrypoint; answering inbound call via fallback. call_sid=%s status=%s",
@@ -7381,6 +9110,24 @@ def create_app() -> FastAPI:
             pending_id = await telephony.find_pending_id_by_provider_sid("piopiy", candidate_sid)
             if pending_id is not None:
                 break
+        if pending_id is None:
+            direction = str(payload.get("direction") or "").strip().lower()
+            if direction == "outbound":
+                pending_id = await telephony.find_recent_pending_piopiy_by_numbers(
+                    caller_id=str(payload.get("caller_id") or payload.get("from") or "").strip(),
+                    to_number=str(payload.get("to") or payload.get("to_number") or "").strip(),
+                    direction="outbound",
+                )
+                if pending_id is not None:
+                    _append_piopiy_trace(
+                        "cdr_matched_outbound_by_number",
+                        pending_id=pending_id,
+                        provider_call_sid=provider_call_sid or None,
+                        call_id_candidates=call_ids,
+                        caller_id=payload.get("caller_id"),
+                        to_number=payload.get("to") or payload.get("to_number"),
+                        status=payload.get("status") or payload.get("event"),
+                    )
         if pending_id is None:
             fallback_client_id, fallback_session_id = _find_piopiy_session_for_payload(payload)
             if fallback_session_id:
@@ -7640,6 +9387,8 @@ def create_app() -> FastAPI:
     @app.get("/piopiy/debug-url")
     async def piopiy_debug_url(request: Request) -> dict[str, object]:
         base_url = str(request.base_url).rstrip("/")
+        ws_public_base = _piopiy_ws_public_base_url() or str(request.base_url).rstrip("/")
+        ws_url_pattern = _piopiy_ws_public_pattern(ws_public_base, "/piopiy/stream/{pending_id}")
         return {
             "ok": True,
             "answer_url": f"{base_url}/piopiy/answer",
@@ -7651,6 +9400,9 @@ def create_app() -> FastAPI:
             "trace_url": f"{base_url}/piopiy/trace",
             "recording_debug_url_pattern": f"{base_url}/piopiy/recording-debug/{{client_id}}/{{session_id}}",
             "stream_url_pattern": f"{base_url}/piopiy/stream/{{pending_id}}",
+            "voice_bot_wss_url_pattern": ws_url_pattern,
+            "voice_bot_port": _piopiy_ws_public_port(),
+            "voice_bot_ip_allowlist": sorted(piopiy_test_allowlist),
             "debug_state": dict(piopiy_debug_state),
             "last_request": piopiy_capture["last_request"],
             "last_answer": piopiy_capture["last_answer"],
@@ -7692,6 +9444,10 @@ def create_app() -> FastAPI:
         logger.info("Piopiy stream websocket connection requested for pending_id=%s", pending_id)
         _record_piopiy_stage("stream_websocket_requested", pending_id=pending_id)
         await websocket.accept()
+        if not _piopiy_test_ip_allowed(websocket):
+            _record_piopiy_stage("stream_websocket_ip_rejected", pending_id=pending_id)
+            await websocket.close(code=1008)
+            return
         _record_piopiy_stage("stream_websocket_accepted", pending_id=pending_id)
         pending_call = await telephony.consume_pending_call(pending_id)
         if pending_call is None:

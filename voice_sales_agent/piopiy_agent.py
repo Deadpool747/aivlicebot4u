@@ -12,6 +12,7 @@ the agent can run as its own long-lived process.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import inspect
 import logging
@@ -30,6 +31,7 @@ import json
 from .clients import list_client_ids, load_client
 from .config import AppSettings, load_settings
 from .prompt_builder import PromptBuilder
+from .tenant_routing import TenantRoutingError, resolve_piopiy_number_route
 
 logger = logging.getLogger(__name__)
 TRACE_FILE = Path(os.getenv("PIOPIY_TRACE_FILE", "/opt/new_voice_agent/runtime/piopiy_agent_trace.jsonl"))
@@ -39,7 +41,13 @@ JANJAL_DEFAULT_IDLE_TIMEOUT_SECS = 15
 JANJAL_DEFAULT_IDLE_WARNING_SECS = 7
 JANJAL_IDLE_WARNING_TEXT = "आपण बोलत नसाल तर मी कॉल थोड्याच वेळात समाप्त करते."
 JANJAL_IDLE_CLOSING_TEXT = "जर आपण बोलत नसाल तर मी कॉल इथेच समाप्त करते. धन्यवाद, जय महाराष्ट्र."
+JANJAL_DEFAULT_CLOSING_HANGUP_DELAY_SECS = 1.5
+JANJAL_DEFAULT_GEMINI_VAD_PREFIX_PADDING_MS = 180
+JANJAL_DEFAULT_GEMINI_VAD_SILENCE_MS = 220
 ACTIVE_PIOPIY_CONVERSATIONS: dict[str, dict[str, Any]] = {}
+JANJAL_DID_NUMBER = "917943446880"
+JANJAL_INBOUND_PROJECT_ID = "janjal_ward22_inbound_918065254654"
+JANJAL_OUTBOUND_PROJECT_ID = "janjal_ward22_outbound_917943446880"
 
 
 @dataclass(slots=True)
@@ -82,6 +90,96 @@ def _env_int(name: str, default: int) -> int:
     return max(1, parsed)
 
 
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        logger.warning("Invalid float for %s=%r; using default=%s", name, value, default)
+        return default
+    return max(0.1, parsed)
+
+
+def _digits_only(value: str | None) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _resolve_outbound_project_for_owned_did(
+    *,
+    client_id: str,
+    did: str,
+    default_project_id: str | None,
+) -> str | None:
+    did_digits = _digits_only(did)
+    with contextlib.suppress(Exception):
+        bundle = load_client(client_id)
+        for project in bundle.projects:
+            runtime = project.runtime
+            if project.status != "active":
+                continue
+            if runtime.outbound_call_provider != "piopiy":
+                continue
+            if did_digits and _digits_only(runtime.piopiy_caller_id) == did_digits:
+                return project.project_id
+    return default_project_id
+
+
+def _resolve_session_tenant_and_project(
+    *,
+    client_id: str,
+    default_project_id: str | None,
+    from_number: str,
+    to_number: str,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[str, str | None, str, str]:
+    """Resolve live Piopiy calls by client-owned DID only."""
+    metadata_client_id = str((metadata or {}).get("client_id") or "").strip()
+    metadata_project_id = str((metadata or {}).get("project_id") or "").strip()
+    if metadata_client_id and metadata_project_id:
+        return metadata_client_id, metadata_project_id, "metadata_client_project", "unknown"
+
+    try:
+        inbound_route = resolve_piopiy_number_route(to_number)
+        return (
+            inbound_route.client_id,
+            inbound_route.project_id,
+            "piopiy_inbound_did",
+            "inbound",
+        )
+    except TenantRoutingError:
+        pass
+
+    try:
+        outbound_route = resolve_piopiy_number_route(from_number)
+        outbound_project_id = _resolve_outbound_project_for_owned_did(
+            client_id=outbound_route.client_id,
+            did=from_number,
+            default_project_id=outbound_route.project_id or default_project_id,
+        )
+        return (
+            outbound_route.client_id,
+            outbound_project_id,
+            "piopiy_outbound_caller_id",
+            "outbound",
+        )
+    except TenantRoutingError as exc:
+        raise RuntimeError(
+            f"Piopiy call numbers are not assigned to a client: from={from_number!r} to={to_number!r}"
+        ) from exc
+
+
+def _resolve_call_direction(from_number: str, to_number: str) -> str:
+    with contextlib.suppress(TenantRoutingError):
+        resolve_piopiy_number_route(to_number)
+        return "inbound"
+    with contextlib.suppress(TenantRoutingError):
+        resolve_piopiy_number_route(from_number)
+        return "outbound"
+    return "unknown"
+
+
 def _resolve_idle_timeout_secs(client_id: str) -> int:
     if client_id == JANJAL_CLIENT_ID:
         return _env_int("PIOPIY_JANJAL_IDLE_TIMEOUT_SECS", JANJAL_DEFAULT_IDLE_TIMEOUT_SECS)
@@ -109,6 +207,97 @@ def _apply_idle_policy_instruction(instructions: str, *, client_id: str, idle_ti
         "- Do not repeat the warning more than once in the same silence period."
     )
     return instructions.rstrip() + policy
+
+
+def _apply_janjal_complaint_loop_guard(instructions: str, *, client_id: str) -> str:
+    """Prevent Janjal calls from looping on complaint/address capture questions."""
+    if client_id != JANJAL_CLIENT_ID:
+        return instructions
+    policy = (
+        "\n\n# Janjal Complaint Capture Loop Guard\n"
+        "- Internally track how many times you have asked for the caller's complaint/problem details.\n"
+        "- If the caller gives any concrete issue at all, treat complaint_details as captured even if it is incomplete.\n"
+        "- After complaint_details is captured, do not ask again: 'समस्या काय आहे?', 'तक्रार काय आहे?', or 'problem काय आहे?'.\n"
+        "- Ask for complaint/problem details at most one time total in the full call.\n"
+        "- If that answer is unclear, summarize the best words you heard, say you have taken the note, and move to closing.\n"
+        "- Ask for the address-on-WhatsApp instruction only once in the full call.\n"
+        "- Do not keep asking the caller to put/send the address on WhatsApp. After one request, treat address_on_whatsapp as pending and continue.\n"
+        "- If full name is missing, ask once for the name. If not provided, continue with 'नाव नोंदलेले नाही' and close.\n"
+        "- Never get stuck repeating the same complaint or address question. After one complaint attempt, classify best-effort, provide a complaint ID, timeline, and close respectfully.\n"
+        "- Use only one language per turn. Marathi is primary unless the caller clearly switches language.\n"
+    )
+    return instructions.rstrip() + policy
+
+
+def _build_janjal_gemini_vad_params(factory: Any, *, enabled: bool) -> Any | None:
+    if not enabled:
+        return None
+    try:
+        return factory(
+            disabled=False,
+            start_sensitivity=os.getenv(
+                "PIOPIY_JANJAL_GEMINI_VAD_START_SENSITIVITY",
+                "START_SENSITIVITY_HIGH",
+            ).strip() or "START_SENSITIVITY_HIGH",
+            end_sensitivity=os.getenv(
+                "PIOPIY_JANJAL_GEMINI_VAD_END_SENSITIVITY",
+                "END_SENSITIVITY_HIGH",
+            ).strip() or "END_SENSITIVITY_HIGH",
+            prefix_padding_ms=_env_int(
+                "PIOPIY_JANJAL_GEMINI_VAD_PREFIX_PADDING_MS",
+                JANJAL_DEFAULT_GEMINI_VAD_PREFIX_PADDING_MS,
+            ),
+            silence_duration_ms=_env_int(
+                "PIOPIY_JANJAL_GEMINI_VAD_SILENCE_MS",
+                JANJAL_DEFAULT_GEMINI_VAD_SILENCE_MS,
+            ),
+        )
+    except Exception as exc:
+        logger.warning("Failed to build Janjal Gemini Live VAD params; using Gemini defaults. error=%s", exc)
+        _append_trace("janjal_gemini_vad_config_error", error=repr(exc))
+        return None
+
+
+def _is_janjal_final_closing_text(text: str) -> bool:
+    normalized = " ".join(str(text or "").lower().split())
+    if not normalized:
+        return False
+    strong_markers = (
+        "जय शिवसेना",
+        "jai shiv sena",
+        "jay shiv sena",
+    )
+    if any(marker in normalized for marker in strong_markers):
+        return True
+    if "धन्यवाद" in normalized and "जय महाराष्ट्र" in normalized:
+        return True
+    if "complaint id" in normalized and ("thank" in normalized or "धन्यवाद" in normalized):
+        return True
+    if "तक्रार क्रमांक" in normalized and ("धन्यवाद" in normalized or "पाठपुरावा" in normalized):
+        return True
+    return False
+
+
+def _extract_frame_text(frame: Any) -> str:
+    text = getattr(frame, "text", None)
+    if isinstance(text, str) and text.strip():
+        return text
+    content = getattr(frame, "content", None)
+    if isinstance(content, str) and content.strip():
+        return content
+    messages = getattr(frame, "messages", None)
+    if isinstance(messages, list):
+        parts: list[str] = []
+        for message in messages:
+            role = str(getattr(message, "role", "") or "").lower()
+            if role and role != "assistant":
+                continue
+            message_content = getattr(message, "content", None)
+            if isinstance(message_content, str) and message_content.strip():
+                parts.append(message_content)
+        if parts:
+            return " ".join(parts)
+    return ""
 
 
 def _resolve_piopiy_conversation_id(call_id: str, metadata: dict[str, Any] | None = None) -> str:
@@ -311,6 +500,8 @@ async def _run_agent_with_optional_silence_watchdog(
     *,
     client_id: str,
     call_id: str,
+    project_id: str | None = None,
+    call_direction: str = "unknown",
     idle_warning_secs: int,
     idle_timeout_secs: int,
     llm: Any | None = None,
@@ -364,23 +555,68 @@ async def _run_agent_with_optional_silence_watchdog(
         "warning_sent": False,
         "hangup_sent": False,
         "hangup_cancel_at": None,
+        "hangup_reason": None,
+        "closing_detected": False,
+        "closing_text": "",
+        "closing_hangup_at": None,
     }
 
     class JanjalSilenceObserver(BaseObserver):
         async def on_push_frame(self, data: Any) -> None:
             frame = data.frame
             now = time.monotonic()
+            frame_type = type(frame).__name__
+            frame_text = _extract_frame_text(frame)
+            if frame_text and frame_type in {"LLMTextFrame", "TTSTextFrame", "TextFrame", "TranscriptionUpdateFrame"}:
+                if _is_janjal_final_closing_text(frame_text) and not state["closing_detected"]:
+                    state["closing_detected"] = True
+                    state["closing_text"] = frame_text[-500:]
+                    if not state["bot_speaking"]:
+                        state["closing_hangup_at"] = now + _env_float(
+                            "PIOPIY_JANJAL_CLOSING_HANGUP_DELAY_SECS",
+                            JANJAL_DEFAULT_CLOSING_HANGUP_DELAY_SECS,
+                        )
+                    _append_trace(
+                        "janjal_final_closing_detected",
+                        call_id=call_id,
+                        project_id=project_id,
+                        call_direction=call_direction,
+                        frame_type=frame_type,
+                        closing_text=state["closing_text"],
+                    )
+            if isinstance(frame, (UserStartedSpeakingFrame, UserStoppedSpeakingFrame)):
+                _append_trace(
+                    "janjal_user_speech_frame",
+                    call_id=call_id,
+                    project_id=project_id,
+                    call_direction=call_direction,
+                    frame_type=type(frame).__name__,
+                )
             if isinstance(frame, (UserStartedSpeakingFrame, UserSpeakingFrame, UserStoppedSpeakingFrame)):
                 state["silence_started_at"] = None
                 state["warning_sent"] = False
-                state["hangup_sent"] = False
-                state["hangup_cancel_at"] = None
+                if not state["closing_detected"]:
+                    state["hangup_sent"] = False
+                    state["hangup_cancel_at"] = None
+                    state["hangup_reason"] = None
                 return
             if isinstance(frame, BotStartedSpeakingFrame):
                 state["bot_speaking"] = True
                 return
             if isinstance(frame, BotStoppedSpeakingFrame):
                 state["bot_speaking"] = False
+                if state["closing_detected"] and not state["hangup_sent"]:
+                    state["closing_hangup_at"] = now + _env_float(
+                        "PIOPIY_JANJAL_CLOSING_HANGUP_DELAY_SECS",
+                        JANJAL_DEFAULT_CLOSING_HANGUP_DELAY_SECS,
+                    )
+                    _append_trace(
+                        "janjal_final_closing_bot_stopped",
+                        call_id=call_id,
+                        project_id=project_id,
+                        call_direction=call_direction,
+                        hangup_delay_secs=round(float(state["closing_hangup_at"]) - now, 2),
+                    )
                 if state["silence_started_at"] is None:
                     state["silence_started_at"] = now
 
@@ -400,6 +636,8 @@ async def _run_agent_with_optional_silence_watchdog(
         _append_trace(
             "janjal_silence_watchdog_started",
             call_id=call_id,
+            project_id=project_id,
+            call_direction=call_direction,
             idle_warning_secs=idle_warning_secs,
             idle_timeout_secs=idle_timeout_secs,
         )
@@ -481,6 +719,30 @@ async def _run_agent_with_optional_silence_watchdog(
             await asyncio.sleep(0.25)
             if getattr(task, "has_finished", lambda: False)():
                 return
+            closing_hangup_at = state.get("closing_hangup_at")
+            if (
+                closing_hangup_at is not None
+                and not state["hangup_sent"]
+                and time.monotonic() >= float(closing_hangup_at)
+            ):
+                state["hangup_sent"] = True
+                state["hangup_reason"] = "janjal_final_closing_detected"
+                _append_trace(
+                    "janjal_final_closing_hangup_sent",
+                    call_id=call_id,
+                    project_id=project_id,
+                    call_direction=call_direction,
+                    closing_text=state.get("closing_text") or "",
+                )
+                hangup_ok = await terminate_piopiy_call()
+                _append_trace(
+                    "janjal_final_closing_local_session_cleanup_started",
+                    call_id=call_id,
+                    conversation_id=conversation_id or call_id,
+                    hangup_ok=hangup_ok,
+                )
+                await task.cancel(reason="janjal_final_closing_completed")
+                return
             silence_started_at = state.get("silence_started_at")
             if silence_started_at is None or state.get("bot_speaking"):
                 continue
@@ -496,6 +758,7 @@ async def _run_agent_with_optional_silence_watchdog(
                 await speak_via_active_gemini(JANJAL_IDLE_WARNING_TEXT, stage="warning")
             if elapsed >= idle_timeout_secs and not state["hangup_sent"]:
                 state["hangup_sent"] = True
+                state["hangup_reason"] = "janjal_silent_caller_timeout"
                 state["hangup_cancel_at"] = time.monotonic() + 2.0
                 _append_trace(
                     "janjal_silence_closing_sent",
@@ -830,6 +1093,7 @@ async def run_piopiy_agent() -> None:
     )
     gemini_tts_factory = _load_factory(_resolve_gemini_tts_factory())
     gemini_input_params = _load_factory("piopiy.services.google.gemini_live.llm:InputParams")
+    gemini_vad_params = _load_factory("piopiy.services.google.gemini_live.llm:GeminiVADParams")
     gemini_modalities = _load_factory("piopiy.services.google.gemini_live.llm:GeminiModalities")
     gemini_live_config = PiopiyProviderConfig(
         factory=os.getenv(
@@ -917,28 +1181,54 @@ async def run_piopiy_agent() -> None:
                 from_number=from_number,
                 to_number=to_number,
             )
-            client = load_client(client_id, project_id=project_id)
-            customer_name = _resolve_customer_name(from_number, metadata)
+            session_client_id, session_project_id, project_resolution_reason, call_direction = _resolve_session_tenant_and_project(
+                client_id=client_id,
+                default_project_id=project_id,
+                from_number=from_number,
+                to_number=to_number,
+                metadata=metadata,
+            )
+            _append_trace(
+                "session_project_resolved",
+                call_id=call_id,
+                configured_client_id=client_id,
+                client_id=session_client_id,
+                project_id=session_project_id,
+                default_project_id=project_id,
+                project_resolution_reason=project_resolution_reason,
+                call_direction=call_direction,
+                from_number=from_number,
+                to_number=to_number,
+            )
+            client = load_client(session_client_id, project_id=session_project_id)
+            customer_name = _resolve_customer_name(
+                to_number if call_direction == "outbound" else from_number,
+                metadata,
+            )
             contact_details = _resolve_contact_details(from_number, to_number, metadata)
             instructions, greeting = _build_prompt(
                 settings=settings,
-                client_id=client_id,
-                project_id=project_id,
+                client_id=session_client_id,
+                project_id=session_project_id,
                 customer_name=customer_name,
                 contact_details=contact_details,
             )
-            idle_timeout_secs = _resolve_idle_timeout_secs(client_id)
-            idle_warning_secs = _resolve_idle_warning_secs(client_id, idle_timeout_secs)
+            idle_timeout_secs = _resolve_idle_timeout_secs(session_client_id)
+            idle_warning_secs = _resolve_idle_warning_secs(session_client_id, idle_timeout_secs)
             instructions = _apply_idle_policy_instruction(
                 instructions,
-                client_id=client_id,
+                client_id=session_client_id,
                 idle_timeout_secs=idle_timeout_secs,
+            )
+            instructions = _apply_janjal_complaint_loop_guard(
+                instructions,
+                client_id=session_client_id,
             )
 
             client_voice_name = (client.config.voice.voice_name or "").strip() or None
             if use_gemini_native:
                 session_started_at = time.monotonic()
-                is_janjal = client_id == JANJAL_CLIENT_ID
+                is_janjal = session_client_id == JANJAL_CLIENT_ID
                 voice_name = (
                     (os.getenv("PIOPIY_JANJAL_VOICE_NAME", "").strip() or JANJAL_DEFAULT_VOICE_NAME)
                     if is_janjal
@@ -946,19 +1236,35 @@ async def run_piopiy_agent() -> None:
                 )
                 prefer_voice_agent = is_janjal or _env_bool("PIOPIY_USE_NATIVE_VOICE_AGENT", False)
                 selected_modality = gemini_modalities.AUDIO if prefer_voice_agent else gemini_modalities.TEXT
-                selected_live_model = (
+                selected_native_live_model = (
                     _native_voice_agent_live_model(gemini_live_config.model)
                     if prefer_voice_agent
                     else _speech_agent_live_model(gemini_live_config.model)
                 )
+                selected_text_live_model = _speech_agent_live_model(gemini_live_config.model)
+                selected_gemini_vad = _build_janjal_gemini_vad_params(
+                    gemini_vad_params,
+                    enabled=is_janjal and _env_bool("PIOPIY_JANJAL_GEMINI_VAD_ENABLED", True),
+                )
+                selected_temperature = (
+                    _env_float("PIOPIY_JANJAL_GEMINI_TEMPERATURE", 0.2)
+                    if is_janjal
+                    else None
+                )
+                selected_top_p = _env_float("PIOPIY_JANJAL_GEMINI_TOP_P", 0.8) if is_janjal else None
+                selected_max_tokens = _env_int("PIOPIY_JANJAL_GEMINI_MAX_TOKENS", 450) if is_janjal else None
                 omni = _instantiate(
                     gemini_live_factory,
                     api_key=gemini_live_config.api_key,
-                    model=selected_live_model,
+                    model=selected_native_live_model,
                     voice_id=voice_name,
-                    system_instruction=instructions,
+                    system_instruction=None if prefer_voice_agent else instructions,
                     params=gemini_input_params(
                         modalities=selected_modality,
+                        vad=selected_gemini_vad,
+                        temperature=selected_temperature,
+                        top_p=selected_top_p,
+                        max_tokens=selected_max_tokens,
                     ),
                 )
                 if prefer_voice_agent:
@@ -980,6 +1286,9 @@ async def run_piopiy_agent() -> None:
                             call_id=call_id,
                             mode="gemini_live_native_audio",
                             session_id=call_id,
+                            project_id=session_project_id,
+                            project_resolution_reason=project_resolution_reason,
+                            call_direction=call_direction,
                             selected_agent_class="VoiceAgent",
                             voice_agent_configure_method=configure_method,
                             piopiy_sdk_native_configure_supported=_supports_voice_agent_configure(voice_agent),
@@ -990,9 +1299,10 @@ async def run_piopiy_agent() -> None:
                             separate_tts_enabled=False,
                             active_tts_provider=None,
                             active_tts_model=None,
-                            active_gemini_live_model=selected_live_model,
+                            active_gemini_live_model=selected_native_live_model,
                             audio_path_active="gemini_live_audio_in_audio_out",
                             active_voice_name="gemini_native",
+                            duplicate_system_instruction_removed=True,
                             audio_path_locked=True,
                             voice_locked=True,
                             fallback_switch_count=0,
@@ -1003,11 +1313,21 @@ async def run_piopiy_agent() -> None:
                             gemini_request_started_at=round(session_started_at, 6),
                             idle_warning_secs=idle_warning_secs,
                             idle_timeout_secs=idle_timeout_secs,
+                            gemini_vad_enabled=selected_gemini_vad is not None,
+                            gemini_vad_start_sensitivity=os.getenv("PIOPIY_JANJAL_GEMINI_VAD_START_SENSITIVITY", "START_SENSITIVITY_HIGH"),
+                            gemini_vad_end_sensitivity=os.getenv("PIOPIY_JANJAL_GEMINI_VAD_END_SENSITIVITY", "END_SENSITIVITY_HIGH"),
+                            gemini_vad_prefix_padding_ms=_env_int("PIOPIY_JANJAL_GEMINI_VAD_PREFIX_PADDING_MS", JANJAL_DEFAULT_GEMINI_VAD_PREFIX_PADDING_MS),
+                            gemini_vad_silence_duration_ms=_env_int("PIOPIY_JANJAL_GEMINI_VAD_SILENCE_MS", JANJAL_DEFAULT_GEMINI_VAD_SILENCE_MS),
+                            gemini_temperature=selected_temperature,
+                            gemini_top_p=selected_top_p,
+                            gemini_max_tokens=selected_max_tokens,
                         )
                         await _run_agent_with_optional_silence_watchdog(
                             voice_agent,
-                            client_id=client_id,
+                            client_id=session_client_id,
                             call_id=call_id,
+                            project_id=session_project_id,
+                            call_direction=call_direction,
                             idle_warning_secs=idle_warning_secs,
                             idle_timeout_secs=idle_timeout_secs,
                             llm=omni,
@@ -1040,6 +1360,8 @@ async def run_piopiy_agent() -> None:
                             call_id,
                             exc,
                         )
+                        if is_janjal:
+                            raise
 
                 from piopiy.speech_agent import SpeechAgent
 
@@ -1062,6 +1384,9 @@ async def run_piopiy_agent() -> None:
                     call_id=call_id,
                     mode="speech_agent_text_tts",
                     session_id=call_id,
+                    project_id=session_project_id,
+                    project_resolution_reason=project_resolution_reason,
+                    call_direction=call_direction,
                     selected_agent_class="SpeechAgent",
                     selected_audio_path="SPEECH_AGENT_WITH_TTS_FALLBACK",
                     native_voice_agent_enabled=prefer_voice_agent,
@@ -1073,7 +1398,7 @@ async def run_piopiy_agent() -> None:
                     active_voice_name=voice_name,
                     active_tts_provider=gemini_tts_config.factory,
                     active_tts_model=gemini_tts_config.model,
-                    active_gemini_live_model=selected_live_model,
+                    active_gemini_live_model=selected_text_live_model,
                     fallback_voice_name=voice_name,
                     fallback_triggered=False,
                     fallback_reason=None,
@@ -1086,6 +1411,14 @@ async def run_piopiy_agent() -> None:
                     marker="AUDIO_PATH_SELECTED = SPEECH_AGENT_WITH_TTS_FALLBACK",
                     idle_warning_secs=idle_warning_secs,
                     idle_timeout_secs=idle_timeout_secs,
+                    gemini_vad_enabled=selected_gemini_vad is not None,
+                    gemini_vad_start_sensitivity=os.getenv("PIOPIY_JANJAL_GEMINI_VAD_START_SENSITIVITY", "START_SENSITIVITY_HIGH"),
+                    gemini_vad_end_sensitivity=os.getenv("PIOPIY_JANJAL_GEMINI_VAD_END_SENSITIVITY", "END_SENSITIVITY_HIGH"),
+                    gemini_vad_prefix_padding_ms=_env_int("PIOPIY_JANJAL_GEMINI_VAD_PREFIX_PADDING_MS", JANJAL_DEFAULT_GEMINI_VAD_PREFIX_PADDING_MS),
+                    gemini_vad_silence_duration_ms=_env_int("PIOPIY_JANJAL_GEMINI_VAD_SILENCE_MS", JANJAL_DEFAULT_GEMINI_VAD_SILENCE_MS),
+                    gemini_temperature=selected_temperature,
+                    gemini_top_p=selected_top_p,
+                    gemini_max_tokens=selected_max_tokens,
                 )
                 await speech_agent.Action(
                     omni=omni,
@@ -1103,8 +1436,10 @@ async def run_piopiy_agent() -> None:
                 )
                 await _run_agent_with_optional_silence_watchdog(
                     speech_agent,
-                    client_id=client_id,
+                    client_id=session_client_id,
                     call_id=call_id,
+                    project_id=session_project_id,
+                    call_direction=call_direction,
                     idle_warning_secs=idle_warning_secs,
                     idle_timeout_secs=idle_timeout_secs,
                     llm=omni,

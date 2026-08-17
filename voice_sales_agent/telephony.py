@@ -188,7 +188,11 @@ def pcm24k_to_twilio_mulaw(payload: bytes) -> bytes:
 
 def _normalize_pio_dial_number(value: str) -> str:
     """Normalize phone input for Piopiy's digits-only caller validation."""
-    return "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+    digits = "".join(ch for ch in str(value or "").strip() if ch.isdigit())
+    default_country_code = (os.getenv("PIOPIY_DEFAULT_COUNTRY_CODE") or "91").strip().lstrip("+")
+    if len(digits) == 10 and default_country_code:
+        return f"{default_country_code}{digits}"
+    return digits
 
 
 class TwilioMediaBridge:
@@ -1306,6 +1310,7 @@ class PiopiyCallClient:
         caller_id: str | None = None,
         app_id: str | None = None,
     ) -> None:
+        resolved_agent_id = (agent_id or self.settings.piopiy_agent_id or "").strip()
         resolved_caller_id = (caller_id or self.settings.piopiy_caller_id or "").strip()
         resolved_app_id = (app_id or self.settings.piopiy_app_id or "").strip()
         missing = [
@@ -1313,7 +1318,7 @@ class PiopiyCallClient:
             for name, value in (
                 ("PIOPIY_API_TOKEN", self.settings.piopiy_api_token),
                 ("PIOPIY_CALLER_ID", resolved_caller_id),
-                ("PIOPIY_APP_ID", resolved_app_id),
+                ("PIOPIY_AGENT_ID or PIOPIY_APP_ID", resolved_agent_id or resolved_app_id),
             )
             if not value
         ]
@@ -1331,6 +1336,8 @@ class PiopiyCallClient:
         agent_id: str | None = None,
         caller_id: str | None = None,
         app_id: str | None = None,
+        options: dict[str, Any] | None = None,
+        variables: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.ensure_configured(agent_id=agent_id, caller_id=caller_id, app_id=app_id)
         return await asyncio.to_thread(
@@ -1339,6 +1346,8 @@ class PiopiyCallClient:
             agent_id,
             caller_id,
             app_id,
+            options,
+            variables,
         )
 
     def _create_call_sync(
@@ -1347,8 +1356,11 @@ class PiopiyCallClient:
         agent_id: str | None,
         caller_id: str | None,
         app_id: str | None,
+        options: dict[str, Any] | None,
+        variables: dict[str, Any] | None,
     ) -> dict[str, Any]:
         client = PiopiyRestClient(token=self.settings.piopiy_api_token)
+        resolved_agent_id = (agent_id or self.settings.piopiy_agent_id or "").strip()
         resolved_caller_id = (caller_id or self.settings.piopiy_caller_id or "").strip()
         resolved_app_id = (app_id or self.settings.piopiy_app_id or "").strip()
         normalized_to_number = _normalize_pio_dial_number(to_number)
@@ -1356,11 +1368,20 @@ class PiopiyCallClient:
             raise RuntimeError(
                 "Piopiy requires a digits-only destination number with 7 to 16 digits, for example 919876543210."
             )
-        response = client.voice.call(
-            caller_id=resolved_caller_id,
-            to_number=normalized_to_number,
-            app_id=resolved_app_id,
-        )
+        if resolved_agent_id:
+            response = client.ai.call(
+                caller_id=resolved_caller_id,
+                to_number=normalized_to_number,
+                agent_id=resolved_agent_id,
+                options=options,
+                variables=variables,
+            )
+        else:
+            response = client.voice.call(
+                caller_id=resolved_caller_id,
+                to_number=normalized_to_number,
+                app_id=resolved_app_id,
+            )
         normalized = response if isinstance(response, dict) else {"raw_response": response}
         sid = str(
             normalized.get("sid")
@@ -1803,6 +1824,23 @@ class MetaWhatsAppCallClient:
         self.ensure_configured()
         return await asyncio.to_thread(self._send_text_message_sync, to_number, body_text)
 
+    async def send_template_message(
+        self,
+        *,
+        to_number: str,
+        template_name: str,
+        language_code: str = "en_US",
+        body_params: list[str] | None = None,
+    ) -> dict[str, Any]:
+        self.ensure_configured()
+        return await asyncio.to_thread(
+            self._send_template_message_sync,
+            to_number,
+            template_name,
+            language_code,
+            body_params or [],
+        )
+
     def _send_text_message_sync(self, to_number: str, body_text: str) -> dict[str, Any]:
         payload = {
             "messaging_product": "whatsapp",
@@ -1811,6 +1849,41 @@ class MetaWhatsAppCallClient:
             "type": "text",
             "text": {"body": body_text},
         }
+        parsed = self._post_json_sync(
+            self._resolve_url(self.settings.meta_whatsapp_messages_path),
+            payload,
+            self._build_headers(),
+        )
+        return _normalize_provider_response(parsed)
+
+    def _send_template_message_sync(
+        self,
+        to_number: str,
+        template_name: str,
+        language_code: str,
+        body_params: list[str],
+    ) -> dict[str, Any]:
+        components: list[dict[str, Any]] = []
+        params = [str(item).strip() for item in body_params if str(item).strip()]
+        if params:
+            components.append(
+                {
+                    "type": "body",
+                    "parameters": [{"type": "text", "text": value} for value in params],
+                }
+            )
+        payload: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to_number,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": language_code},
+            },
+        }
+        if components:
+            payload["template"]["components"] = components
         parsed = self._post_json_sync(
             self._resolve_url(self.settings.meta_whatsapp_messages_path),
             payload,

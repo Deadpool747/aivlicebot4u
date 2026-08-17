@@ -1,0 +1,7 @@
+{
+  "busy": "No problem. Should I send a short note, or would another time be better?",
+  "not_interested": "No problem, I understand. I will not take more of your time. Thank you.",
+  "already_have_team": "That is good. Are there any projects where your team needs extra support or specialised skills?",
+  "already_have_vendor": "Understood. Is your current partner working well, or are there gaps you want to improve?",
+  "unclear_or_background_noise": "Sorry, I heard some background noise. Could you please repeat that?"
+}

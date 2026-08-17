@@ -1,0 +1,5 @@
+{
+  "primary_cta": "After the customer shares a real problem or interest, ask for a 20-minute technical discovery conversation.",
+  "fallback_cta": "If they are busy, offer to send a short note or call back later.",
+  "do_not_do": "Do not ask for date/time until they agree to a meeting or callback."
+}

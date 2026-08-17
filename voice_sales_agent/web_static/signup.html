@@ -253,8 +253,8 @@
 
         const name = nameInput.value.trim();
         const email = emailInput.value.trim();
-        const password = passwordInput.value;
-        const confirmPassword = confirmPasswordInput.value;
+        const password = passwordInput.value.trim();
+        const confirmPassword = confirmPasswordInput.value.trim();
 
         if (name.length < 2) {
           errorText.textContent = "Please enter your full name.";

@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "need": "What is the main requirement or reason for the enquiry?",
+    "fit": "Does the visitor match the selected scenario and express a genuine interest?",
+    "timeline": "Is there any timing signal such as immediate need, this month, or later?",
+    "next_step": "Did the conversation end with a clear follow-up expectation?"
+  }
+}

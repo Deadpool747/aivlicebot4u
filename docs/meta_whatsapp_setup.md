@@ -20,6 +20,8 @@ META_WHATSAPP_DEFAULT_SDP_TYPE=offer
 META_WHATSAPP_DEFAULT_SDP=replace_with_test_sdp_offer
 META_WHATSAPP_WEBHOOK_VERIFY_TOKEN=replace_with_meta_verify_token
 META_WHATSAPP_APP_SECRET=replace_with_meta_app_secret
+META_WHATSAPP_POST_CALL_TEMPLATE_NAME=
+META_WHATSAPP_POST_CALL_TEMPLATE_LANGUAGE_CODE=en_US
 META_WHATSAPP_COST_PER_MINUTE=0
 ```
 
@@ -51,6 +53,20 @@ The callback handler:
 - de-duplicates retries using webhook idempotency keys
 - consumes pending state on terminal statuses/events
 - verifies webhook signature when `META_WHATSAPP_APP_SECRET` is set
+
+## Post-call WhatsApp details
+
+To send the last-call details as a WhatsApp template message, set:
+
+- `META_WHATSAPP_POST_CALL_TEMPLATE_NAME` to an approved WhatsApp template name
+- `META_WHATSAPP_POST_CALL_TEMPLATE_LANGUAGE_CODE` to that template's language code
+
+The app will populate the template body with:
+
+- caller name
+- caller problem
+- caller location when mentioned
+- confidence and session reference as extra values if the template expects them
 
 ## Notes
 

@@ -58,7 +58,7 @@
       "english": "Hello, you are connected to Rajendra Janjal Saheb office assistant. How can I help you?"
     },
     "closure_examples": {
-      "guidance": "Always close by repeating complaint summary and complaint ID, with respectful Marathi ending. After the final closing line, stop speaking immediately and let the call end.",
+      "guidance": "Always close by repeating complaint summary and complaint ID, with respectful Marathi ending. If complaint details remain unclear after one ask, close with a best-effort summary instead of asking again. After the final closing line, stop speaking immediately and let the call end.",
       "positive": [
         "आपली तक्रार नोंदवली आहे. तक्रार क्रमांक {complaint_id} लक्षात ठेवा. जंजाळ साहेबांच्या कार्यालयाकडून पाठपुरावा केला जाईल. धन्यवाद, जय महाराष्ट्र, जय शिवसेना.",
         "ही बाब संबंधित विभागाकडे पाठवली आहे. तक्रार क्रमांक {complaint_id}. लवकरच आपल्याशी संपर्क साधला जाईल. धन्यवाद."
@@ -98,18 +98,18 @@
   "voice": {
     "voice_name": "Aoede",
     "persona_gender": "female",
-    "speaking_rate": 0.92
+    "speaking_rate": 1.0
   },
-  "model_routing": {
-    "live_generation": {
-      "temperature": 0.3,
-      "top_p": 0.9,
-      "top_k": 32,
-      "max_output_tokens": 2000
-    },
-    "structured_generation": {
+    "model_routing": {
+      "live_generation": {
       "temperature": 0.2,
       "top_p": 0.8,
+      "top_k": 16,
+      "max_output_tokens": 500
+      },
+      "structured_generation": {
+        "temperature": 0.2,
+        "top_p": 0.8,
       "top_k": 20,
       "max_output_tokens": 2000
     }

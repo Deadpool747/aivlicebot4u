@@ -20,6 +20,9 @@ def _normalize_gemini_tts_model(model: str) -> str:
     aliases = {
         "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
         "gemini-2.5-pro-tts": "gemini-2.5-pro-preview-tts",
+        # Native-audio models are Live API models, not standalone TTS models.
+        # Keep call TTS on a supported Gemini TTS model instead of failing here.
+        "gemini-2.5-flash-native-audio-preview-12-2025": "gemini-2.5-flash-preview-tts",
     }
     value = aliases.get(value, value)
     if not value.startswith("models/"):
@@ -39,7 +42,7 @@ class GeminiApiKeyTTSService(TTSService):
         self,
         *,
         api_key: str,
-        model: str = "gemini-2.5-flash-tts",
+        model: str = "gemini-2.5-flash-native-audio-preview-12-2025",
         voice_id: str = "Aoede",
         sample_rate: Optional[int] = 24_000,
         call_session_id: str | None = None,
@@ -54,7 +57,7 @@ class GeminiApiKeyTTSService(TTSService):
         fallback_model = fallback_model or (
             os.getenv("PIOPIY_GEMINI_TTS_FALLBACK_MODEL")
             or os.getenv("GEMINI_TTS_FALLBACK_MODEL")
-            or "gemini-2.5-pro-preview-tts"
+            or "gemini-2.5-flash-preview-tts"
         )
         self._fallback_model = _normalize_gemini_tts_model(fallback_model)
         self._fallback_speech = (

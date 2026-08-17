@@ -1,0 +1,10 @@
+{
+  "primary_cta": "Secure a specific payment commitment with amount and date.",
+  "fallback_cta": "Agree on a callback date or escalate the dispute for review.",
+  "success_criteria": [
+    "Identity is verified",
+    "The written-off status is explained clearly",
+    "A payment amount and date are captured, or a callback is scheduled",
+    "The call ends respectfully"
+  ]
+}

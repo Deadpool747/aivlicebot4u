@@ -1,0 +1,10 @@
+{
+  "fields": {
+    "main_speaker": "Did the response come from the main person or background noise?",
+    "problem": "What problem or inefficiency did the customer mention?",
+    "current_process": "How do they handle it today?",
+    "impact": "What is the cost, delay, manual work, or business impact?",
+    "service_fit": "Which Oswell service fits the problem?",
+    "next_step": "Discovery call, callback, WhatsApp note, no interest, or unclear."
+  }
+}
