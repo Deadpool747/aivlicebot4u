@@ -8211,6 +8211,20 @@ def create_app() -> FastAPI:
                     frame = await asyncio.wait_for(websocket.receive(), timeout=1.0)
                 except TimeoutError:
                     continue
+                except RuntimeError as exc:
+                    if "disconnect message has been received" in str(exc):
+                        logger.info(
+                            "Airtel IQ websocket already disconnected pending_id=%s",
+                            active_pending_id or "<unresolved>",
+                        )
+                        break
+                    raise
+                if frame.get("type") == "websocket.disconnect":
+                    logger.info(
+                        "Airtel IQ websocket disconnect received pending_id=%s",
+                        active_pending_id or "<unresolved>",
+                    )
+                    break
                 if frame.get("bytes") is not None:
                     binary_payload = frame["bytes"] or b""
                     if binary_payload:
