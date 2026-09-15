@@ -1,0 +1,6 @@
+.env
+.env.*
+work/
+*.log
+node_modules/
+.pnpm-store/
