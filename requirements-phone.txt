@@ -1,0 +1,5 @@
+# Separate virtual environment; does not change the browser app runtime.
+piopiy-ai==0.6.1
+google-genai==1.75.0
+livekit==1.0.25
+python-socketio[asyncio_client]==5.17.0

@@ -4,3 +4,5 @@ work/
 *.log
 node_modules/
 .pnpm-store/
+.local/
+__pycache__/
