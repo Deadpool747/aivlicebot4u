@@ -8,7 +8,11 @@ const {WebSocket,WebSocketServer}=require('ws');
 const {createBookingMailer,validEmail}=require('./booking-email.cjs');
 const model=value('GEMINI_LIVE_MODEL')||'gemini-3.1-flash-live-preview';
 const promptPaths={inbound:path.join(__dirname,'sales-prompt.txt'),outbound:path.join(__dirname,'outbound-prompt.txt')};
-const auth=require('./auth.cjs').createAuth(path.join(__dirname,'.local'));
+const basePath=value('BASE_PATH').replace(/\/$/,'');
+if(basePath&&!/^\/[a-zA-Z0-9_-]+$/.test(basePath))throw Error('Invalid BASE_PATH');
+const publicOrigin=value('PUBLIC_ORIGIN');
+if(publicOrigin&&new URL(publicOrigin).origin!==publicOrigin)throw Error('PUBLIC_ORIGIN must be an origin');
+const auth=require('./auth.cjs').createAuth(path.join(__dirname,'.local'),{cookiePath:basePath||'/',secure:publicOrigin.startsWith('https://'),cookieName:basePath?'bot4u_session':'voice_session'});
 const scripts=require('./script-store.cjs').createScriptStore(path.join(__dirname,'.local','scripts'));
 const accountsPath=path.join(__dirname,'.local','users.json'),legacyAccountPath=path.join(__dirname,'.local','account.json');
 const existingAccounts=fs.existsSync(accountsPath)?JSON.parse(fs.readFileSync(accountsPath,'utf8')):fs.existsSync(legacyAccountPath)?[JSON.parse(fs.readFileSync(legacyAccountPath,'utf8'))]:[];
@@ -16,16 +20,20 @@ scripts.migrate(existingAccounts,{inbound:fs.readFileSync(promptPaths.inbound,'u
 const port=Number(process.env.PORT||4174);
 const history=require('./call-history.cjs').createHistory(path.join(__dirname,'.local','call-history'));
 const phoneCall=require('./phone-call.cjs').createPhoneCaller({history,directory:path.join(__dirname,'.local'),token:()=>value('PIOPIY_API_TOKEN'),readScript:(owner,mode)=>scripts.read(owner,mode)});
-const hosts=[`127.0.0.1:${port}`,`localhost:${port}`];
+const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicOrigin?[new URL(publicOrigin).host]:[])];
+const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`,...(publicOrigin?[publicOrigin]:[])];
+function stripBase(req){if(!basePath)return true;if(!req.url.startsWith(basePath+'/'))return false;req.url=req.url.slice(basePath.length);return true}
 const assets={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/capture.js':'capture.js','/dashboard':'dashboard.html','/dashboard.js':'dashboard.js'};
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data))}
 const server=http.createServer(async(req,res)=>{try{
 if(!hosts.includes(req.headers.host))return json(res,403,{error:'Invalid host'});
-if(req.headers.origin&&!hosts.some(h=>req.headers.origin==='http://'+h))return json(res,403,{error:'Invalid origin'});
+if(req.headers.origin&&!origins.includes(req.headers.origin))return json(res,403,{error:'Invalid origin'});
+if(basePath&&req.url===basePath){res.writeHead(302,{Location:basePath+'/'});return res.end()}
+if(!stripBase(req)){res.writeHead(404);return res.end()}
 if(await auth.handle(req,res))return;
 const publicAssets={'/login':'login.html','/login.js':'login.js','/style.css':'style.css'};
 if(publicAssets[req.url]&&req.method==='GET'){const file=publicAssets[req.url];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html','Cache-Control':'no-store'});return res.end(fs.readFileSync(path.join(__dirname,'dist',file)))}
-if(!auth.session(req)){if(req.url.startsWith('/api/'))return json(res,401,{error:'Please sign in.'});res.writeHead(302,{Location:'/login','Cache-Control':'no-store'});return res.end()}
+if(!auth.session(req)){if(req.url.startsWith('/api/'))return json(res,401,{error:'Please sign in.'});res.writeHead(302,{Location:basePath+'/login','Cache-Control':'no-store'});return res.end()}
 const requestUrl=new URL(req.url,'http://localhost');
 if(requestUrl.pathname==='/api/call-recording'&&['GET','HEAD'].includes(req.method)){
 const file=history.recording(auth.session(req).username,requestUrl.searchParams.get('id'));
@@ -71,7 +79,7 @@ scripts.write(owner,mode,data.script);return json(res,200,{saved:true});
 const asset=assets[req.url];if(req.method!=='GET'||!asset){res.writeHead(404);return res.end()};res.writeHead(200,{'Content-Type':asset.endsWith('.js')?'text/javascript':asset.endsWith('.css')?'text/css':'text/html','Cache-Control':'no-store'});res.end(fs.readFileSync(path.join(__dirname,'dist',asset)));
 }catch{json(res,500,{error:'Could not read or save the script. Please retry.'})}});
 const wss=new WebSocketServer({noServer:true,maxPayload:128*1024});
-server.on('upgrade',(req,socket,head)=>{const session=auth.session(req);if(!session){socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}const url=new URL(req.url,'http://localhost');const mode=url.searchParams.get('mode')||'inbound';const email=(url.searchParams.get('email')||'').trim();const name=(url.searchParams.get('name')||'').trim();if((email&&!validEmail(email))||!Object.hasOwn(promptPaths,mode)||!/^[\p{L}\p{M} .’'-]{1,80}$/u.test(name)||url.pathname!=='/live'||!hosts.includes(req.headers.host)||!hosts.some(h=>req.headers.origin===`http://${h}`)){socket.destroy();return}const selectedScript=scripts.read(session.username,mode);if(!selectedScript.trim()){socket.write('HTTP/1.1 409 Conflict\r\nConnection: close\r\n\r\n');socket.destroy();return}wss.handleUpgrade(req,socket,head,client=>{session.sockets.add(client);const expiry=setTimeout(()=>client.close(1000,'Session expired'),Math.max(0,session.expires-Date.now()));client.on('close',()=>{clearTimeout(expiry);session.sockets.delete(client)});wss.emit('connection',client,name,mode,email,selectedScript,session.username)})});
+server.on('upgrade',(req,socket,head)=>{if(!stripBase(req)){socket.destroy();return}const session=auth.session(req);if(!session){socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}const url=new URL(req.url,'http://localhost');const mode=url.searchParams.get('mode')||'inbound';const email=(url.searchParams.get('email')||'').trim();const name=(url.searchParams.get('name')||'').trim();if((email&&!validEmail(email))||!Object.hasOwn(promptPaths,mode)||!/^[\p{L}\p{M} .’'-]{1,80}$/u.test(name)||url.pathname!=='/live'||!hosts.includes(req.headers.host)||!origins.includes(req.headers.origin)){socket.destroy();return}const selectedScript=scripts.read(session.username,mode);if(!selectedScript.trim()){socket.write('HTTP/1.1 409 Conflict\r\nConnection: close\r\n\r\n');socket.destroy();return}wss.handleUpgrade(req,socket,head,client=>{session.sockets.add(client);const expiry=setTimeout(()=>client.close(1000,'Session expired'),Math.max(0,session.expires-Date.now()));client.on('close',()=>{clearTimeout(expiry);session.sockets.delete(client)});wss.emit('connection',client,name,mode,email,selectedScript,session.username)})});
 wss.on('connection',(client,name,mode,email,selectedScript,owner)=>{
 const browserCall=require('./browser-history.cjs').trackBrowserCall(history,owner,{name,mode});
 client.once('close',()=>browserCall.end());
