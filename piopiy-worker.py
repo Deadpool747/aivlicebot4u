@@ -47,7 +47,7 @@ def prompt(mode='inbound', name=''):
         'If asked, provide the booking URL verbally. After your final spoken goodbye, '
         'call end_conversation. End your final closing with Goodbye (or the equivalent in the customer language). Never end while waiting for a customer response. '
         'If interrupted during goodbye, answer the new question instead of ending. '
-        'For outbound calls: initially listen silently. Do not speak until a live person greets you. '
+        'For outbound calls: briefly listen first. When instructed by the application, greet the customer even if they have not spoken yet. Never hang up solely because no greeting was detected. '
         'If you hear voicemail, an answering machine, a beep, or an automated call-screening request, call voicemail_detected silently. Never leave a message or introduce yourself to a screening system.'
     )
 
@@ -189,11 +189,11 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                 closing_task = asyncio.create_task(close_after_audio())
 
             async def answer_timeout():
-                nonlocal no_human
-                await asyncio.sleep(15)
-                if not human and not ended.is_set():
-                    no_human = True
-                    request_close(silent=True)
+                nonlocal human
+                await asyncio.sleep(5)
+                if not human and not machine and not ended.is_set():
+                    human = True
+                    await session.send_realtime_input(text='No automated greeting was detected. Say a brief Hello, can you hear me? now, then wait for the customer. Do not end the call merely because the customer was initially silent.')
                 await ended.wait()
 
             async def receive():
@@ -206,13 +206,13 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                             input_text = (input_text + spoken)[-1000:]
                             if mode == "outbound" and voicemail(input_text):
                                 request_close(silent=True)
-                            elif not human and human_greeting(input_text):
+                            elif not human and spoken.strip():
                                 if human_candidate:
                                     human_candidate.cancel()
                                 async def confirm_greeting():
                                     nonlocal human
                                     await asyncio.sleep(1.2)
-                                    if not machine and human_greeting(input_text):
+                                    if not machine and input_text.strip() and not voicemail(input_text):
                                         human = True
                                         await session.send_realtime_input(text='A live human greeting was detected. Give your short opening now.')
                                 human_candidate = asyncio.create_task(confirm_greeting())
@@ -251,7 +251,7 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
             if mode == 'outbound':
                 tasks.add(asyncio.create_task(answer_timeout()))
             await session.send_realtime_input(text=(
-                'Outbound call connected. Listen silently for a live human greeting before speaking. Hang up silently on voicemail or automated screening.'
+                'Outbound call connected. Briefly listen for a greeting. The application will prompt you to speak if the customer is initially quiet. Hang up silently only on clearly detected voicemail or automated screening.'
                 if mode == 'outbound' else 'The caller is connected. Give your opening greeting now.'))
             done, _ = await asyncio.wait(tasks, timeout=300, return_when=asyncio.FIRST_COMPLETED)
             for task in done:

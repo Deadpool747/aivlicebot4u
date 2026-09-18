@@ -3,7 +3,7 @@ import numpy as np
 
 
 class InputNoiseGate:
-    def __init__(self, rate=16000, threshold=0.012, release_ms=240):
+    def __init__(self, rate=16000, threshold=0.006, release_ms=240):
         self.rate = rate
         self.threshold = threshold
         self.release = rate * release_ms // 1000
