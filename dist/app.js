@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
-let phoneCalling=false;
+let phoneCalling=false,carrierSaving=false;
 async function placePhoneCall(){
- if(phoneCalling)return;
+ if(phoneCalling||carrierSaving)return;
  const status=$('phoneCallStatus');
  if(mode!=='outbound'||!scriptLoaded||savingScript||!savedScript.trim()||$('script').value!==savedScript){status.textContent='Select Outbound and save your script before calling.';return}
  const number=$('outboundNumber').value.trim();
@@ -57,7 +57,7 @@ fetch('api/auth/status').then(r=>r.json()).then(d=>{if(!d.authenticated){locatio
 let selectedCarrier='';
 function showCarrier(m){
  if(!m)return;
- $('accountPhone').hidden=false;selectedCarrier=m.provider||m.outbound_provider||'piopiy';
+ $('accountPhone').hidden=false;selectedCarrier=m.outbound_provider||m.provider||'piopiy';
  document.querySelectorAll('input[name="carrier"]').forEach(c=>c.checked=c.value===selectedCarrier);
  $('phoneBusiness').textContent=m.business_name||'Your phone account';
  $('phoneNumber').textContent=selectedCarrier==='airtel_iq'?'Airtel number: +91 8045911978':'Piopiy number: '+m.display_number;
@@ -67,8 +67,8 @@ fetch('api/account/telephony').then(r=>r.json()).then(d=>showCarrier(d.telephony
 for(const input of document.querySelectorAll('input[name="carrier"]'))input.onchange=async()=>{
  const controls=[...document.querySelectorAll('input[name="carrier"]')];
  if(phoneCalling){controls.forEach(c=>c.checked=c.value===selectedCarrier);$('carrierStatus').textContent='Wait for the current call request before switching.';return;}
- controls.forEach(c=>c.disabled=true);$('carrierStatus').textContent='Saving provider...';
- try{const r=await fetch('api/account/telephony',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:input.value})});const d=await r.json();if(!r.ok)throw Error(d.error);showCarrier(d.telephony);$('carrierStatus').textContent='Saved for new inbound and outbound calls. Existing calls continue.';}
+ carrierSaving=true;$('phoneCall').disabled=true;controls.forEach(c=>c.disabled=true);$('carrierStatus').textContent='Saving provider...';
+ try{const r=await fetch('api/account/telephony',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:input.value})});const d=await r.json();if(!r.ok)throw Error(d.error);showCarrier(d.telephony);$('phoneCallStatus').textContent='';$('carrierStatus').textContent='Saved for new inbound and outbound calls. Existing calls continue.';}
  catch(e){controls.forEach(c=>c.checked=c.value===selectedCarrier);$('carrierStatus').textContent=e.message||'Could not save provider.';}
- finally{controls.forEach(c=>c.disabled=false);}
+ finally{carrierSaving=false;$('phoneCall').disabled=phoneCalling;controls.forEach(c=>c.disabled=false);}
 };
