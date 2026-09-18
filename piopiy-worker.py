@@ -22,6 +22,7 @@ from google.genai import types
 from livekit import rtc
 from piopiy.agent import Agent, URL_CTX, TOKEN_CTX
 from phone_control import finish_phone_call
+from phone_signals import voicemail, human_greeting, closing
 from phone_history import save_session
 from phone_recording import CallRecording
 from datetime import datetime, timezone
@@ -43,12 +44,16 @@ def prompt(mode='inbound', name=''):
         +
         'Email delivery is unavailable on this phone connection; never claim an email was sent. '
         'If asked, provide the booking URL verbally. After your final spoken goodbye, '
-        'call end_conversation. Never end while waiting for a customer response.'
+        'call end_conversation. End your final closing with Goodbye (or the equivalent in the customer language). Never end while waiting for a customer response. '
+        'If interrupted during goodbye, answer the new question instead of ending. '
+        'For outbound calls: initially listen silently. Do not speak until a live person greets you. '
+        'If you hear voicemail, an answering machine, a beep, or an automated call-screening request, call voicemail_detected silently. Never leave a message or introduce yourself to a screening system.'
     )
 
 def config(mode='inbound', name=''):
     return types.LiveConnectConfig(
         response_modalities=['AUDIO'], system_instruction=prompt(mode, name),
+        input_audio_transcription={}, output_audio_transcription={},
         speech_config={'voice_config': {'prebuilt_voice_config': {'voice_name': 'Sulafat'}}},
         realtime_input_config={'automatic_activity_detection': {
             'start_of_speech_sensitivity': 'START_SENSITIVITY_HIGH',
@@ -56,7 +61,8 @@ def config(mode='inbound', name=''):
             'prefix_padding_ms': 20, 'silence_duration_ms': 400},
             'activity_handling': 'START_OF_ACTIVITY_INTERRUPTS'},
         tools=[{'function_declarations': [{'name': 'end_conversation',
-                'description': 'Disconnect after delivering your final spoken goodbye.'}]}],
+                'description': 'Disconnect after delivering your final spoken goodbye.'},
+                {'name': 'voicemail_detected', 'description': 'Silently disconnect a voicemail, answering machine or automated call-screening system. Do not speak.'}]}],
     )
 
 async def create_session(agent_id, call_id, from_number, to_number, metadata=None):
@@ -78,6 +84,14 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
     started_at = datetime.now(timezone.utc).isoformat()
     connected_at = None
     remarks = 'Phone session ended.'
+    human = mode != 'outbound'
+    machine = False
+    human_candidate = None
+    no_human = False
+    closing_task = None
+    close_version = 0
+    output_text = ''
+    input_text = ''
     try:
         async with client.aio.live.connect(model=MODEL, config=config(mode, name)) as session:
             async def forward(track):
@@ -115,12 +129,6 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                 while True:
                     data = await audio.get()
                     try:
-                        if data is None:
-                            await finish_phone_call(source, call_id, os.environ['PIOPIY_API_TOKEN'])
-                            print('Closing audio played; Piopiy hangup request accepted.', flush=True)
-                            remarks = 'Closing statement played; Piopiy accepted the hangup request.'
-                            ended.set()
-                            return
                         # 20 ms PCM frames keep interruptions responsive.
                         epoch, pcm = data
                         for offset in range(0, len(pcm), 960):
@@ -132,27 +140,117 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                     finally:
                         audio.task_done()
 
+            def cancel_closing():
+                nonlocal close_version, closing_task
+                close_version += 1
+                if closing_task and not closing_task.done():
+                    closing_task.cancel()
+                closing_task = None
+
+            def request_close(silent=False):
+                nonlocal closing_task, machine, remarks, generation
+                if closing_task and not closing_task.done():
+                    return
+                version = close_version
+                if silent:
+                    machine = True
+                    generation += 1
+                    source.clear_queue()
+                    while not audio.empty():
+                        audio.get_nowait()
+                        audio.task_done()
+
+                async def close_after_audio():
+                    nonlocal remarks
+                    await audio.join()
+                    for attempt in range(3):
+                        try:
+                            accepted = await finish_phone_call(
+                                source, call_id, os.environ['PIOPIY_API_TOKEN'],
+                                still_valid=lambda: silent or close_version == version,
+                                grace=0 if silent else 0.8)
+                            if accepted:
+                                remarks = (('No live greeting detected within 15 seconds; disconnected silently.' if no_human else 'Voicemail / automated screening detected; disconnected without a message.')
+                                           if machine else 'Closing audio finished; carrier hangup accepted.')
+                                print(remarks, flush=True)
+                                ended.set()
+                            return
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            print('Hangup attempt failed: ' + type(exc).__name__, flush=True)
+                            if attempt == 2:
+                                remarks = 'Carrier hangup failed after three attempts.'
+                                ended.set()
+                                return
+                            await asyncio.sleep(1)
+                closing_task = asyncio.create_task(close_after_audio())
+
+            async def answer_timeout():
+                nonlocal no_human
+                await asyncio.sleep(15)
+                if not human and not ended.is_set():
+                    no_human = True
+                    request_close(silent=True)
+                await ended.wait()
+
             async def receive():
-                nonlocal generation
+                nonlocal generation, human, input_text, output_text, human_candidate
                 while not ended.is_set():
                     async for response in session.receive():
                         content = response.server_content
+                        if content and content.input_transcription:
+                            spoken = content.input_transcription.text or ""
+                            input_text = (input_text + spoken)[-1000:]
+                            if mode == "outbound" and voicemail(input_text):
+                                request_close(silent=True)
+                            elif not human and human_greeting(input_text):
+                                if human_candidate:
+                                    human_candidate.cancel()
+                                async def confirm_greeting():
+                                    nonlocal human
+                                    await asyncio.sleep(1.2)
+                                    if not machine and human_greeting(input_text):
+                                        human = True
+                                        await session.send_realtime_input(text='A live human greeting was detected. Give your short opening now.')
+                                human_candidate = asyncio.create_task(confirm_greeting())
+                            if spoken.strip() and not machine:
+                                cancel_closing()
+                        if content and content.output_transcription:
+                            output_text += content.output_transcription.text or ""
                         if content and content.interrupted:
+                            if not machine:
+                                cancel_closing()
+                            output_text = ""
                             generation += 1
                             source.clear_queue()
                             while not audio.empty():
                                 audio.get_nowait()
                                 audio.task_done()
-                        if response.data:
+                        if response.data and human and not machine:
                             await audio.put((generation, response.data))
                         if response.tool_call:
                             for call in response.tool_call.function_calls:
                                 if call.name == 'end_conversation':
-                                    await audio.put(None)
+                                    request_close()
+                                elif call.name == 'voicemail_detected':
+                                    request_close(silent=True)
+                                await session.send_tool_response(function_responses=[types.FunctionResponse(
+                                    id=call.id, name=call.name, response={'status': 'scheduled'})])
+                        if content and content.turn_complete:
+                            if human and closing(output_text):
+                                request_close()
+                            output_text = ''
+                            if human:
+                                input_text = ''
 
             tasks.update([asyncio.create_task(play()), asyncio.create_task(receive()),
                           asyncio.create_task(ended.wait())])
-            await session.send_realtime_input(text='The caller is connected. Give your opening greeting now.')
+            if mode == 'outbound':
+                tasks.add(asyncio.create_task(answer_timeout()))
+            await session.send_realtime_input(text=(
+                'Outbound call connected. Listen silently for a live human greeting before speaking. Hang up silently on voicemail or automated screening.'
+                if mode == 'outbound' else 'The caller is connected. Give your opening greeting now.'))
             done, _ = await asyncio.wait(tasks, timeout=300, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
@@ -171,8 +269,14 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
         save_session(ROOT, OWNER, requestId=details.get('history_id'), callId=call_id,
                      startedAt=started_at, type=mode, phone='+' + digits(to_number if mode=='outbound' else from_number),
                      name=name, duration=round(time.monotonic()-connected_at) if connected_at else None,
-                     result='Answered' if connected_at else 'Unconfirmed', remarks=remarks,
+                     result='Not answered' if machine else ('Answered' if connected_at else 'Unconfirmed'), remarks=remarks,
                      recordingId=recording_id)
+        if human_candidate:
+            human_candidate.cancel()
+            await asyncio.gather(human_candidate, return_exceptions=True)
+        if closing_task:
+            closing_task.cancel()
+            await asyncio.gather(closing_task, return_exceptions=True)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

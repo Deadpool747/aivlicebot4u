@@ -3,6 +3,13 @@ from phone_control import finish_phone_call
 
 
 class HangupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_interruption_cancels_hangup_after_playback(self):
+        class Source:
+            async def wait_for_playout(self):
+                pass
+        self.assertFalse(await finish_phone_call(
+            Source(), 'call-id', 'test', still_valid=lambda: False, grace=0))
+
     async def test_playback_finishes_before_hangup(self):
         events = []
 

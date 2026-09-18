@@ -3,12 +3,15 @@ import asyncio
 import httpx
 
 
-async def finish_phone_call(source, call_id, token, client_factory=httpx.AsyncClient):
+async def finish_phone_call(source, call_id, token, client_factory=httpx.AsyncClient,
+                            still_valid=lambda: True, grace=0.8):
     await source.wait_for_playout()
     if not call_id:
         raise RuntimeError('Missing Piopiy call ID; cannot hang up the telephone leg')
     # Allow the last audio frame to cross the phone transport.
-    await asyncio.sleep(0.25)
+    await asyncio.sleep(grace)
+    if not still_valid():
+        return False
     async with client_factory(timeout=10) as client:
         response = await client.post(
             'https://rest.piopiy.com/v3/voice/call/hangup',
