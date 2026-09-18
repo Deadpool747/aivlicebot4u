@@ -20,10 +20,11 @@ scripts.migrate(existingAccounts,{inbound:fs.readFileSync(promptPaths.inbound,'u
 const port=Number(process.env.PORT||4174);
 const history=require('./call-history.cjs').createHistory(path.join(__dirname,'.local','call-history'));
 const phoneCall=require('./phone-call.cjs').createPhoneCaller({history,directory:path.join(__dirname,'.local'),token:()=>value('PIOPIY_API_TOKEN'),readScript:(owner,mode)=>scripts.read(owner,mode)});
+const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(__dirname,'.local','campaigns'),call:phoneCall,history});
 const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicOrigin?[new URL(publicOrigin).host]:[])];
 const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`,...(publicOrigin?[publicOrigin]:[])];
 function stripBase(req){if(!basePath)return true;if(!req.url.startsWith(basePath+'/'))return false;req.url=req.url.slice(basePath.length);return true}
-const assets={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/capture.js':'capture.js','/dashboard':'dashboard.html','/dashboard.js':'dashboard.js'};
+const assets={'/':'index.html','/app.js':'app.js','/csv-calls.js':'csv-calls.js','/style.css':'style.css','/capture.js':'capture.js','/dashboard':'dashboard.html','/dashboard.js':'dashboard.js'};
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data))}
 const server=http.createServer(async(req,res)=>{try{
 if(!hosts.includes(req.headers.host))return json(res,403,{error:'Invalid host'});
@@ -56,7 +57,16 @@ let data;try{data=JSON.parse(text)}catch{return json(res,400,{error:'Invalid JSO
 if(!data||typeof data.remarks!=='string'||data.remarks.length>2000||!['','Answered','Not answered'].includes(data.result))return json(res,400,{error:'Invalid remarks or result'});
 return history.edit(owner,data.id,data)?json(res,200,{saved:true}):json(res,404,{error:'Call not found'});
 }
+if(requestUrl.pathname==='/api/phone/campaign'){
+const owner=auth.session(req).username;
+if(req.method==='GET'){await campaigns.tick(owner);return json(res,200,{campaign:campaigns.get(owner)})}
+if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
+if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});
+let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>300000)return json(res,413,{error:'CSV is too large.'})}
+try{const data=JSON.parse(body);const campaign=data.action==='import'?campaigns.importCsv(owner,data.csv):campaigns.action(owner,data.action);return json(res,200,{campaign})}catch(e){return json(res,400,{error:e.message})}
+}
 if(requestUrl.pathname==='/api/phone/call'){
+if(campaigns.locked(auth.session(req).username))return json(res,409,{error:'A CSV calling list is active. Pause it and finish the current call before calling manually.'});
 
 if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
 if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});

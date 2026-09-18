@@ -30,6 +30,14 @@ before an update, and preserve them when copying application code. Existing
 accounts, scripts, history and recordings were copied during initial deployment.
 Subsequent local and production edits are independent.
 
+CSV calling lists accept `name,phone` headers (name is optional), up to 200
+rows and 256 KB. Phone numbers must include `+` and country code. Importing
+only previews the list; Start calling authorizes automatic sequential calls.
+List state is account-scoped in `.local/campaigns`. Pause stops future
+submissions. A server restart pauses the list, and a submission whose outcome
+is unknown is never automatically retried. Carrier completion must be confirmed
+by a finished worker session; otherwise the list pauses for manual review.
+
 Verification performed: HTTPS pages, scoped Secure login cookie, signup,
 new-user empty scripts, script save, logout, WSS Gemini native audio, phone
 worker heartbeat, and six Python call-control/recording tests. A real telephone

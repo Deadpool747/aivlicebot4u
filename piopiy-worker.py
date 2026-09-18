@@ -38,7 +38,9 @@ def prompt(mode='inbound', name=''):
     text = text.replace('{{customer_name}}', name).replace('{{customer_email}}', 'not provided')
     return text + '\n' + (ROOT / 'voice-defaults.txt').read_text(encoding='utf-8') + (
         '\nThis is a telephone call. There is no on-screen booking button. '
-        'Do not refer to a screen or button. Customer name is unknown; do not invent it. '
+        'Do not refer to a screen or button. '
+        + ('Use the provided customer name naturally. ' if name else 'Customer name is unknown; do not invent it. ')
+        +
         'Email delivery is unavailable on this phone connection; never claim an email was sent. '
         'If asked, provide the booking URL verbally. After your final spoken goodbye, '
         'call end_conversation. Never end while waiting for a customer response.'
