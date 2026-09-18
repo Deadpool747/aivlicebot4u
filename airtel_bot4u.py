@@ -51,6 +51,12 @@ def session_config(root, mode):
             'description': 'End the telephone conversation after the final spoken goodbye.'}]}])
 
 async def run(websocket, bridge, context, call_id, root=ROOT):
+    from phone_provider import selected_provider
+    if selected_provider(root, OWNER) != 'airtel_iq':
+        await websocket.send_json({'event': 'terminate', 'streamSid': bridge.stream_sid,
+                                   'reason': {'code': 1, 'text': 'Carrier not selected'}})
+        await websocket.close()
+        return
     mode = 'outbound' if context.get('direction') == 'outbound' else 'inbound'
     started = datetime.now(timezone.utc).isoformat()
     clock = time.monotonic()

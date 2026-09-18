@@ -20,6 +20,7 @@ scripts.migrate(existingAccounts,{inbound:fs.readFileSync(promptPaths.inbound,'u
 const port=Number(process.env.PORT||4174);
 const history=require('./call-history.cjs').createHistory(path.join(__dirname,'.local','call-history'));
 const phoneCall=require('./phone-call.cjs').createPhoneCaller({history,directory:path.join(__dirname,'.local'),token:()=>value('PIOPIY_API_TOKEN'),readScript:(owner,mode)=>scripts.read(owner,mode)});
+const carriers=require('./carrier-store.cjs').createCarrierStore(path.join(__dirname,'.local'));
 const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(__dirname,'.local','campaigns'),call:phoneCall,history});
 const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicOrigin?[new URL(publicOrigin).host]:[])];
 const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`,...(publicOrigin?[publicOrigin]:[])];
@@ -74,7 +75,15 @@ let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)
 let data;try{data=JSON.parse(body);if(!data||typeof data!=='object')throw Error()}catch{return json(res,400,{error:'Invalid request'})}
 const result=await phoneCall(auth.session(req).username,data);return json(res,result.status,result.body);
 }
-if(requestUrl.pathname==='/api/account/telephony'&&req.method==='GET'){const p=path.join(__dirname,'.local','telephony.json');const mappings=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{};return json(res,200,{telephony:mappings[auth.session(req).username]||null})}
+if(requestUrl.pathname==='/api/account/telephony'){
+ const owner=auth.session(req).username;
+ if(req.method==='GET')return json(res,200,{telephony:carriers.read(owner)});
+ if(req.method!=='PUT')return json(res,405,{error:'Method not allowed'});
+ if(campaigns.locked(owner))return json(res,409,{error:'Pause the CSV list and finish its current call before switching carriers.'});
+ if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});
+ let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>1024)return json(res,413,{error:'Request too large'});}
+ try{return json(res,200,{telephony:carriers.select(owner,JSON.parse(body).provider)})}catch(e){return json(res,400,{error:e.message})}
+}
 if(requestUrl.pathname==='/api/email-status')return json(res,200,{configured:!!(process.env.RESEND_API_KEY&&process.env.BOOKING_EMAIL_FROM)});
 if(requestUrl.pathname==='/api/script'){
 const mode=requestUrl.searchParams.get('mode')||'inbound';if(!Object.hasOwn(promptPaths,mode))return json(res,400,{error:'Invalid call mode'});const owner=auth.session(req).username;

@@ -67,8 +67,14 @@ def config(mode='inbound', name=''):
     )
 
 async def create_session(agent_id, call_id, from_number, to_number, metadata=None):
-    if agent_id != MAPPING['agent_id']:
+    from phone_provider import selected_provider
+    if selected_provider(ROOT, OWNER) != 'piopiy':
+        print('Piopiy session ignored: another carrier is selected.', flush=True)
         return
+    if agent_id != MAPPING['agent_id']:
+        print('Phone invite rejected: agent ID does not match configured mapping.', flush=True)
+        return
+    print('Phone session callback received for configured agent.', flush=True)
     room = rtc.Room()
     source = rtc.AudioSource(24000, 1, queue_size_ms=120)
     ended = asyncio.Event()
@@ -309,6 +315,16 @@ async def main():
     agent = Agent(agent_id=MAPPING['agent_id'],
                   agent_token=os.environ['PIOPIY_API_TOKEN'], create_session=create_session, debug=False)
     # SDK connect() installs Unix signal handlers, unsupported on Windows.
+    # Trace delivery without logging room tokens, caller details or invite payloads.
+    join_handler = agent.sio.handlers['/']['join_room']
+    async def traced_join(*args):
+        print('Piopiy join_room event received.', flush=True)
+        try:
+            return await join_handler(*args)
+        except Exception as exc:
+            print('Piopiy join_room dispatch failed: ' + type(exc).__name__, flush=True)
+            raise
+    agent.sio.on('join_room', handler=traced_join)
     async def heartbeat():
         while True:
             status = {'owner': OWNER, 'agent_id': MAPPING['agent_id'],

@@ -8,7 +8,7 @@ async function placePhoneCall(){
  if(!/^\+[1-9]\d{6,14}$/.test(number.replace(/[ ()-]/g,''))){status.textContent='Enter the number with + and country code.';$('outboundNumber').focus();return}
  phoneCalling=true;$('phoneCall').disabled=true;$('phoneCall').textContent='Calling…';status.textContent='Submitting call request…';
  try{const r=await fetch('api/phone/call',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({number,name:$('customerName').value.trim()})});const d=await r.json();status.textContent=r.ok?d.message:(d.error||'Could not request the call.');}
- catch{status.textContent='Call status is unknown. Check Piopiy call history before trying again.';}
+ catch{status.textContent='Call status is unknown. Check your carrier call history before trying again.';}
  finally{phoneCalling=false;$('phoneCall').disabled=false;$('phoneCall').textContent='Call';}
 }
 $('phoneCall').onclick=placePhoneCall;
@@ -54,4 +54,21 @@ $('logout').onclick=async()=>{finish();try{const r=await fetch('api/auth/logout'
 
 fetch('api/auth/status').then(r=>r.json()).then(d=>{if(!d.authenticated){location.replace('login');return}$('loggedInUser').value=(d.username||'').toUpperCase();}).catch(()=>{$('loggedInUser').placeholder='Account unavailable'});
 
-fetch('api/account/telephony').then(r=>r.json()).then(d=>{if(!d.telephony)return;$('accountPhone').hidden=false;$('phoneBusiness').textContent=d.telephony.business_name;$('phoneNumber').textContent='Piopiy number: '+d.telephony.display_number;$('phoneState').textContent='Assigned to your account. Live phone routing has not been verified.';}).catch(()=>{});
+let selectedCarrier='';
+function showCarrier(m){
+ if(!m)return;
+ $('accountPhone').hidden=false;selectedCarrier=m.provider||m.outbound_provider||'piopiy';
+ document.querySelectorAll('input[name="carrier"]').forEach(c=>c.checked=c.value===selectedCarrier);
+ $('phoneBusiness').textContent=m.business_name||'Your phone account';
+ $('phoneNumber').textContent=selectedCarrier==='airtel_iq'?'Airtel number: +91 8045911978':'Piopiy number: '+m.display_number;
+ $('phoneState').textContent=selectedCarrier==='airtel_iq'?'Inbound uses Airtel. Outbound requires Airtel API credentials.':'Inbound and outbound use Piopiy. Carrier-side inbound routing must be configured.';
+}
+fetch('api/account/telephony').then(r=>r.json()).then(d=>showCarrier(d.telephony)).catch(()=>{});
+for(const input of document.querySelectorAll('input[name="carrier"]'))input.onchange=async()=>{
+ const controls=[...document.querySelectorAll('input[name="carrier"]')];
+ if(phoneCalling){controls.forEach(c=>c.checked=c.value===selectedCarrier);$('carrierStatus').textContent='Wait for the current call request before switching.';return;}
+ controls.forEach(c=>c.disabled=true);$('carrierStatus').textContent='Saving provider...';
+ try{const r=await fetch('api/account/telephony',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:input.value})});const d=await r.json();if(!r.ok)throw Error(d.error);showCarrier(d.telephony);$('carrierStatus').textContent='Saved for new inbound and outbound calls. Existing calls continue.';}
+ catch(e){controls.forEach(c=>c.checked=c.value===selectedCarrier);$('carrierStatus').textContent=e.message||'Could not save provider.';}
+ finally{controls.forEach(c=>c.disabled=false);}
+};

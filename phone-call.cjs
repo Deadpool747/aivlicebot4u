@@ -7,6 +7,9 @@ function createPhoneCaller({directory,token,readScript,fetcher=fetch,history}){
   if(!/^\+[1-9]\d{6,14}$/.test(number))return fail(400,'Enter a phone number with + and country code.');
   const mapping=JSON.parse(fs.readFileSync(path.join(directory,'telephony.json'),'utf8'))[owner];
   if(!mapping)return fail(403,'No phone number is assigned to this account.');
+  // Never silently use Piopiy for an account assigned to another carrier.
+  if(mapping.outbound_provider==='airtel_iq')return fail(503,'Airtel outbound calling is not configured yet. Ask the account administrator to enable Airtel Voice API access and configure its credentials. No Piopiy call was placed.');
+  if(mapping.outbound_provider&&mapping.outbound_provider!=='piopiy')return fail(503,'The selected outbound carrier is not configured.');
   if(!token())return fail(503,'Piopiy is not configured.');
   if(!readScript(owner,'outbound').trim())return fail(400,'Save an outbound script first.');
   let worker;try{worker=JSON.parse(fs.readFileSync(path.join(directory,'phone-worker.json'),'utf8'))}catch{}
