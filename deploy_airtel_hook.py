@@ -20,7 +20,7 @@ hook = '''            # BOT4U owns only the explicitly assigned Airtel number.
 '''
 assert section.count(anchor) == 1, 'Unexpected deployed Airtel adapter; no changes made'
 assert 'bot4u_run' not in section, 'Hook already installed'
-updated = source[:start] + section.replace(anchor, hook + anchor) + source[end:]
+updated = source[:start] + section.replace('    ' + anchor, ''.join('    ' + line if line.strip() else line for line in hook.splitlines(True)) + '    ' + anchor) + source[end:]
 compile(updated, str(target), 'exec')
 backup = target.with_suffix('.py.before-bot4u-airtel')
 assert not backup.exists(), 'Existing backup must be reviewed first'
