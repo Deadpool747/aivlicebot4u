@@ -22,6 +22,7 @@ from google.genai import types
 from livekit import rtc
 from piopiy.agent import Agent, URL_CTX, TOKEN_CTX
 from phone_control import finish_phone_call
+from phone_audio import InputNoiseGate
 from phone_signals import voicemail, human_greeting, closing
 from phone_history import save_session
 from phone_recording import CallRecording
@@ -56,9 +57,9 @@ def config(mode='inbound', name=''):
         input_audio_transcription={}, output_audio_transcription={},
         speech_config={'voice_config': {'prebuilt_voice_config': {'voice_name': 'Sulafat'}}},
         realtime_input_config={'automatic_activity_detection': {
-            'start_of_speech_sensitivity': 'START_SENSITIVITY_HIGH',
-            'end_of_speech_sensitivity': 'END_SENSITIVITY_HIGH',
-            'prefix_padding_ms': 20, 'silence_duration_ms': 400},
+            'start_of_speech_sensitivity': 'START_SENSITIVITY_LOW',
+            'end_of_speech_sensitivity': 'END_SENSITIVITY_LOW',
+            'prefix_padding_ms': 120, 'silence_duration_ms': 650},
             'activity_handling': 'START_OF_ACTIVITY_INTERRUPTS'},
         tools=[{'function_declarations': [{'name': 'end_conversation',
                 'description': 'Disconnect after delivering your final spoken goodbye.'},
@@ -96,11 +97,12 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
         async with client.aio.live.connect(model=MODEL, config=config(mode, name)) as session:
             async def forward(track):
                 stream = rtc.AudioStream(track, sample_rate=16000, num_channels=1)
+                noise_gate = InputNoiseGate()
                 try:
                     async for event in stream:
                         recording.add(bytes(event.frame.data), 16000, 0)
                         await session.send_realtime_input(audio=types.Blob(
-                            data=bytes(event.frame.data), mime_type='audio/pcm;rate=16000'))
+                            data=noise_gate.process(bytes(event.frame.data)), mime_type='audio/pcm;rate=16000'))
                 finally:
                     await stream.aclose()
 
