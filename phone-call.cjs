@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path');
-function createPhoneCaller({directory,token,readScript,fetcher=fetch,history}){
+function createPhoneCaller({directory,token,readScript,fetcher=fetch,history,airtelCall}){
  const attempts=new Map(),pending=new Set();
  return async function call(owner,data){
   const fail=(status,error,uncertain=false)=>({status,body:{error,uncertain}});
@@ -8,6 +8,7 @@ function createPhoneCaller({directory,token,readScript,fetcher=fetch,history}){
   const mapping=JSON.parse(fs.readFileSync(path.join(directory,'telephony.json'),'utf8'))[owner];
   if(!mapping)return fail(403,'No phone number is assigned to this account.');
   // Never silently use Piopiy for an account assigned to another carrier.
+  if(mapping.outbound_provider==='airtel_iq'&&airtelCall)return airtelCall(owner,data);
   if(mapping.outbound_provider==='airtel_iq')return fail(503,'Airtel outbound calling is not configured yet. Ask the account administrator to enable Airtel Voice API access and configure its credentials. No Piopiy call was placed.');
   if(mapping.outbound_provider&&mapping.outbound_provider!=='piopiy')return fail(503,'The selected outbound carrier is not configured.');
   if(!token())return fail(503,'Piopiy is not configured.');

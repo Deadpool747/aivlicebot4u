@@ -24,7 +24,7 @@ def matches(context):
     return any(digits(context.get(k)) in (NUMBER, NUMBER[2:]) for k in
                ('airtel_iq_called_number', 'called_via_number'))
 
-def session_config(root, mode):
+def session_config(root, mode, name=""):
     env = {}
     for line in (root / '.env').read_text(encoding='utf-8-sig').splitlines():
         if '=' in line and not line.lstrip().startswith('#'):
@@ -34,7 +34,7 @@ def session_config(root, mode):
     script = (root / '.local/scripts' / owner / (mode + '.txt')).read_text(encoding='utf-8')
     if not script.strip():
         raise ValueError('Save your BOT4U script before receiving calls.')
-    script = script.replace('{{customer_name}}', '').replace('{{customer_email}}', 'not provided')
+    script = script.replace('{{customer_name}}', name).replace('{{customer_email}}', 'not provided')
     script += '\n' + (root / 'voice-defaults.txt').read_text(encoding='utf-8')
     script += ('\nThis is a telephone call. No screen or booking button is visible. '
                'Do not claim an email or booking was completed. After your final spoken goodbye, '
@@ -111,7 +111,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 queue.task_done()
 
     try:
-        env, config = session_config(root, mode)
+        env, config = session_config(root, mode, context.get('name', ''))
         client = genai.Client(api_key=env['GEMINI_API_KEY'])
         tasks.append(asyncio.create_task(media()))
         await asyncio.wait_for(ready.wait(), 15)
@@ -130,7 +130,8 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 await queue.join()
                 await bridge.wait_for_playback_idle()
                 await asyncio.sleep(0.8)
-                remarks = 'BOT4U closing audio finished; Airtel media session closed.'
+                await websocket.send_json({'event': 'terminate', 'streamSid': bridge.stream_sid, 'reason': {'code': 1, 'text': 'Conversation complete'}})
+                remarks = 'BOT4U closing audio finished; Airtel hangup requested.'
                 ended.set()
 
             async def receive():
@@ -172,8 +173,8 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         await asyncio.gather(*tasks, return_exceptions=True)
         try:
             recording_id = recording.save()
-            save_session(root, OWNER, callId=call_id, startedAt=started, type=mode,
-                phone='+' + digits(context.get('airtel_iq_caller_number')), name='',
+            save_session(root, OWNER, requestId=context.get('historyId'), callId=call_id, startedAt=started, type=mode,
+                phone=context.get('number') or ('+' + digits(context.get('airtel_iq_caller_number')) if digits(context.get('airtel_iq_caller_number')) else ''), name=context.get('name', ''),
                 duration=round(time.monotonic()-clock), result='Answered' if connected else 'Unconfirmed',
                 remarks=remarks, recordingId=recording_id, provider='airtel_iq')
         except Exception:

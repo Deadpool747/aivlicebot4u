@@ -19,7 +19,8 @@ const existingAccounts=fs.existsSync(accountsPath)?JSON.parse(fs.readFileSync(ac
 scripts.migrate(existingAccounts,{inbound:fs.readFileSync(promptPaths.inbound,'utf8'),outbound:fs.readFileSync(promptPaths.outbound,'utf8')});
 const port=Number(process.env.PORT||4174);
 const history=require('./call-history.cjs').createHistory(path.join(__dirname,'.local','call-history'));
-const phoneCall=require('./phone-call.cjs').createPhoneCaller({history,directory:path.join(__dirname,'.local'),token:()=>value('PIOPIY_API_TOKEN'),readScript:(owner,mode)=>scripts.read(owner,mode)});
+const airtelCall=require('./airtel-call.cjs').createAirtelCaller({directory:path.join(__dirname,'.local'),value,history,readScript:(owner,mode)=>scripts.read(owner,mode)});
+const phoneCall=require('./phone-call.cjs').createPhoneCaller({airtelCall,history,directory:path.join(__dirname,'.local'),token:()=>value('PIOPIY_API_TOKEN'),readScript:(owner,mode)=>scripts.read(owner,mode)});
 const carriers=require('./carrier-store.cjs').createCarrierStore(path.join(__dirname,'.local'));
 const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(__dirname,'.local','campaigns'),call:phoneCall,history});
 const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicOrigin?[new URL(publicOrigin).host]:[])];
