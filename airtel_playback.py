@@ -20,6 +20,8 @@ class AirtelPlayback:
         self.phase = 0
         self.next_frame = 0.0
         self.marks = {}
+        self.frames_sent = 0
+        self.underruns = 0
 
     def encode(self, pcm):
         samples = np.frombuffer(pcm, dtype='<i2').astype(float)
@@ -42,12 +44,20 @@ class AirtelPlayback:
 
     async def send_frame(self, frame, version):
         loop = asyncio.get_running_loop()
-        await asyncio.sleep(max(0, self.next_frame - loop.time()))
+        now = loop.time()
+        if not self.next_frame:
+            self.next_frame = now
+        elif now - self.next_frame > 0.08:
+            self.underruns += 1
+            self.next_frame = now
+        await asyncio.sleep(max(0, self.next_frame - now))
         if version != self.version:
             return
         await self.websocket.send_json({'event': 'media', 'streamSid': self.stream_sid,
             'media': {'payload': base64.b64encode(frame).decode('ascii')}})
-        self.next_frame = max(self.next_frame, loop.time()) + 0.02
+        # Absolute media clock: scheduler/send overhead must not accumulate per packet.
+        self.next_frame += 0.02
+        self.frames_sent += 1
 
     async def finish_turn(self, version):
         if version != self.version:
@@ -58,6 +68,9 @@ class AirtelPlayback:
             frame = bytes(self.pending[:160])
             del self.pending[:160]
             await self.send_frame(frame.ljust(160, b'\xff'), version)
+        self.tail[:] = 0
+        self.phase = 0
+        self.next_frame = 0
 
     async def clear(self):
         self.version += 1
@@ -96,15 +109,48 @@ class Goodbye:
         self.requested = False
         self.task = None
         self.sent = False
+        self.confirmed = False
+        self.state = 'NORMAL_CONVERSATION'
+        self.speaking = False
+        self.allow_close = True
+        self.cancelled_tasks = set()
+
+    def transition(self, state):
+        if self.state != state:
+            logging.getLogger('bot4u.airtel').info('Call state %s -> %s', self.state, state)
+            self.state = state
+
+    def request(self):
+        if self.sent or self.speaking or not self.allow_close:
+            return False
+        self.requested = True
+        self.transition('BOT_CLOSING')
+        return True
+
+    def stopped(self):
+        self.confirmed = self.sent
+        self.transition('CALL_TERMINATED')
+        self.ended.set()
+
 
     def interrupt(self):
+        # A terminate frame is a committed action; do not cancel its acknowledgement wait.
+        if self.sent or self.state == 'CALL_TERMINATING':
+            return
+        closing = self.requested or self.task is not None
         self.requested = False
         if self.task:
-            self.task.cancel()
+            task = self.task
+            task.cancel()
+            self.cancelled_tasks.add(task)
+            task.add_done_callback(self.cancelled_tasks.discard)
             self.task = None
+        if closing:
+            self.transition('CLOSING_CANCELLED')
+        self.transition('NORMAL_CONVERSATION')
 
     def turn_complete(self):
-        if self.requested and self.task is None:
+        if self.requested and self.task is None and not self.sent:
             self.task = asyncio.create_task(self.finish(self.playback.version))
 
     async def finish(self, version):
@@ -112,9 +158,15 @@ class Goodbye:
             await self.queue.join()
             if not await self.playback.wait_played(version):
                 return
+            self.transition('WAITING_FOR_FINAL_CUSTOMER_RESPONSE')
             await asyncio.sleep(self.grace)
-            if not self.requested or version != self.playback.version:
+            # A first voiced packet can precede sustained-speech detection by 60 ms.
+            # Never hang up in that gap; sustained speech cancels this task upstream.
+            while self.speaking:
+                await asyncio.sleep(0.02)
+            if not self.requested or self.speaking or version != self.playback.version:
                 return
+            self.transition('CALL_TERMINATING')
             await self.websocket.send_json({'event': 'terminate', 'streamSid': self.playback.stream_sid,
                                            'reason': {'code': 1, 'text': 'Conversation complete'}})
             self.sent = True
@@ -123,11 +175,40 @@ class Goodbye:
             try:
                 await asyncio.wait_for(self.ended.wait(), 5)
             except asyncio.TimeoutError:
+                logging.getLogger('bot4u.airtel').error('Airtel terminate unconfirmed: no stop event')
                 self.ended.set()
         except asyncio.TimeoutError:
             # No playback acknowledgement: do not cut off unconfirmed audio.
             logging.getLogger('bot4u.airtel').warning('Airtel goodbye playback acknowledgement timed out')
             self.requested = False
+            self.transition('NORMAL_CONVERSATION')
         except Exception:
             logging.getLogger('bot4u.airtel').exception('Airtel goodbye failed')
             self.requested = False
+
+
+class SpeechActivity:
+    """Cancel closing on sustained incoming speech before delayed transcription arrives."""
+    def __init__(self, rate=16000):
+        self.rate = rate
+        self.voiced = 0
+        self.quiet = 0
+        self.active = False
+        self.candidate = False
+
+    def process(self, pcm):
+        samples = np.frombuffer(pcm, dtype='<i2').astype(float)
+        self.candidate = bool(len(samples) and np.sqrt(np.mean(samples * samples)) >= 240)
+        onset = False
+        if self.candidate:
+            self.voiced += len(samples)
+            self.quiet = 0
+            if not self.active and self.voiced >= self.rate * 0.06:
+                self.active = True
+                onset = True
+        else:
+            self.quiet += len(samples)
+            self.voiced = 0
+            if self.quiet >= self.rate * 0.3:
+                self.active = False
+        return onset

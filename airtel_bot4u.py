@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import time
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from google import genai
@@ -11,7 +12,7 @@ from google.genai import types
 from phone_history import save_session
 from phone_recording import CallRecording
 from phone_audio import InputNoiseGate
-from airtel_playback import AirtelPlayback, Goodbye
+from airtel_playback import AirtelPlayback, Goodbye, SpeechActivity
 
 ROOT = Path('/opt/bot4u')
 OWNER = 'huzaifa'
@@ -40,7 +41,14 @@ def session_config(root, mode, name=""):
     script += ('\nThis is a telephone call. No screen or booking button is visible. '
                'Do not claim an email or booking was completed. After your final spoken goodbye, '
                'call end_conversation. If interrupted, respond instead of ending. '
-               'Never end while waiting for the customer to answer a question.')
+               'Never end while waiting for the customer to answer a question. '
+               'Closing is reversible. If the customer speaks after a goodbye, listen to their latest '
+               'request and answer it normally. Wait, actually, another question, explain, order, '
+               'documents, or requests for details are continuation, NOT goodbye confirmation. '
+               'Do not repeat thanks or goodbye in response to a new question. Only close again '
+               'when the customer genuinely ends the conversation. A closing tool result only '
+               'means a tentative request, never that the customer has finished. '
+               'After calling end_conversation do not generate another spoken farewell.')
     return env, types.LiveConnectConfig(response_modalities=['AUDIO'], system_instruction=script,
         input_audio_transcription={}, output_audio_transcription={},
         speech_config={'voice_config': {'prebuilt_voice_config': {'voice_name': 'Sulafat'}}},
@@ -78,7 +86,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         while True:
             frame = await websocket.receive()
             if frame.get('type') == 'websocket.disconnect':
-                ended.set()
+                goodbye.stopped()
                 return
             payload = frame.get('text')
             if not payload:
@@ -95,7 +103,10 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 ready.set()
             event = str(message.get('event') or message.get('eventType') or message.get('status') or '').lower()
             if event in {'stop', 'terminate', 'stream_terminate', 'streamstop', 'end', 'error'}:
-                ended.set()
+                if event == 'stop':
+                    goodbye.stopped()
+                else:
+                    ended.set()
                 return
 
     async def play():
@@ -125,34 +136,73 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         async with client.aio.live.connect(model=env.get('GEMINI_LIVE_MODEL', 'gemini-3.1-flash-live-preview'), config=config) as session:
             connected = True
             log.info('Airtel call connected to BOT4U account huzaifa')
+            activity = SpeechActivity()
+            last_speech = 0.0
             async def forward():
+                nonlocal last_speech
                 gate = InputNoiseGate()
                 async for pcm in bridge.mic_chunks():
                     recording.add(pcm, 16000, 0)
-                    await session.send_realtime_input(audio=types.Blob(data=gate.process(pcm), mime_type='audio/pcm;rate=16000'))
+                    filtered = gate.process(pcm)
+                    onset = activity.process(filtered)
+                    goodbye.speaking = activity.active or activity.candidate
+                    if activity.active:
+                        last_speech = time.monotonic()
+                    if onset:
+                        log.info('Customer speech onset; cancelling pending closing')
+                        goodbye.interrupt()
+                    await session.send_realtime_input(audio=types.Blob(data=filtered, mime_type='audio/pcm;rate=16000'))
                 ended.set()
 
             async def receive():
+                output_text = ''
+                input_text = ''
+                turn_audio = False
                 while not ended.is_set():
                     async for response in session.receive():
                         content = response.server_content
+                        if goodbye.sent:
+                            continue
                         if content and content.interrupted:
                             goodbye.interrupt()
+                            log.info('Gemini interruption; recent local speech=%s', time.monotonic() - last_speech < 1)
                             await playback.clear()
+                            output_text = ''
+                            turn_audio = False
                         elif content and content.input_transcription and content.input_transcription.text:
                             # Cancel a pending goodbye for actual caller speech.
                             goodbye.interrupt()
+                            input_text += content.input_transcription.text
+                            # Questions/continuations override farewell words within the same utterance.
+                            continuation = bool(re.search(r'\?|\b(wait|actually|question|what|when|why|how|explain|more|order|documents)\b', input_text, re.I))
+                            goodbye.allow_close = not continuation
+                        if content and content.output_transcription and content.output_transcription.text:
+                            output_text += content.output_transcription.text
                         if response.data:
+                            if not turn_audio:
+                                log.info('Gemini audio turn started')
+                            turn_audio = True
                             await queue.put((playback.version, response.data))
                         if response.tool_call:
                             for call in response.tool_call.function_calls:
                                 if call.name == 'end_conversation':
-                                    goodbye.requested = True
+                                    goodbye.request()
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
-                                    id=call.id, name=call.name, response={'status': 'closing_after_audio'})])
+                                    id=call.id, name=call.name, response={'status': 'pending_silence' if goodbye.requested else 'cancelled_customer_continuing',
+                                        'instruction': 'Listen and answer any new customer question normally; do not repeat a goodbye.'})])
                         if content and content.turn_complete:
+                            # Some model turns speak a farewell without invoking the tool.
+                            from phone_signals import closing
+                            if turn_audio and closing(output_text) and goodbye.allow_close:
+                                goodbye.request()
                             await queue.put((playback.version, None))
                             goodbye.turn_complete()
+                            log.info('Gemini turn complete; audio=%s closing=%s queue=%s frames=%s underruns=%s',
+                                     turn_audio, goodbye.requested, queue.qsize(), playback.frames_sent, playback.underruns)
+                            # A normal answer has now been generated. A later genuine goodbye is allowed.
+                            if turn_audio and not closing(output_text):
+                                goodbye.allow_close = True
+                            output_text, input_text, turn_audio = '', '', False
 
             player = asyncio.create_task(play())
             tasks += [player, asyncio.create_task(forward()), asyncio.create_task(receive()), asyncio.create_task(ended.wait())]
@@ -165,10 +215,12 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         log.error(remarks)
     finally:
         if goodbye.sent:
-            remarks = 'BOT4U closing audio acknowledged; Airtel hangup requested.'
+            remarks = ('Airtel termination confirmed by stream stop.' if goodbye.confirmed else
+                       'Airtel hangup requested; provider termination not confirmed.')
         if goodbye.task:
             goodbye.task.cancel()
             tasks.append(goodbye.task)
+        tasks.extend(goodbye.cancelled_tasks)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
