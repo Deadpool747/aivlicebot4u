@@ -26,7 +26,17 @@ function createAirtelCaller({directory,value,readScript,history,fetcher=fetch}){
    fs.writeFileSync(path.join(folder,id+'.json'),JSON.stringify({owner,direction:'outbound',number,name,historyId,expiresAt:now+360000}),{mode:0o600});
    const body=JSON.stringify({from:{number:number.slice(3),participant_name:'Customer',max_timeout_seconds:59},to:[{number:number.slice(3),participant_name:'Customer',max_timeout_seconds:59}],caller_id:'8045911978',metaData:{voicebotUrl:'wss://aivoicebot4u.com/airtel-iq/ws-airtel/',bot4u_request_id:id},call_flow_id:'e55a0f09-1c99-40a7-b0ff-041ef088447e'});
    const response=await fetcher('https://iqvoice.airtel.in/gateway/airtel-xchange/v2/adv/click-to-call',{method:'POST',headers:headers(body,value('AIRTEL_APP_ID'),value('AIRTEL_API_KEY')),body,signal:AbortSignal.timeout(20000)});
-   if(!response.ok)return fail(502,'Airtel returned HTTP '+response.status+'. Check Airtel call logs before retrying.',true,historyId);
+   if(!response.ok){
+    const detail=await response.json().catch(()=>({}));
+    const known={"No valid participant passed in 'to'. At least 1 valid participant required.":'Airtel rejected the call: no valid destination participant. The Airtel request format needs verification.',"JSON decoding error":'Airtel rejected the call request format.'};
+    const message=known[detail.errorMessage]||'Airtel rejected the request (HTTP '+response.status+'). Check Airtel call logs.';
+    if(response.status>=400&&response.status<500){
+     fs.renameSync(path.join(folder,id+'.json'),path.join(folder,id+'.rejected'));
+     if(historyId)history?.edit(owner,historyId,{result:'Not answered',remarks:message});
+     return fail(502,message,false,historyId);
+    }
+    return fail(502,message,true,historyId);
+   }
    return {status:202,body:{historyId,requestId:id,message:'Call submitted to Airtel; ringing and answer are not yet confirmed.'}};
   }catch{return fail(502,'Airtel call status is unknown. Check Airtel call logs before retrying.',true,historyId)}
   finally{pending.delete(owner)}
