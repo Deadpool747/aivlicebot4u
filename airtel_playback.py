@@ -103,7 +103,7 @@ class AirtelPlayback:
 
 
 class Goodbye:
-    def __init__(self, playback, queue, websocket, ended, grace=0.8):
+    def __init__(self, playback, queue, websocket, ended, grace=1.2):
         self.playback, self.queue, self.websocket, self.ended = playback, queue, websocket, ended
         self.grace = grace
         self.requested = False
@@ -114,6 +114,15 @@ class Goodbye:
         self.speaking = False
         self.allow_close = True
         self.cancelled_tasks = set()
+        self.acoustic_hold_until = 0
+        self.acoustic_checked = False
+
+    def acoustic_activity(self):
+        # Energy is not speech: permit recognition to arrive, but do not let
+        # background noise permanently cancel a genuine completed goodbye.
+        if self.requested and not self.acoustic_checked and not self.sent:
+            self.acoustic_checked = True
+            self.acoustic_hold_until = asyncio.get_running_loop().time() + 0.8
 
     def transition(self, state):
         if self.state != state:
@@ -123,6 +132,9 @@ class Goodbye:
     def request(self):
         if self.sent or self.speaking or not self.allow_close:
             return False
+        if not self.requested:
+            self.acoustic_checked = False
+            self.acoustic_hold_until = 0
         self.requested = True
         self.transition('BOT_CLOSING')
         return True
@@ -160,10 +172,7 @@ class Goodbye:
                 return
             self.transition('WAITING_FOR_FINAL_CUSTOMER_RESPONSE')
             await asyncio.sleep(self.grace)
-            # A first voiced packet can precede sustained-speech detection by 60 ms.
-            # Never hang up in that gap; sustained speech cancels this task upstream.
-            while self.speaking:
-                await asyncio.sleep(0.02)
+            await asyncio.sleep(max(0, self.acoustic_hold_until - asyncio.get_running_loop().time()))
             if not self.requested or self.speaking or version != self.playback.version:
                 return
             self.transition('CALL_TERMINATING')

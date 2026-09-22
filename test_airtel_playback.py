@@ -144,6 +144,27 @@ class PlaybackTests(unittest.IsolatedAsyncioTestCase):
             self.assertLess(len(actual) - len(expected), 160)
             self.assertTrue(all(len(m['frame']) == 160 for m in socket.messages[start:]))
 
+    async def test_background_energy_cannot_cancel_or_extend_closing_forever(self):
+        socket = Socket()
+        player = AirtelPlayback(socket, 'test')
+        goodbye = Goodbye(player, asyncio.Queue(), socket, asyncio.Event(), grace=0)
+        goodbye.request()
+        goodbye.acoustic_activity()
+        deadline = goodbye.acoustic_hold_until
+        for _ in range(100):
+            goodbye.acoustic_activity()
+        self.assertEqual(goodbye.acoustic_hold_until, deadline)
+        self.assertTrue(goodbye.requested)
+        goodbye.acoustic_hold_until = 0
+        goodbye.turn_complete()
+        await asyncio.sleep(0)
+        player.acknowledge(socket.messages[-1])
+        for _ in range(10):
+            await asyncio.sleep(0)
+        self.assertTrue(goodbye.sent)
+        goodbye.stopped()
+        await goodbye.task
+
 
 if __name__ == '__main__':
     unittest.main()

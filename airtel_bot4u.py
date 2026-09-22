@@ -145,12 +145,10 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                     recording.add(pcm, 16000, 0)
                     filtered = gate.process(pcm)
                     onset = activity.process(filtered)
-                    goodbye.speaking = activity.active or activity.candidate
                     if activity.active:
                         last_speech = time.monotonic()
                     if onset:
-                        log.info('Customer speech onset; cancelling pending closing')
-                        goodbye.interrupt()
+                        goodbye.acoustic_activity()
                     await session.send_realtime_input(audio=types.Blob(data=filtered, mime_type='audio/pcm;rate=16000'))
                 ended.set()
 
@@ -163,6 +161,14 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                         content = response.server_content
                         if goodbye.sent:
                             continue
+                        voice_activity = getattr(response, 'voice_activity', None)
+                        activity_type = str(getattr(voice_activity, 'voice_activity_type', '') or '')
+                        if activity_type.endswith('ACTIVITY_START'):
+                            goodbye.speaking = True
+                            goodbye.interrupt()
+                            log.info('Gemini customer speech start')
+                        elif activity_type.endswith('ACTIVITY_END'):
+                            goodbye.speaking = False
                         if content and content.interrupted:
                             goodbye.interrupt()
                             log.info('Gemini interruption; recent local speech=%s', time.monotonic() - last_speech < 1)
@@ -191,6 +197,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                                     id=call.id, name=call.name, response={'status': 'pending_silence' if goodbye.requested else 'cancelled_customer_continuing',
                                         'instruction': 'Listen and answer any new customer question normally; do not repeat a goodbye.'})])
                         if content and content.turn_complete:
+                            goodbye.speaking = False
                             # Some model turns speak a farewell without invoking the tool.
                             from phone_signals import closing
                             if turn_audio and closing(output_text) and goodbye.allow_close:
