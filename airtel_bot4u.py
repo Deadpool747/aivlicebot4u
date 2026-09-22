@@ -11,6 +11,7 @@ from google.genai import types
 from phone_history import save_session
 from phone_recording import CallRecording
 from phone_audio import InputNoiseGate
+from airtel_playback import AirtelPlayback, Goodbye
 
 ROOT = Path('/opt/bot4u')
 OWNER = 'huzaifa'
@@ -66,10 +67,10 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         ready.set()
     queue = asyncio.Queue(maxsize=1000)
     tasks = []
-    closer = None
+    playback = AirtelPlayback(websocket, bridge.stream_sid)
+    goodbye = Goodbye(playback, queue, websocket, ended)
     player = None
     client = None
-    epoch = 0
     connected = False
     remarks = 'Airtel call ended.'
 
@@ -88,6 +89,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 continue
             if not isinstance(message, dict):
                 continue
+            playback.acknowledge(message)
             await bridge.handle_ws_message(message)
             if bridge.stream_sid:
                 ready.set()
@@ -97,16 +99,20 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 return
 
     async def play():
+        buffered_version = None
         while True:
             version, pcm = await queue.get()
             try:
-                # One small frame at a time permits genuine caller interruption.
-                for offset in range(0, len(pcm), 960):
-                    if version != epoch:
-                        break
-                    chunk = pcm[offset:offset+960]
-                    await bridge.play(chunk)
-                    recording.add(chunk, 24000, 1)
+                if pcm is None:
+                    await playback.finish_turn(version)
+                    buffered_version = None
+                elif version == playback.version:
+                    if buffered_version != version:
+                        # A small initial cushion absorbs Gemini/network chunk jitter.
+                        await asyncio.sleep(0.12)
+                        buffered_version = version
+                    await playback.play(pcm, version)
+                    recording.add(pcm, 24000, 1)
             finally:
                 queue.task_done()
 
@@ -115,6 +121,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         client = genai.Client(api_key=env['GEMINI_API_KEY'])
         tasks.append(asyncio.create_task(media()))
         await asyncio.wait_for(ready.wait(), 15)
+        playback.stream_sid = bridge.stream_sid
         async with client.aio.live.connect(model=env.get('GEMINI_LIVE_MODEL', 'gemini-3.1-flash-live-preview'), config=config) as session:
             connected = True
             log.info('Airtel call connected to BOT4U account huzaifa')
@@ -125,35 +132,27 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                     await session.send_realtime_input(audio=types.Blob(data=gate.process(pcm), mime_type='audio/pcm;rate=16000'))
                 ended.set()
 
-            async def close_after_audio():
-                nonlocal remarks
-                await queue.join()
-                await bridge.wait_for_playback_idle()
-                await asyncio.sleep(0.8)
-                await websocket.send_json({'event': 'terminate', 'streamSid': bridge.stream_sid, 'reason': {'code': 1, 'text': 'Conversation complete'}})
-                remarks = 'BOT4U closing audio finished; Airtel hangup requested.'
-                ended.set()
-
             async def receive():
-                nonlocal epoch, closer
                 while not ended.is_set():
                     async for response in session.receive():
                         content = response.server_content
-                        if content and (content.interrupted or (content.input_transcription and content.input_transcription.text)):
-                            if closer:
-                                closer.cancel()
-                                closer = None
                         if content and content.interrupted:
-                            epoch += 1
-                            await bridge.flush_playback()
+                            goodbye.interrupt()
+                            await playback.clear()
+                        elif content and content.input_transcription and content.input_transcription.text:
+                            # Cancel a pending goodbye for actual caller speech.
+                            goodbye.interrupt()
                         if response.data:
-                            await queue.put((epoch, response.data))
+                            await queue.put((playback.version, response.data))
                         if response.tool_call:
                             for call in response.tool_call.function_calls:
-                                if call.name == 'end_conversation' and closer is None:
-                                    closer = asyncio.create_task(close_after_audio())
+                                if call.name == 'end_conversation':
+                                    goodbye.requested = True
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
                                     id=call.id, name=call.name, response={'status': 'closing_after_audio'})])
+                        if content and content.turn_complete:
+                            await queue.put((playback.version, None))
+                            goodbye.turn_complete()
 
             player = asyncio.create_task(play())
             tasks += [player, asyncio.create_task(forward()), asyncio.create_task(receive()), asyncio.create_task(ended.wait())]
@@ -165,9 +164,11 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         remarks = 'Airtel BOT4U error: ' + type(exc).__name__
         log.error(remarks)
     finally:
-        if closer:
-            closer.cancel()
-            tasks.append(closer)
+        if goodbye.sent:
+            remarks = 'BOT4U closing audio acknowledged; Airtel hangup requested.'
+        if goodbye.task:
+            goodbye.task.cancel()
+            tasks.append(goodbye.task)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
