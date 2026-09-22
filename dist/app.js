@@ -61,7 +61,7 @@ function showCarrier(m){
  document.querySelectorAll('input[name="carrier"]').forEach(c=>c.checked=c.value===selectedCarrier);
  $('phoneBusiness').textContent=m.business_name||'Your phone account';
  $('phoneNumber').textContent=selectedCarrier==='airtel_iq'?'Airtel number: +91 8045911978':'Piopiy number: '+m.display_number;
- $('phoneState').textContent=selectedCarrier==='airtel_iq'?'Inbound uses Airtel. Outbound requires Airtel API credentials.':'Inbound and outbound use Piopiy. Carrier-side inbound routing must be configured.';
+ $('phoneState').textContent=selectedCarrier==='airtel_iq'?'Inbound and outbound calls use Airtel.':'Inbound and outbound use Piopiy. Carrier-side inbound routing must be configured.';
 }
 fetch('api/account/telephony').then(r=>r.json()).then(d=>showCarrier(d.telephony)).catch(()=>{});
 for(const input of document.querySelectorAll('input[name="carrier"]'))input.onchange=async()=>{

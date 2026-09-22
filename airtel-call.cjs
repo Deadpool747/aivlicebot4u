@@ -24,7 +24,7 @@ function createAirtelCaller({directory,value,readScript,history,fetcher=fetch}){
    const id=crypto.randomUUID(),folder=path.join(directory,'airtel-pending');fs.mkdirSync(folder,{recursive:true});
    historyId=history?.add(owner,{kind:'request',type:'outbound',phone:number,name,result:'Pending',remarks:'Airtel call requested; answer not confirmed.'});
    fs.writeFileSync(path.join(folder,id+'.json'),JSON.stringify({owner,direction:'outbound',number,name,historyId,expiresAt:now+360000}),{mode:0o600});
-   const body=JSON.stringify({from:{number:number.slice(3),participant_name:'Customer',max_timeout_seconds:59},to:[{number:number.slice(3),participant_name:'Customer',max_timeout_seconds:59}],caller_id:'8045911978',metaData:{voicebotUrl:'wss://aivoicebot4u.com/airtel-iq/ws-airtel/',bot4u_request_id:id},call_flow_id:'e55a0f09-1c99-40a7-b0ff-041ef088447e'});
+   const body=JSON.stringify({from:{number:number.slice(3),participant_name:'Customer',max_timeout_seconds:59},to:[{number:'+918045911978',participant_name:'Bot',max_timeout_seconds:59}],caller_id:'8045911978',metaData:{voicebotUrl:'wss://aivoicebot4u.com/airtel-iq/ws-airtel/',bot4u_request_id:id},call_flow_id:'e55a0f09-1c99-40a7-b0ff-041ef088447e'});
    const response=await fetcher('https://iqvoice.airtel.in/gateway/airtel-xchange/v2/adv/click-to-call',{method:'POST',headers:headers(body,value('AIRTEL_APP_ID'),value('AIRTEL_API_KEY')),body,signal:AbortSignal.timeout(20000)});
    if(!response.ok){
     const detail=await response.json().catch(()=>({}));
