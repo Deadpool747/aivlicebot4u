@@ -13,6 +13,9 @@ if(basePath&&!/^\/[a-zA-Z0-9_-]+$/.test(basePath))throw Error('Invalid BASE_PATH
 const publicOrigin=value('PUBLIC_ORIGIN');
 if(publicOrigin&&new URL(publicOrigin).origin!==publicOrigin)throw Error('PUBLIC_ORIGIN must be an origin');
 const auth=require('./auth.cjs').createAuth(path.join(__dirname,'.local'),{cookiePath:basePath||'/',secure:publicOrigin.startsWith('https://'),cookieName:basePath?'bot4u_session':'voice_session'});
+const apiKeys=require('./api-keys.cjs').createApiKeys(path.join(__dirname,'.local'),{userExists:auth.userExists});
+const apiGateway=require('./api-keys.cjs').createApiGateway(apiKeys);
+const keyManagementLimit=require('./api-keys.cjs').createLimiter({limit:30});
 const scripts=require('./script-store.cjs').createScriptStore(path.join(__dirname,'.local','scripts'));
 const accountsPath=path.join(__dirname,'.local','users.json'),legacyAccountPath=path.join(__dirname,'.local','account.json');
 const existingAccounts=fs.existsSync(accountsPath)?JSON.parse(fs.readFileSync(accountsPath,'utf8')):fs.existsSync(legacyAccountPath)?[JSON.parse(fs.readFileSync(legacyAccountPath,'utf8'))]:[];
@@ -26,7 +29,7 @@ const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(
 const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicOrigin?[new URL(publicOrigin).host]:[])];
 const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`,...(publicOrigin?[publicOrigin]:[])];
 function stripBase(req){if(!basePath)return true;if(!req.url.startsWith(basePath+'/'))return false;req.url=req.url.slice(basePath.length);return true}
-const assets={'/':'index.html','/app.js':'app.js','/csv-calls.js':'csv-calls.js','/style.css':'style.css','/capture.js':'capture.js','/dashboard':'dashboard.html','/dashboard.js':'dashboard.js'};
+const assets={'/':'index.html','/app.js':'app.js','/csv-calls.js':'csv-calls.js','/style.css':'style.css','/capture.js':'capture.js','/dashboard':'dashboard.html','/dashboard.js':'dashboard.js','/api-keys':'api-keys.html','/api-keys.js':'api-keys.js','/api-docs':'api-docs.html'};
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data))}
 const server=http.createServer(async(req,res)=>{try{
 if(!hosts.includes(req.headers.host))return json(res,403,{error:'Invalid host'});
@@ -36,10 +39,30 @@ if(!stripBase(req)){res.writeHead(404);return res.end()}
 if(await auth.handle(req,res))return;
 const publicAssets={'/login':'login.html','/login.js':'login.js','/style.css':'style.css'};
 if(publicAssets[req.url]&&req.method==='GET'){const file=publicAssets[req.url];res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html','Cache-Control':'no-store'});return res.end(fs.readFileSync(path.join(__dirname,'dist',file)))}
-if(!auth.session(req)){if(req.url.startsWith('/api/'))return json(res,401,{error:'Please sign in.'});res.writeHead(302,{Location:basePath+'/login','Cache-Control':'no-store'});return res.end()}
+let identity=auth.session(req);
+if(req.url.startsWith('/api/v1/')){
+ const access=apiGateway(req);if(access.error){if(access.status===429)res.setHeader('Retry-After','60');return json(res,access.status,{error:access.error})}
+ identity=access.identity;req.url=access.url;
+}
+if(!identity){if(req.url.startsWith('/api/'))return json(res,401,{error:'Please sign in.'});res.writeHead(302,{Location:basePath+'/login','Cache-Control':'no-store'});return res.end()}
+if(req.url==='/api/keys'||req.url.startsWith('/api/keys/')){
+ // Key lifecycle endpoints require the dashboard session, never a bearer key.
+ if(!auth.session(req))return json(res,401,{error:'Please sign in.'});
+ const owner=identity.username;
+ if(!keyManagementLimit(owner))return json(res,429,{error:'Too many key management requests.'});
+ if(req.url==='/api/keys'&&req.method==='GET')return json(res,200,{keys:apiKeys.list(owner)});
+ if(req.url==='/api/keys'&&req.method==='POST'){
+  if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});
+  let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>2048)return json(res,413,{error:'Request too large'})}
+  let data;try{data=JSON.parse(body)}catch{return json(res,400,{error:'Invalid JSON'})}
+  try{return json(res,201,apiKeys.create(owner,data?.name))}catch(e){return json(res,400,{error:e.message})}
+ }
+ if(req.method==='DELETE'&&/^\/api\/keys\/[a-f0-9]{32}$/.test(req.url))return apiKeys.revoke(owner,req.url.split('/').pop())?json(res,200,{revoked:true}):json(res,404,{error:'Key not found'});
+ return json(res,405,{error:'Method not allowed'});
+}
 const requestUrl=new URL(req.url,'http://localhost');
 if(requestUrl.pathname==='/api/call-recording'&&['GET','HEAD'].includes(req.method)){
-const file=history.recording(auth.session(req).username,requestUrl.searchParams.get('id'));
+const file=history.recording(identity.username,requestUrl.searchParams.get('id'));
 if(!file)return json(res,404,{error:'Recording unavailable'});
 const size=fs.statSync(file).size;let start=0,end=size-1,status=200;
 const headers={'Content-Type':'audio/wav','Cache-Control':'private, no-store','Accept-Ranges':'bytes','X-Content-Type-Options':'nosniff'};
@@ -50,7 +73,7 @@ headers['Content-Length']=end-start+1;res.writeHead(status,headers);if(req.metho
 }
 if(requestUrl.pathname==='/api/call-history'){
 
-const owner=auth.session(req).username;
+const owner=identity.username;
 if(req.method==='GET')return json(res,200,{calls:history.list(owner)});
 if(req.method!=='PATCH')return json(res,405,{error:'Method not allowed'});
 if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});
@@ -60,7 +83,7 @@ if(!data||typeof data.remarks!=='string'||data.remarks.length>2000||!['','Answer
 return history.edit(owner,data.id,data)?json(res,200,{saved:true}):json(res,404,{error:'Call not found'});
 }
 if(requestUrl.pathname==='/api/phone/campaign'){
-const owner=auth.session(req).username;
+const owner=identity.username;
 if(req.method==='GET'){await campaigns.tick(owner);return json(res,200,{campaign:campaigns.get(owner)})}
 if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
 if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});
@@ -68,16 +91,16 @@ let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)
 try{const data=JSON.parse(body);const campaign=data.action==='import'?campaigns.importCsv(owner,data.csv):campaigns.action(owner,data.action);return json(res,200,{campaign})}catch(e){return json(res,400,{error:e.message})}
 }
 if(requestUrl.pathname==='/api/phone/call'){
-if(campaigns.locked(auth.session(req).username))return json(res,409,{error:'A CSV calling list is active. Pause it and finish the current call before calling manually.'});
+if(campaigns.locked(identity.username))return json(res,409,{error:'A CSV calling list is active. Pause it and finish the current call before calling manually.'});
 
 if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
 if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});
 let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>4096)return json(res,413,{error:'Request too large'})}
 let data;try{data=JSON.parse(body);if(!data||typeof data!=='object')throw Error()}catch{return json(res,400,{error:'Invalid request'})}
-const result=await phoneCall(auth.session(req).username,data);return json(res,result.status,result.body);
+const result=await phoneCall(identity.username,data);return json(res,result.status,result.body);
 }
 if(requestUrl.pathname==='/api/account/telephony'){
- const owner=auth.session(req).username;
+ const owner=identity.username;
  if(req.method==='GET')return json(res,200,{telephony:carriers.read(owner)});
  if(req.method!=='PUT')return json(res,405,{error:'Method not allowed'});
  if(campaigns.locked(owner))return json(res,409,{error:'Pause the CSV list and finish its current call before switching carriers.'});
@@ -87,7 +110,7 @@ if(requestUrl.pathname==='/api/account/telephony'){
 }
 if(requestUrl.pathname==='/api/email-status')return json(res,200,{configured:!!(process.env.RESEND_API_KEY&&process.env.BOOKING_EMAIL_FROM)});
 if(requestUrl.pathname==='/api/script'){
-const mode=requestUrl.searchParams.get('mode')||'inbound';if(!Object.hasOwn(promptPaths,mode))return json(res,400,{error:'Invalid call mode'});const owner=auth.session(req).username;
+const mode=requestUrl.searchParams.get('mode')||'inbound';if(!Object.hasOwn(promptPaths,mode))return json(res,400,{error:'Invalid call mode'});const owner=identity.username;
 if(req.method==='GET')return json(res,200,{script:scripts.read(owner,mode)});
 if(req.method!=='PUT')return json(res,405,{error:'Method not allowed'});
 if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});

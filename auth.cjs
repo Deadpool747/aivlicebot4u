@@ -30,6 +30,6 @@ const user=users().find(u=>u.username.toLowerCase()===username.toLowerCase());co
 
 sessions.delete(token(req));const id=crypto.randomBytes(32).toString('hex');sessions.set(id,{username:username.toLowerCase(),expires:Date.now()+8*3600000,sockets:new Set()});res.setHeader('Set-Cookie',`${cookieName}=${id}; ${cookieFlags} Max-Age=28800`);json(res,200,{ok:true});return true;
 }
-return {handle,session};
+return {handle,session,userExists:owner=>users().some(u=>u.username.toLowerCase()===owner)};
 }
 module.exports={createAuth};
