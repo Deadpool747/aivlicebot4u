@@ -29,7 +29,7 @@ const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(
 const hosts=[`127.0.0.1:${port}`,`localhost:${port}`,...(publicOrigin?[new URL(publicOrigin).host]:[])];
 const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`,...(publicOrigin?[publicOrigin]:[])];
 function stripBase(req){if(!basePath)return true;if(!req.url.startsWith(basePath+'/'))return false;req.url=req.url.slice(basePath.length);return true}
-const assets={'/':'index.html','/app.js':'app.js','/csv-calls.js':'csv-calls.js','/style.css':'style.css','/capture.js':'capture.js','/dashboard':'dashboard.html','/dashboard.js':'dashboard.js','/api-keys':'api-keys.html','/api-keys.js':'api-keys.js','/api-docs':'api-docs.html'};
+const assets={'/numbers':'numbers.html','/numbers.js':'numbers.js','/':'index.html','/app.js':'app.js','/csv-calls.js':'csv-calls.js','/style.css':'style.css','/capture.js':'capture.js','/dashboard':'dashboard.html','/dashboard.js':'dashboard.js','/api-keys':'api-keys.html','/api-keys.js':'api-keys.js','/api-docs':'api-docs.html'};
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data))}
 const server=http.createServer(async(req,res)=>{try{
 if(!hosts.includes(req.headers.host))return json(res,403,{error:'Invalid host'});
@@ -45,6 +45,11 @@ if(req.url.startsWith('/api/v1/')){
  identity=access.identity;req.url=access.url;
 }
 if(!identity){if(req.url.startsWith('/api/'))return json(res,401,{error:'Please sign in.'});res.writeHead(302,{Location:basePath+'/login','Cache-Control':'no-store'});return res.end()}
+if(req.url==='/api/numbers'){
+ if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
+ if(identity.username.toLowerCase()!=='huzaifa')return json(res,403,{error:'Airtel inventory is available to the account administrator only.'});
+ try{const inventory=JSON.parse(fs.readFileSync(path.join(__dirname,'.local','airtel-inventory.json'),'utf8'));const mappings=JSON.parse(fs.readFileSync(path.join(__dirname,'.local','telephony.json'),'utf8'));const digits=v=>String(v||'').replace(/\D/g,'').slice(-10);const assigned=new Set(['8045911978']);const collect=v=>{if(typeof v==='string'&&/^\+?[\d ()-]{10,25}$/.test(v))assigned.add(digits(v));else if(v&&typeof v==='object')Object.values(v).forEach(collect)};collect(mappings);return json(res,200,{checkedAt:inventory.checkedAt,numbers:inventory.numbers.filter(n=>!assigned.has(digits(n)))});}catch{return json(res,503,{error:'Airtel inventory is not available. Ask the administrator to update it.'})}
+}
 if(req.url==='/api/keys'||req.url.startsWith('/api/keys/')){
  // Key lifecycle endpoints require the dashboard session, never a bearer key.
  if(!auth.session(req))return json(res,401,{error:'Please sign in.'});
