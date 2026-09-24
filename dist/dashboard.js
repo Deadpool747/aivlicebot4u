@@ -16,3 +16,6 @@ $('closeRecording').onclick=()=>$('recordingDialog').close();
 $('recordingDialog').addEventListener('close',()=>{const audio=$('recordingAudio');audio.pause();audio.removeAttribute('src');audio.load()});
 $('recordingAudio').addEventListener('error',()=>{if($('recordingAudio').hasAttribute('src'))$('recordingStatus').textContent='Recording could not be loaded. Sign in again or refresh and retry.'});
 window.addEventListener('pagehide',()=>$('recordingAudio').pause());
+
+const sidebarLogout=document.getElementById('logout');
+if(sidebarLogout)sidebarLogout.onclick=async()=>{sidebarLogout.disabled=true;try{const r=await fetch('api/auth/logout',{method:'POST'});if(!r.ok)throw Error();location.replace('login')}catch{document.getElementById('logoutStatus').textContent='Could not sign out. Please try again.';sidebarLogout.disabled=false}};
