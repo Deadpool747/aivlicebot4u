@@ -52,7 +52,7 @@ fetch('api/email-status').then(r=>r.json()).then(d=>{if(!d.configured)$('emailSt
 
 $('logout').onclick=async()=>{finish();try{const r=await fetch('api/auth/logout',{method:'POST'});if(!r.ok)throw Error();location.replace('login')}catch{error('Could not sign out. Please try again.')}};
 
-fetch('api/auth/status').then(r=>r.json()).then(d=>{if(!d.authenticated){location.replace('login');return}}).catch(()=>{});
+fetch('api/auth/status').then(r=>r.json()).then(d=>{if(!d.authenticated){location.replace('login');return}document.getElementById('sidebarUsername').textContent=(d.username||'').toUpperCase();}).catch(()=>{});
 
 let selectedCarrier='';
 function showCarrier(m){

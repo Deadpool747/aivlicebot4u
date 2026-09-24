@@ -19,3 +19,5 @@ window.addEventListener('pagehide',()=>$('recordingAudio').pause());
 
 const sidebarLogout=document.getElementById('logout');
 if(sidebarLogout)sidebarLogout.onclick=async()=>{sidebarLogout.disabled=true;try{const r=await fetch('api/auth/logout',{method:'POST'});if(!r.ok)throw Error();location.replace('login')}catch{document.getElementById('logoutStatus').textContent='Could not sign out. Please try again.';sidebarLogout.disabled=false}};
+
+fetch('api/auth/status',{cache:'no-store'}).then(r=>r.json()).then(d=>{const el=document.getElementById('sidebarUsername');if(el&&d.authenticated)el.textContent=(d.username||'').toUpperCase();}).catch(()=>{});
