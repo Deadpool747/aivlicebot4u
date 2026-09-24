@@ -72,5 +72,5 @@ for(const input of document.querySelectorAll('input[name="carrier"]'))input.onch
  finally{carrierSaving=false;$('phoneCall').disabled=phoneCalling;controls.forEach(c=>c.disabled=false);}
 };
 
-function updateContactFields(){const inbound=mode==='inbound';$('nameField').hidden=inbound;$('emailField').hidden=inbound;$('customerName').required=!inbound;$('connect').disabled=!inbound&&!$('customerName').value.trim();$('status').textContent=inbound?'Start your inbound conversation with BOT4U.':'Enter your name, then start your conversation with BOT4U.';}
+function updateContactFields(){const inbound=mode==='inbound';$('csvSection').hidden=inbound;$('nameField').hidden=inbound;$('emailField').hidden=inbound;$('customerName').required=!inbound;$('connect').disabled=!inbound&&!$('customerName').value.trim();$('status').textContent=inbound?'Start your inbound conversation with BOT4U.':'Enter your name, then start your conversation with BOT4U.';}
 updateContactFields();
