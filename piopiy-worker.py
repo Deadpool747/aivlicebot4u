@@ -26,6 +26,7 @@ from phone_audio import InputNoiseGate
 from phone_signals import voicemail, human_greeting, closing
 from phone_history import save_session
 from phone_recording import CallRecording
+from follow_up_client import schedule_follow_up
 from datetime import datetime, timezone
 
 OWNER = 'huzaifa'
@@ -49,6 +50,7 @@ def prompt(mode='inbound', name=''):
         'If interrupted during goodbye, answer the new question instead of ending. '
         'For outbound calls: briefly listen first. When instructed by the application, greet the customer even if they have not spoken yet. Never hang up solely because no greeting was detected. '
         'If you hear voicemail, an answering machine, a beep, or an automated call-screening request, call voicemail_detected silently. Never leave a message or introduce yourself to a screening system.'
+        ' If the customer requests a callback, clarify and repeat the exact future date, local time, timezone, name and phone number. Obtain explicit confirmation before calling schedule_follow_up. Never guess an ambiguous date or time.'
     )
 
 def config(mode='inbound', name=''):
@@ -61,7 +63,15 @@ def config(mode='inbound', name=''):
             'end_of_speech_sensitivity': 'END_SENSITIVITY_LOW',
             'prefix_padding_ms': 120, 'silence_duration_ms': 650},
             'activity_handling': 'START_OF_ACTIVITY_INTERRUPTS'},
-        tools=[{'function_declarations': [{'name': 'end_conversation',
+        tools=[{'function_declarations': [{'name': 'schedule_follow_up',
+                'description': 'Schedule a future Airtel callback only after the customer explicitly confirms every detail.',
+                'parameters': {'type': 'OBJECT', 'properties': {
+                    'customerName': {'type': 'STRING'}, 'phoneNumber': {'type': 'STRING'},
+                    'date': {'type': 'STRING'}, 'time': {'type': 'STRING'},
+                    'timezone': {'type': 'STRING'}, 'reason': {'type': 'STRING'},
+                    'notes': {'type': 'STRING'}, 'confirmed': {'type': 'BOOLEAN'}},
+                    'required': ['date', 'time', 'timezone', 'reason', 'confirmed']}},
+                {'name': 'end_conversation',
                 'description': 'Disconnect after delivering your final spoken goodbye.'},
                 {'name': 'voicemail_detected', 'description': 'Silently disconnect a voicemail, answering machine or automated call-screening system. Do not speak.'}]}],
     )
@@ -239,12 +249,17 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                             await audio.put((generation, response.data))
                         if response.tool_call:
                             for call in response.tool_call.function_calls:
+                                tool_result = {'status': 'scheduled'}
                                 if call.name == 'end_conversation':
                                     request_close()
                                 elif call.name == 'voicemail_detected':
                                     request_close(silent=True)
+                                elif call.name == 'schedule_follow_up':
+                                    tool_result = await schedule_follow_up(ROOT, OWNER, call.args, {
+                                        'customerName': name,
+                                        'phoneNumber': '+' + digits(to_number if mode == 'outbound' else from_number)})
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
-                                    id=call.id, name=call.name, response={'status': 'scheduled'})])
+                                    id=call.id, name=call.name, response=tool_result)])
                         if content and content.turn_complete:
                             if human and closing(output_text):
                                 request_close()

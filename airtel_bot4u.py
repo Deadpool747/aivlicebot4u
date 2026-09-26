@@ -13,6 +13,7 @@ from phone_history import save_session
 from phone_recording import CallRecording
 from phone_audio import InputNoiseGate
 from airtel_playback import AirtelPlayback, Goodbye, SpeechActivity
+from follow_up_client import schedule_follow_up
 
 ROOT = Path('/opt/bot4u')
 OWNER = 'huzaifa'
@@ -26,7 +27,7 @@ def matches(context):
     return any(digits(context.get(k)) in (NUMBER, NUMBER[2:]) for k in
                ('airtel_iq_called_number', 'called_via_number'))
 
-def session_config(root, mode, name=""):
+def session_config(root, mode, name="", follow_up=None):
     env = {}
     for line in (root / '.env').read_text(encoding='utf-8-sig').splitlines():
         if '=' in line and not line.lstrip().startswith('#'):
@@ -49,6 +50,13 @@ def session_config(root, mode, name=""):
                'when the customer genuinely ends the conversation. A closing tool result only '
                'means a tentative request, never that the customer has finished. '
                'After calling end_conversation do not generate another spoken farewell.')
+    if follow_up:
+        script += ('\nThis call is a scheduled follow-up. Address this purpose naturally without reading metadata aloud: '
+                   + json.dumps({'reason': follow_up.get('reason', ''), 'notes': follow_up.get('notes', ''),
+                                 'previous_summary': follow_up.get('previousSummary', '')}, ensure_ascii=False))
+    script += ('\nIf the customer requests another callback, clarify the exact future date, local time, timezone, name and phone number. '
+               'Repeat all details and obtain explicit confirmation before calling schedule_follow_up. Never guess ambiguous dates or times. '
+               'The current UTC time is ' + datetime.now(timezone.utc).isoformat() + '.')
     return env, types.LiveConnectConfig(response_modalities=['AUDIO'], system_instruction=script,
         input_audio_transcription={}, output_audio_transcription={},
         speech_config={'voice_config': {'prebuilt_voice_config': {'voice_name': 'Sulafat'}}},
@@ -56,7 +64,16 @@ def session_config(root, mode, name=""):
             'start_of_speech_sensitivity': 'START_SENSITIVITY_LOW',
             'end_of_speech_sensitivity': 'END_SENSITIVITY_LOW',
             'prefix_padding_ms': 120, 'silence_duration_ms': 650}},
-        tools=[{'function_declarations': [{'name': 'end_conversation',
+        tools=[{'function_declarations': [{'name': 'schedule_follow_up',
+            'description': 'Schedule a future Airtel callback only after the customer explicitly confirms every detail.',
+            'parameters': {'type': 'OBJECT', 'properties': {
+                'customerName': {'type': 'STRING'}, 'phoneNumber': {'type': 'STRING'},
+                'date': {'type': 'STRING', 'description': 'YYYY-MM-DD in the stated timezone'},
+                'time': {'type': 'STRING', 'description': 'HH:MM in 24-hour format'},
+                'timezone': {'type': 'STRING'}, 'reason': {'type': 'STRING'},
+                'notes': {'type': 'STRING'}, 'confirmed': {'type': 'BOOLEAN'}},
+                'required': ['date', 'time', 'timezone', 'reason', 'confirmed']}},
+            {'name': 'end_conversation',
             'description': 'End the telephone conversation after the final spoken goodbye.'}]}])
 
 async def run(websocket, bridge, context, call_id, root=ROOT):
@@ -128,7 +145,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 queue.task_done()
 
     try:
-        env, config = session_config(root, mode, context.get('name', ''))
+        env, config = session_config(root, mode, context.get('name', ''), context.get('followUp'))
         client = genai.Client(api_key=env['GEMINI_API_KEY'])
         tasks.append(asyncio.create_task(media()))
         await asyncio.wait_for(ready.wait(), 15)
@@ -191,11 +208,16 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                             await queue.put((playback.version, response.data))
                         if response.tool_call:
                             for call in response.tool_call.function_calls:
+                                tool_result = None
                                 if call.name == 'end_conversation':
                                     goodbye.request()
+                                    tool_result = {'status': 'pending_silence' if goodbye.requested else 'cancelled_customer_continuing',
+                                        'instruction': 'Listen and answer any new customer question normally; do not repeat a goodbye.'}
+                                elif call.name == 'schedule_follow_up':
+                                    tool_result = await schedule_follow_up(root, OWNER, call.args, {
+                                        'customerName': context.get('name', ''), 'phoneNumber': context.get('number', '')})
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
-                                    id=call.id, name=call.name, response={'status': 'pending_silence' if goodbye.requested else 'cancelled_customer_continuing',
-                                        'instruction': 'Listen and answer any new customer question normally; do not repeat a goodbye.'})])
+                                    id=call.id, name=call.name, response=tool_result or {'status': 'unsupported'})])
                         if content and content.turn_complete:
                             goodbye.speaking = False
                             # Some model turns speak a farewell without invoking the tool.
