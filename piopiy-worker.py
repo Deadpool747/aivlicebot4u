@@ -26,7 +26,6 @@ from phone_audio import InputNoiseGate
 from phone_signals import voicemail, human_greeting, closing
 from phone_history import save_session
 from phone_recording import CallRecording
-from follow_up_client import schedule_follow_up
 from datetime import datetime, timezone
 
 OWNER = 'huzaifa'
@@ -50,7 +49,7 @@ def prompt(mode='inbound', name=''):
         'If interrupted during goodbye, answer the new question instead of ending. '
         'For outbound calls: briefly listen first. When instructed by the application, greet the customer even if they have not spoken yet. Never hang up solely because no greeting was detected. '
         'If you hear voicemail, an answering machine, a beep, or an automated call-screening request, call voicemail_detected silently. Never leave a message or introduce yourself to a screening system.'
-        ' If the customer requests a callback, clarify and repeat the exact future date, local time, timezone, name and phone number. Obtain explicit confirmation before calling schedule_follow_up. Never guess an ambiguous date or time.'
+        ' If the customer asks for a callback or says to call later, do not ask for a date, time, timezone, name, or phone number. Simply acknowledge with a brief phrase such as "Okay, we will follow up," then call mark_follow_up_requested. Do not claim that a specific callback has been scheduled.'
     )
 
 def config(mode='inbound', name=''):
@@ -63,14 +62,8 @@ def config(mode='inbound', name=''):
             'end_of_speech_sensitivity': 'END_SENSITIVITY_LOW',
             'prefix_padding_ms': 120, 'silence_duration_ms': 650},
             'activity_handling': 'START_OF_ACTIVITY_INTERRUPTS'},
-        tools=[{'function_declarations': [{'name': 'schedule_follow_up',
-                'description': 'Schedule a future Airtel callback only after the customer explicitly confirms every detail.',
-                'parameters': {'type': 'OBJECT', 'properties': {
-                    'customerName': {'type': 'STRING'}, 'phoneNumber': {'type': 'STRING'},
-                    'date': {'type': 'STRING'}, 'time': {'type': 'STRING'},
-                    'timezone': {'type': 'STRING'}, 'reason': {'type': 'STRING'},
-                    'notes': {'type': 'STRING'}, 'confirmed': {'type': 'BOOLEAN'}},
-                    'required': ['date', 'time', 'timezone', 'reason', 'confirmed']}},
+        tools=[{'function_declarations': [{'name': 'mark_follow_up_requested',
+                'description': 'Record the call remark as Follow up when the customer asks to be called back. Do not collect scheduling details.'},
                 {'name': 'end_conversation',
                 'description': 'Disconnect after delivering your final spoken goodbye.'},
                 {'name': 'voicemail_detected', 'description': 'Silently disconnect a voicemail, answering machine or automated call-screening system. Do not speak.'}]}],
@@ -101,6 +94,7 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
     started_at = datetime.now(timezone.utc).isoformat()
     connected_at = None
     remarks = 'Phone session ended.'
+    follow_up_requested = False
     human = mode != 'outbound'
     machine = False
     human_candidate = None
@@ -213,7 +207,7 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                 await ended.wait()
 
             async def receive():
-                nonlocal generation, human, input_text, output_text, human_candidate
+                nonlocal generation, human, input_text, output_text, human_candidate, remarks, follow_up_requested
                 while not ended.is_set():
                     async for response in session.receive():
                         content = response.server_content
@@ -254,10 +248,10 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                                     request_close()
                                 elif call.name == 'voicemail_detected':
                                     request_close(silent=True)
-                                elif call.name == 'schedule_follow_up':
-                                    tool_result = await schedule_follow_up(ROOT, OWNER, call.args, {
-                                        'customerName': name,
-                                        'phoneNumber': '+' + digits(to_number if mode == 'outbound' else from_number)})
+                                elif call.name == 'mark_follow_up_requested':
+                                    follow_up_requested = True
+                                    remarks = 'Follow up'
+                                    tool_result = {'status': 'recorded', 'remark': 'Follow up'}
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
                                     id=call.id, name=call.name, response=tool_result)])
                         if content and content.turn_complete:
@@ -292,7 +286,7 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
         save_session(ROOT, OWNER, requestId=details.get('history_id'), callId=call_id,
                      startedAt=started_at, type=mode, phone='+' + digits(to_number if mode=='outbound' else from_number),
                      name=name, duration=round(time.monotonic()-connected_at) if connected_at else None,
-                     result='Not answered' if machine else ('Answered' if connected_at else 'Unconfirmed'), remarks=remarks,
+                     result='Not answered' if machine else ('Answered' if connected_at else 'Unconfirmed'), remarks='Follow up' if follow_up_requested else remarks,
                      recordingId=recording_id)
         if human_candidate:
             human_candidate.cancel()

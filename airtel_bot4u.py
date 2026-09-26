@@ -13,7 +13,6 @@ from phone_history import save_session
 from phone_recording import CallRecording
 from phone_audio import InputNoiseGate
 from airtel_playback import AirtelPlayback, Goodbye, SpeechActivity
-from follow_up_client import schedule_follow_up
 
 ROOT = Path('/opt/bot4u')
 OWNER = 'huzaifa'
@@ -54,9 +53,9 @@ def session_config(root, mode, name="", follow_up=None):
         script += ('\nThis call is a scheduled follow-up. Address this purpose naturally without reading metadata aloud: '
                    + json.dumps({'reason': follow_up.get('reason', ''), 'notes': follow_up.get('notes', ''),
                                  'previous_summary': follow_up.get('previousSummary', '')}, ensure_ascii=False))
-    script += ('\nIf the customer requests another callback, clarify the exact future date, local time, timezone, name and phone number. '
-               'Repeat all details and obtain explicit confirmation before calling schedule_follow_up. Never guess ambiguous dates or times. '
-               'The current UTC time is ' + datetime.now(timezone.utc).isoformat() + '.')
+    script += ('\nIf the customer asks for a callback or says to call later, do not ask for a date, time, timezone, name, or phone number. '
+               'Simply acknowledge with a brief phrase such as "Okay, we will follow up," then call mark_follow_up_requested. '
+               'Do not claim that a specific callback has been scheduled.')
     return env, types.LiveConnectConfig(response_modalities=['AUDIO'], system_instruction=script,
         input_audio_transcription={}, output_audio_transcription={},
         speech_config={'voice_config': {'prebuilt_voice_config': {'voice_name': 'Sulafat'}}},
@@ -64,15 +63,8 @@ def session_config(root, mode, name="", follow_up=None):
             'start_of_speech_sensitivity': 'START_SENSITIVITY_LOW',
             'end_of_speech_sensitivity': 'END_SENSITIVITY_LOW',
             'prefix_padding_ms': 120, 'silence_duration_ms': 650}},
-        tools=[{'function_declarations': [{'name': 'schedule_follow_up',
-            'description': 'Schedule a future Airtel callback only after the customer explicitly confirms every detail.',
-            'parameters': {'type': 'OBJECT', 'properties': {
-                'customerName': {'type': 'STRING'}, 'phoneNumber': {'type': 'STRING'},
-                'date': {'type': 'STRING', 'description': 'YYYY-MM-DD in the stated timezone'},
-                'time': {'type': 'STRING', 'description': 'HH:MM in 24-hour format'},
-                'timezone': {'type': 'STRING'}, 'reason': {'type': 'STRING'},
-                'notes': {'type': 'STRING'}, 'confirmed': {'type': 'BOOLEAN'}},
-                'required': ['date', 'time', 'timezone', 'reason', 'confirmed']}},
+        tools=[{'function_declarations': [{'name': 'mark_follow_up_requested',
+            'description': 'Record the call remark as Follow up when the customer asks to be called back. Do not collect scheduling details.'},
             {'name': 'end_conversation',
             'description': 'End the telephone conversation after the final spoken goodbye.'}]}])
 
@@ -98,6 +90,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
     client = None
     connected = False
     remarks = 'Airtel call ended.'
+    follow_up_requested = False
 
     async def media():
         while True:
@@ -170,6 +163,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 ended.set()
 
             async def receive():
+                nonlocal remarks, follow_up_requested
                 output_text = ''
                 input_text = ''
                 turn_audio = False
@@ -213,9 +207,10 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                                     goodbye.request()
                                     tool_result = {'status': 'pending_silence' if goodbye.requested else 'cancelled_customer_continuing',
                                         'instruction': 'Listen and answer any new customer question normally; do not repeat a goodbye.'}
-                                elif call.name == 'schedule_follow_up':
-                                    tool_result = await schedule_follow_up(root, OWNER, call.args, {
-                                        'customerName': context.get('name', ''), 'phoneNumber': context.get('number', '')})
+                                elif call.name == 'mark_follow_up_requested':
+                                    follow_up_requested = True
+                                    remarks = 'Follow up'
+                                    tool_result = {'status': 'recorded', 'remark': 'Follow up'}
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
                                     id=call.id, name=call.name, response=tool_result or {'status': 'unsupported'})])
                         if content and content.turn_complete:
@@ -243,7 +238,9 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         remarks = 'Airtel BOT4U error: ' + type(exc).__name__
         log.error(remarks)
     finally:
-        if goodbye.sent:
+        if follow_up_requested:
+            remarks = 'Follow up'
+        elif goodbye.sent:
             remarks = ('Airtel termination confirmed by stream stop.' if goodbye.confirmed else
                        'Airtel hangup requested; provider termination not confirmed.')
         if goodbye.task:
