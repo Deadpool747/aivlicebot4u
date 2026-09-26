@@ -21,7 +21,8 @@ const routes={
  '/api/v1/recording':{path:'/api/call-recording',methods:['GET','HEAD']},
  '/api/v1/scripts':{path:'/api/script',methods:['GET','PUT']},
  '/api/v1/telephony':{path:'/api/account/telephony',methods:['GET','PUT']},
- '/api/v1/campaign':{path:'/api/phone/campaign',methods:['GET','POST']}
+ '/api/v1/campaign':{path:'/api/phone/campaign',methods:['GET','POST']},
+ '/api/v1/follow-ups/import':{path:'/api/follow-ups/import',methods:['POST']}
 };
 function createApiGateway(store){const byIp=createLimiter({limit:180}),byOwner=createLimiter({limit:120});return(req)=>{if(!byIp(req.socket.remoteAddress||'unknown'))return {status:429,error:'Too many API requests. Retry in one minute.'};const header=req.headers.authorization;if(!header)return {status:401,error:'API key required'};const match=/^Bearer ([^\s]+)$/i.exec(header);const identity=match&&store.verify(match[1]);if(!identity)return {status:401,error:'Invalid or revoked API key'};if(!byOwner(identity.username))return {status:429,error:'Too many API requests. Retry in one minute.'};const url=new URL(req.url,'http://localhost'),route=routes[url.pathname];if(!route)return {status:404,error:'API endpoint not found'};if(!route.methods.includes(req.method))return {status:405,error:'Method not allowed'};return {identity,url:route.path+url.search}}}
 module.exports={createApiKeys,createApiGateway,createLimiter,routes};

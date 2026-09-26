@@ -27,6 +27,7 @@ const phoneCall=require('./phone-call.cjs').createPhoneCaller({airtelCall,histor
 const carriers=require('./carrier-store.cjs').createCarrierStore(path.join(__dirname,'.local'));
 const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(__dirname,'.local','campaigns'),call:phoneCall,history});
 const followUps=require('./follow-up-store.cjs').createFollowUpStore(path.join(__dirname,'.local'));
+const {parseFollowUpCsv}=require('./follow-up-import.cjs');
 const followUpScheduler=require('./follow-up-scheduler.cjs').createFollowUpScheduler({store:followUps,call:airtelCall,history});
 const internalTokenPath=path.join(__dirname,'.local','follow-up-internal-token');
 fs.mkdirSync(path.dirname(internalTokenPath),{recursive:true});
@@ -80,6 +81,10 @@ if(req.url==='/api/keys'||req.url.startsWith('/api/keys/')){
  return json(res,405,{error:'Method not allowed'});
 }
 const requestUrl=new URL(req.url,'http://localhost');
+if(requestUrl.pathname==='/api/follow-ups/import'){
+ if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
+ try{requireAirtel(identity.username);const data=await jsonBody(req,600000);let rows,source;if(typeof data.csv==='string'){rows=parseFollowUpCsv(data.csv);source='csv'}else if(Array.isArray(data.records)){if(!data.records.length||data.records.length>200)throw Error('Provide between 1 and 200 database records.');rows=data.records.map((record,index)=>({row:index+1,data:record,sourceRef:String(record.sourceRef||record.id||'').trim()}));source='database'}else throw Error('Provide a CSV string or a records array.');const result=followUps.importBatch(identity.username,rows,{source});return json(res,result.imported.length?201:200,result)}catch(e){return json(res,e.status||400,{error:e.message})}
+}
 if(requestUrl.pathname==='/api/follow-ups'||/^\/api\/follow-ups\/[a-f0-9-]{36}$/.test(requestUrl.pathname)){
  const owner=identity.username,id=requestUrl.pathname.split('/')[3];
  if(req.method==='GET'&&!id)return json(res,200,{followUps:followUps.list(owner,{filter:requestUrl.searchParams.get('filter')||'All',search:requestUrl.searchParams.get('search')||''})});

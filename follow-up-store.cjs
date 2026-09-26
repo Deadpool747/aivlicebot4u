@@ -47,16 +47,35 @@ function createFollowUpStore(directory,{now=Date.now,logger=console}={}){
  function save(owner,records){fs.mkdirSync(root,{recursive:true,mode:0o700});const dest=file(owner),tmp=dest+'.'+process.pid+'.tmp';fs.writeFileSync(tmp,JSON.stringify({version:1,owner,followUps:records},null,2),{mode:0o600});fs.renameSync(tmp,dest)}
  function mutate(owner,change){const records=read(owner),result=change(records);save(owner,records);return result}
  const event=(record,status,message)=>{record.events=record.events||[];record.events.push({at:new Date(now()).toISOString(),status,message});if(record.events.length>100)record.events=record.events.slice(-100)};
- function create(owner,data,{source='dashboard'}={}){
+ function build(owner,data,{source='dashboard',sourceRef=''}={}){
   const values=normalized(data,now),stamp=new Date(now()).toISOString();
+  const sourceKey=crypto.createHash('sha256').update(`${values.phoneNumber}|${values.scheduledAt}|${values.reason.toLowerCase()}`).digest('hex');
   const record={id:crypto.randomUUID(),userId:owner,...values,status:'Scheduled',attemptCount:0,
    lastAttemptAt:null,nextAttemptAt:values.scheduledAt,airtelCallId:null,historyId:null,lastCallStatus:null,
    callSummary:null,callOutcome:null,customerResponse:null,failureReason:null,callStartedAt:null,
-   callEndedAt:null,durationSeconds:null,recordingId:null,source,createdAt:stamp,updatedAt:stamp,events:[]};
-  event(record,'Scheduled','Follow-up created.');mutate(owner,records=>records.push(record));
+   callEndedAt:null,durationSeconds:null,recordingId:null,source,sourceRef:sourceRef||null,sourceKey,createdAt:stamp,updatedAt:stamp,events:[]};
+  event(record,'Scheduled',source==='csv'?'Follow-up imported automatically from CSV.':'Follow-up created.');return record;
+ }
+ function create(owner,data,{source='dashboard'}={}){
+  const record=build(owner,data,{source});mutate(owner,records=>records.push(record));
   log('created',{owner,id:record.id,scheduledAt:record.scheduledAt,source});return publicRecord(record);
  }
- function publicRecord(record){const copy=JSON.parse(JSON.stringify(record));delete copy.lockToken;return copy}
+ function importBatch(owner,items,{source='csv'}={}){
+  if(!Array.isArray(items)||!items.length)throw Error('No follow-up rows were found.');
+  const records=read(owner),sourceRefs=new Set(records.filter(r=>r.source===source&&r.sourceRef).map(r=>String(r.sourceRef))),sourceKeys=new Set(records.map(r=>r.sourceKey||crypto.createHash('sha256').update(`${r.phoneNumber}|${r.scheduledAt}|${String(r.reason||'').toLowerCase()}`).digest('hex')));
+  const imported=[],skipped=[];
+  for(const item of items){try{
+   const sourceRef=String(item.sourceRef||item.data?.sourceRef||'').trim();
+   if(sourceRef&&sourceRefs.has(sourceRef))throw Error('This source record was already imported.');
+   const record=build(owner,item.data||item,{source,sourceRef});
+   if(sourceKeys.has(record.sourceKey))throw Error('This follow-up is already scheduled.');
+   records.push(record);imported.push(publicRecord(record));sourceKeys.add(record.sourceKey);if(sourceRef)sourceRefs.add(sourceRef);
+  }catch(e){skipped.push({row:item.row||null,error:e.message})}}
+  if(imported.length)save(owner,records);
+  log('batch_imported',{owner,source,imported:imported.length,skipped:skipped.length});
+  return {imported,skipped,summary:{total:items.length,imported:imported.length,skipped:skipped.length}};
+ }
+ function publicRecord(record){const copy=JSON.parse(JSON.stringify(record));delete copy.lockToken;delete copy.sourceKey;return copy}
  function get(owner,id){return read(owner).find(r=>r.id===id)||null}
  function list(owner,{filter='All',search=''}={}){
   const query=String(search).trim().toLowerCase(),wanted=String(filter||'All').toLowerCase(),todayCache=new Map();
@@ -77,6 +96,6 @@ function createFollowUpStore(directory,{now=Date.now,logger=console}={}){
  function completed(owner,id,call){return mutate(owner,records=>{const r=records.find(v=>v.id===id);if(!r||r.status!=='Calling')return null;delete r.lockToken;Object.assign(r,{status:'Completed',lastCallStatus:call.result||'Answered',callSummary:call.remarks||'Call completed.',callOutcome:call.result||'Answered',callEndedAt:new Date(now()).toISOString(),durationSeconds:call.duration??null,recordingId:call.recordingId||null,nextAttemptAt:null,updatedAt:new Date(now()).toISOString()});event(r,'Completed','Follow-up call completed.');log('completed',{owner,id,durationSeconds:r.durationSeconds});return publicRecord(r)})}
  function all(){if(!fs.existsSync(root))return [];return fs.readdirSync(root).filter(n=>/^[a-f0-9]{64}\.json$/.test(n)).flatMap(name=>{try{const payload=JSON.parse(fs.readFileSync(path.join(root,name),'utf8'));return (payload.followUps||[]).map(record=>({owner:payload.owner,record}))}catch{return []}})}
  async function schedulerLock(work){fs.mkdirSync(directory,{recursive:true});let handle;try{handle=fs.openSync(lockFile,'wx',0o600)}catch(e){if(e.code!=='EEXIST')throw e;try{if(now()-fs.statSync(lockFile).mtimeMs>60000)fs.unlinkSync(lockFile);else return false}catch{return false}handle=fs.openSync(lockFile,'wx',0o600)}try{fs.writeFileSync(handle,JSON.stringify({pid:process.pid,at:now()}));await work();return true}finally{try{fs.closeSync(handle)}catch{}try{fs.unlinkSync(lockFile)}catch{}}}
- return {STATUSES,create,get,list,edit,reschedule,cancel,claim,submitted,failed,completed,all,schedulerLock,log};
+ return {STATUSES,create,importBatch,get,list,edit,reschedule,cancel,claim,submitted,failed,completed,all,schedulerLock,log};
 }
 module.exports={createFollowUpStore,zonedDateTime,validZone,STATUSES};

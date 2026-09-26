@@ -2,6 +2,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {createFollowUpStore,zonedDateTime}=require('./follow-up-store.cjs');
 const {createFollowUpScheduler}=require('./follow-up-scheduler.cjs');
+const {parseFollowUpCsv}=require('./follow-up-import.cjs');
 
 const silent={info(){}};
 const base=()=>({customerName:'Priya Shah',phoneNumber:'+919876543210',date:'2026-01-02',time:'10:00',timezone:'Asia/Kolkata',reason:'Discuss the test drive',notes:'Asked for a morning call',agentId:'current',maxAttempts:3,retryIntervalMinutes:30});
@@ -10,6 +11,12 @@ async function main(){
  assert.equal(zonedDateTime('2026-01-02','10:00','Asia/Kolkata').toISOString(),'2026-01-02T04:30:00.000Z');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-follow-up-'));let clock=Date.parse('2026-01-01T00:00:00Z');
  const store=createFollowUpStore(root,{now:()=>clock,logger:silent});
+ const csv='\uFEFFcustomer_name,phone_number,follow_up_date,follow_up_time,timezone,reason,notes,source_ref\r\n"Asha Rao",+919123456789,2026-01-02,12:00,Asia/Kolkata,"Discuss, sedan",Ready,lead-1\r\nBad Phone,123,2026-01-02,13:00,Asia/Kolkata,Callback,,lead-2';
+ const parsed=parseFollowUpCsv(csv);assert.equal(parsed.length,2);assert.equal(parsed[0].data.reason,'Discuss, sedan');
+ const batch=store.importBatch('huzaifa',parsed,{source:'csv'});assert.equal(batch.summary.imported,1);assert.equal(batch.summary.skipped,1);assert.match(batch.skipped[0].error,/Indian mobile/);
+ const repeated=store.importBatch('huzaifa',parsed,{source:'csv'});assert.equal(repeated.summary.imported,0);assert.equal(repeated.summary.skipped,2);
+ assert.equal(store.list('huzaifa').find(item=>item.sourceRef==='lead-1').source,'csv');
+ assert.throws(()=>parseFollowUpCsv('name,phone\nA,+919123456789'),/missing required columns/);
  assert.throws(()=>store.create('huzaifa',{...base(),date:'2025-12-31'}),/future/);
  const record=store.create('huzaifa',base());assert.equal(record.status,'Scheduled');assert.equal(record.scheduledAt,'2026-01-02T04:30:00.000Z');
  assert.equal(store.list('another').length,0);assert.equal(store.list('huzaifa',{search:'9876'}).length,1);
