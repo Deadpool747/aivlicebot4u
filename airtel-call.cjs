@@ -22,9 +22,9 @@ function createAirtelCaller({directory,value,readScript,history,fetcher=fetch}){
   let historyId;
   try{
    const id=crypto.randomUUID(),folder=path.join(directory,'airtel-pending');fs.mkdirSync(folder,{recursive:true});
-   historyId=history?.add(owner,{kind:'request',type:'outbound',phone:number,name,result:'Pending',remarks:'Airtel call requested; answer not confirmed.'});
+   historyId=history?.add(owner,{kind:'request',type:'outbound',phone:number,name,result:'Pending',remarks:'Airtel call requested; answer not confirmed.',followUpAttempt:Number(data.followUp?.attemptCount)||undefined});
    const followUp=data.followUp&&typeof data.followUp==='object'?{
-    id:String(data.followUp.id||'').slice(0,80),reason:String(data.followUp.reason||'').slice(0,200),
+    id:String(data.followUp.id||'').slice(0,80),attemptCount:Number(data.followUp.attemptCount)||undefined,reason:String(data.followUp.reason||'').slice(0,200),
     notes:String(data.followUp.notes||'').slice(0,2000),scheduledAt:String(data.followUp.scheduledAt||'').slice(0,40),
     timezone:String(data.followUp.timezone||'Asia/Kolkata').slice(0,80),previousSummary:String(data.followUp.previousSummary||'').slice(0,1000)
    }:null;

@@ -5,7 +5,7 @@ function createFollowUpScheduler({store,call,history,intervalMs=2000,now=Date.no
   let claimed;try{claimed=store.claim(owner,id,{force})}catch(error){return {status:409,body:{error:error.message}}}
   if(!claimed)return {status:409,body:{error:'This follow-up is not due yet.'}};
   const {record,token}=claimed;
-  let result;try{result=await call(owner,{number:record.phoneNumber,name:record.customerName,followUp:{id:record.id,reason:record.reason,notes:record.notes,scheduledAt:record.scheduledAt,timezone:record.timezone,previousSummary:record.callSummary||''}})}catch{result={status:502,body:{error:'Airtel call submission failed unexpectedly.',uncertain:true}}}
+  let result;try{result=await call(owner,{number:record.phoneNumber,name:record.customerName,followUp:{id:record.id,attemptCount:record.attemptCount,reason:record.reason,notes:record.notes,scheduledAt:record.scheduledAt,timezone:record.timezone,previousSummary:record.callSummary||''}})}catch{result={status:502,body:{error:'Airtel call submission failed unexpectedly.',uncertain:true}}}
   if(result.status===202){store.submitted(owner,id,token,result.body);return result}
   const uncertain=!!result.body?.uncertain,permanent=[400,403,503].includes(result.status)||/rejected|credentials|permission|assigned/i.test(result.body?.error||'');
   store.failed(owner,id,token,{message:result.body?.error||'Airtel call submission failed.',retryable:!uncertain&&!permanent});

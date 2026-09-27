@@ -23,7 +23,7 @@ function createPhoneCaller({directory,token,readScript,fetcher=fetch,history,air
   const name=typeof data.name==='string'?data.name.trim():'';
   if(name&&!/^[\p{L}\p{M} .’'-]{1,80}$/u.test(name))return fail(400,'Enter a valid client name.');
   attempts.set(attemptKey,now);pending.add(owner);
-  const historyId=history?.add(owner,{kind:'request',phone:number,name,result:'Pending',remarks:'Call requested. Carrier answer status is not yet confirmed.'});
+  const historyId=history?.add(owner,{kind:'request',phone:number,name,result:'Pending',remarks:'Call requested. Carrier answer status is not yet confirmed.',followUpAttempt:Number(data.followUp?.attemptCount)||undefined});
   try{
    const r=await fetcher('https://rest.piopiy.com/v3/voice/ai/call',{method:'POST',headers:{Authorization:'Bearer '+token(),'Content-Type':'application/json'},signal:AbortSignal.timeout(20000),body:JSON.stringify({caller_id:mapping.caller_id,to_number:number.slice(1),agent_id:mapping.agent_id,options:{max_duration_sec:300,ring_timeout_sec:60},variables:{customer_name:name,call_mode:'outbound',history_id:historyId||''}})});
    const body=await r.json();

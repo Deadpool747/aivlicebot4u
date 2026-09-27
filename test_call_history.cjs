@@ -26,6 +26,27 @@ test('not answered and uncertain calls automatically enter Attempt 1',()=>{
  }finally{fs.rmSync(root,{recursive:true,force:true})}
 });
 
+test('repeated unanswered calls move a client through attempts without leaving stale rows',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
+ try{const history=createHistory(root),phone='+919876543210';
+  const first=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',remarks:'Voicemail detected'});
+  const second=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',remarks:'No pickup'});
+  let rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===first).followUpAttempt,undefined);assert.equal(rows.find(call=>call.id===second).followUpAttempt,2);
+  const third=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',remarks:'Voicemail detected'});
+  rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===second).followUpAttempt,undefined);assert.equal(rows.find(call=>call.id===third).followUpAttempt,3);
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
+
+test('scheduler attempt count is preserved and an answered call clears the follow-up queue',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
+ try{const history=createHistory(root),phone='+919876543210';
+  const first=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',followUpAttempt:1});
+  const second=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',followUpAttempt:2});
+  let rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===first).followUpAttempt,undefined);assert.equal(rows.find(call=>call.id===second).followUpAttempt,2);
+  history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Answered'});rows=history.list('huzaifa');assert.equal(rows.some(call=>call.followUpAttempt),false);
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
+
 test('public call results contain only Answered or Not answered',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
  try{const history=createHistory(root);history.add('huzaifa',{kind:'request',result:'Pending'});history.add('huzaifa',{kind:'request',result:'Answered'});history.add('huzaifa',{kind:'request',result:'Unconfirmed'});assert.deepEqual(new Set(history.publicList('huzaifa').map(call=>call.result)),new Set(['Answered','Not answered']))}
