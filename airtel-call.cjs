@@ -1,4 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const {normalizeDialNumber}=require('./phone-number.cjs');
 function headers(body,appId,key,date=new Date().toUTCString()){
  const digest='SHA-256='+crypto.createHash('sha256').update(body).digest('base64');
  const signature=crypto.createHmac('sha256',key).update('x-date: '+date+'\ndigest: '+digest).digest('base64');
@@ -11,8 +12,8 @@ function createAirtelCaller({directory,value,readScript,history,fetcher=fetch}){
   if(owner!=='huzaifa')return fail(403,'No Airtel number is assigned to this account.');
   if(!value('AIRTEL_APP_ID')||!value('AIRTEL_API_KEY'))return fail(503,'Airtel outbound API credentials are missing.');
   if(value('AIRTEL_OUTBOUND_ENABLED')!=='true')return fail(503,'Airtel outbound flow verification is pending.');
-  const number=String(data.number||'').replace(/[ ()-]/g,''),name=String(data.name||'').trim();
-  if(!/^\+91[6-9]\d{9}$/.test(number))return fail(400,'Enter an Indian mobile number with +91.');
+  const number=normalizeDialNumber(data.number),name=String(data.name||'').trim();
+  if(!/^\+91[6-9]\d{9}$/.test(number))return fail(400,'Enter a valid 10-digit Indian mobile number. +91 is added automatically.');
   if(name&&!/^[\p{L}\p{M} .’'-]{1,80}$/u.test(name))return fail(400,'Enter a valid client name.');
   if(!readScript(owner,'outbound').trim())return fail(400,'Save an outbound script first.');
   const now=Date.now(),key=owner+number;

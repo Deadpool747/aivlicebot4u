@@ -1,4 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const {normalizeDialNumber}=require('./phone-number.cjs');
 
 function parseLeads(text){
  if(typeof text!=='string'||Buffer.byteLength(text)>256000)throw Error('Use a CSV smaller than 256 KB.');
@@ -21,9 +22,9 @@ function parseLeads(text){
  if(phones.length!==1||names.length>1)throw Error('Use one phone column and optionally one name column.');
  const seen=new Set();
  return rows.map((r,i)=>{
-  const number=(r[phones[0]]||'').replace(/[ ()-]/g,''),name=names.length?(r[names[0]]||''):'';
+  const number=normalizeDialNumber(r[phones[0]]||''),name=names.length?(r[names[0]]||''):'';
   let error=r.length!==headers.length?'Column count does not match the header.':'';
-  if(!/^\+[1-9]\d{6,14}$/.test(number))error='Include + and country code in the phone number.';
+  if(!/^\+[1-9]\d{6,14}$/.test(number))error='Enter a valid phone number. Indian 10-digit numbers automatically use +91.';
   else if(name&&!/^[\p{L}\p{M} .’'-]{1,80}$/u.test(name))error='Name contains unsupported characters or is too long.';
   else if(seen.has(number))error='Duplicate phone number.';
   seen.add(number);return {row:i+2,name,number,error,state:error?'Skipped':'Ready'};

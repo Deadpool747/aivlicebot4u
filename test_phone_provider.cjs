@@ -2,6 +2,13 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {createPhoneCaller}=require('./phone-call.cjs');
+const {normalizeDialNumber}=require('./phone-number.cjs');
+test('Indian phone numbers receive +91 while complete international numbers stay unchanged',()=>{
+ assert.equal(normalizeDialNumber('98765 43210'),'+919876543210');
+ assert.equal(normalizeDialNumber('09876543210'),'+919876543210');
+ assert.equal(normalizeDialNumber('919876543210'),'+919876543210');
+ assert.equal(normalizeDialNumber('+14155552671'),'+14155552671');
+});
 test('Airtel accounts cannot fall back to Piopiy for manual or CSV calls',async()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-provider-'));
  try{

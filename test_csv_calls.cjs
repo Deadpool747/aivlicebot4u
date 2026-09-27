@@ -2,10 +2,15 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {parseLeads,createCampaigns}=require('./csv-calls.cjs');
 const {googleSheetSource,fetchGoogleSheetCsv}=require('./google-sheets.cjs');
 test('CSV supports BOM, quoted names, CRLF and skips duplicate and invalid numbers',()=>{
- const leads=parseLeads('\uFEFFname,phone\r\n"Aarav",+91 98765 43210\r\nOther,+919876543210\r\nBad,9876543210');
- assert.equal(leads[0].number,'+919876543210');assert.equal(leads[0].state,'Ready');assert.match(leads[1].error,/Duplicate/);assert.match(leads[2].error,/country/);
+ const leads=parseLeads('\uFEFFname,phone\r\n"Aarav",+91 98765 43210\r\nOther,+919876543210\r\nBad,123');
+ assert.equal(leads[0].number,'+919876543210');assert.equal(leads[0].state,'Ready');assert.match(leads[1].error,/Duplicate/);assert.match(leads[2].error,/valid phone/);
  assert.throws(()=>parseLeads('name,phone\n"unfinished,+919876543210'),/quote/);
  assert.throws(()=>parseLeads('name,phone,number\na,+123456789,+123456789'),/one phone/);
+});
+test('Indian 10-digit CSV and Google Sheet lead numbers receive +91 automatically',()=>{
+ const leads=parseLeads('name,phone\nAarav,9876543210\nAsha,09123456789\nRavi,919876543211');
+ assert.deepEqual(leads.map(lead=>lead.number),['+919876543210','+919123456789','+919876543211']);
+ assert.ok(leads.every(lead=>lead.state==='Ready'));
 });
 test('Google Sheet links are restricted, converted to CSV exports and reject private HTML',async()=>{
  assert.deepEqual(googleSheetSource('https://docs.google.com/spreadsheets/d/sheet_ID-1/edit#gid=42'),{url:'https://docs.google.com/spreadsheets/d/sheet_ID-1/edit#gid=42',exportUrl:'https://docs.google.com/spreadsheets/d/sheet_ID-1/export?format=csv&gid=42'});

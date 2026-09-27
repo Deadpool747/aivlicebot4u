@@ -1,4 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const {normalizeDialNumber}=require('./phone-number.cjs');
 
 const STATUSES=['Scheduled','Calling','Completed','No Answer','Failed','Retry Scheduled','Cancelled','Rescheduled'];
 const ACTIVE=new Set(['Scheduled','Retry Scheduled','Rescheduled']);
@@ -29,8 +30,8 @@ function integer(value,fallback,min,max,label){const result=value==null||value==
 function normalized(data,now){
  const customerName=text(data.customerName,80,'the customer name',true);
  if(!/^[\p{L}\p{M} .’'-]{1,80}$/u.test(customerName))throw Error('Enter a valid customer name.');
- const phoneNumber=String(data.phoneNumber||'').replace(/[ ()-]/g,'');
- if(!/^\+91[6-9]\d{9}$/.test(phoneNumber))throw Error('Enter an Indian mobile number with +91.');
+ const phoneNumber=normalizeDialNumber(data.phoneNumber);
+ if(!/^\+91[6-9]\d{9}$/.test(phoneNumber))throw Error('Enter a valid 10-digit Indian mobile number. +91 is added automatically.');
  const reason=text(data.reason,200,'a follow-up reason',true),notes=text(data.notes,2000,'notes');
  const agentId=text(data.agentId||'current',80,'the voice agent',true);
  if(!/^[A-Za-z0-9_.-]{1,80}$/.test(agentId))throw Error('Choose a valid voice agent.');

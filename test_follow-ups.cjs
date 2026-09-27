@@ -18,6 +18,7 @@ async function main(){
  assert.equal(store.list('huzaifa').find(item=>item.sourceRef==='lead-1').source,'csv');
  assert.throws(()=>parseFollowUpCsv('name,phone\nA,+919123456789'),/missing required columns/);
  assert.throws(()=>store.create('huzaifa',{...base(),date:'2025-12-31'}),/future/);
+ const localNumber=store.create('local-number-test',{...base(),phoneNumber:'9876543211'});assert.equal(localNumber.phoneNumber,'+919876543211');
  const record=store.create('huzaifa',base());assert.equal(record.status,'Scheduled');assert.equal(record.scheduledAt,'2026-01-02T04:30:00.000Z');
  assert.equal(store.list('another').length,0);assert.equal(store.list('huzaifa',{search:'9876'}).length,1);
  const edited=store.edit('huzaifa',record.id,{reason:'Updated reason'});assert.equal(edited.reason,'Updated reason');assert.equal(edited.scheduledAt,record.scheduledAt);
