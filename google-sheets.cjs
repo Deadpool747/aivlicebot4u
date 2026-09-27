@@ -11,7 +11,8 @@ function googleSheetSource(value){
 }
 
 async function fetchGoogleSheetCsv(value,fetchImpl=fetch){
- const source=googleSheetSource(value),response=await fetchImpl(source.exportUrl,{redirect:'follow',signal:AbortSignal.timeout(15000),headers:{Accept:'text/csv,text/plain;q=0.9'}});
+ const source=googleSheetSource(value),liveUrl=new URL(source.exportUrl);liveUrl.searchParams.set('_',Date.now());
+ const response=await fetchImpl(liveUrl,{redirect:'follow',signal:AbortSignal.timeout(15000),cache:'no-store',headers:{Accept:'text/csv,text/plain;q=0.9','Cache-Control':'no-cache'}});
  if(!response.ok)throw Error(`Google Sheet download failed (${response.status}).`);
  const bytes=Buffer.from(await response.arrayBuffer());
  if(bytes.length>MAX_SHEET_BYTES)throw Error('The Google Sheet is larger than 256 KB. Keep up to 200 lead rows.');

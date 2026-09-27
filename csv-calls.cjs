@@ -31,7 +31,7 @@ function parseLeads(text){
  });
 }
 
-function createCampaigns({directory,call,history,now=Date.now,loadSheet=null,sheetPollMs=30000}){
+function createCampaigns({directory,call,history,now=Date.now,loadSheet=null,sheetPollMs=5000}){
  fs.mkdirSync(directory,{recursive:true});const jobs=new Map(),busy=new Set(),syncing=new Set();
  const file=owner=>path.join(directory,crypto.createHash('sha256').update(owner).digest('hex')+'.json');
  const save=(owner,j)=>{fs.writeFileSync(file(owner)+'.tmp',JSON.stringify(j),{mode:0o600});fs.renameSync(file(owner)+'.tmp',file(owner))};

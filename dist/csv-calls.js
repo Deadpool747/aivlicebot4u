@@ -1,5 +1,6 @@
 (()=>{
  const el=id=>document.getElementById(id);let busy=false,campaign=null,dirty=false;
+ for(const paragraph of document.querySelectorAll('#csvSection p'))if(paragraph.textContent.includes('every 30 seconds'))paragraph.textContent=paragraph.textContent.replace('every 30 seconds','about every 5 seconds');
  function render(j){campaign=j;el('csvRows').replaceChildren();
   if(j)for(const lead of j.leads){const tr=document.createElement('tr');for(const text of [lead.name||'—',lead.number,lead.error||lead.state]){const td=document.createElement('td');td.textContent=text;td.style.padding='8px';tr.append(td)}el('csvRows').append(tr)}
   el('csvSummary').textContent=j?`${j.leads.length} rows · ${j.leads.filter(l=>l.state==='Ready').length} ready · ${j.leads.filter(l=>l.error).length} skipped`:'';

@@ -17,6 +17,13 @@ test('Google Sheet links are restricted, converted to CSV exports and reject pri
  assert.throws(()=>googleSheetSource('https://example.com/sheet.csv'),/docs.google.com/);
  await assert.rejects(()=>fetchGoogleSheetCsv('https://docs.google.com/spreadsheets/d/test/edit',async()=>({ok:true,arrayBuffer:async()=>Buffer.from('<html>sign in</html>')})),/publicly readable/);
 });
+test('Google Sheet live refresh bypasses cached exports',async()=>{
+ let requestedUrl,requestedOptions;
+ await fetchGoogleSheetCsv('https://docs.google.com/spreadsheets/d/test/edit',async(url,options)=>{requestedUrl=String(url);requestedOptions=options;return {ok:true,arrayBuffer:async()=>Buffer.from('name,phone\nA,9876543210')}});
+ assert.match(requestedUrl,/export\?format=csv&_=/);
+ assert.equal(requestedOptions.cache,'no-store');
+ assert.equal(requestedOptions.headers['Cache-Control'],'no-cache');
+});
 test('saving a Google Sheet starts calls and later syncs only new phone numbers',async()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-sheet-'));let csv='name,phone\nA,+123456789',calls=0,clock=1;
  const q=createCampaigns({directory,now:()=>clock,sheetPollMs:10,loadSheet:async url=>({url,exportUrl:url+'/csv',csv}),call:async()=>({status:202,body:{historyId:'h'+(++calls)}}),history:{list:()=>[]}});
@@ -26,6 +33,7 @@ test('outbound page places a saved Google Sheet source beside the CSV source',()
  const html=fs.readFileSync('dist/index.html','utf8'),script=fs.readFileSync('dist/csv-calls.js','utf8');
  for(const value of ['class="lead-source-grid"','id="sheetUrl"','id="sheetSave"','Save link and start calling'])assert.ok(html.includes(value),`missing ${value}`);
  assert.match(script,/save-sheet/);assert.match(script,/sheetStatus/);
+ assert.match(script,/about every 5 seconds/);
 });
 test('queue calls once, waits for completion, respects pause, and isolates accounts',async()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-csv-'));let calls=0,rows=[];
