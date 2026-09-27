@@ -13,6 +13,8 @@ from phone_history import save_session
 from phone_recording import CallRecording
 from phone_audio import InputNoiseGate
 from airtel_playback import AirtelPlayback, Goodbye, SpeechActivity
+from follow_up_client import schedule_follow_up
+from phone_signals import voicemail
 
 ROOT = Path('/opt/bot4u')
 OWNER = 'huzaifa'
@@ -53,9 +55,10 @@ def session_config(root, mode, name="", follow_up=None):
         script += ('\nThis call is a scheduled follow-up. Address this purpose naturally without reading metadata aloud: '
                    + json.dumps({'reason': follow_up.get('reason', ''), 'notes': follow_up.get('notes', ''),
                                  'previous_summary': follow_up.get('previousSummary', '')}, ensure_ascii=False))
-    script += ('\nIf the customer asks for a callback or says to call later, do not ask for a date, time, timezone, name, or phone number. '
-               'Simply acknowledge with a brief phrase such as "Okay, we will follow up," then call mark_follow_up_requested. '
-               'Do not claim that a specific callback has been scheduled.')
+    script += ('\nCallback handling: if the customer asks for a callback without voluntarily giving both an exact date and time, do not ask any scheduling questions. '
+               'Briefly say "Okay, we will follow up," then call mark_follow_up_requested. '
+               'If the customer voluntarily gives both a concrete date and time, call schedule_follow_up immediately using Asia/Kolkata unless they state another timezone; do not ask for confirmation or missing details. '
+               'Only say it was scheduled after the tool succeeds. For outbound calls, if you hear voicemail, an answering machine, a beep, or automated screening, call voicemail_detected silently and do not leave a message.')
     return env, types.LiveConnectConfig(response_modalities=['AUDIO'], system_instruction=script,
         input_audio_transcription={}, output_audio_transcription={},
         speech_config={'voice_config': {'prebuilt_voice_config': {'voice_name': 'Sulafat'}}},
@@ -65,6 +68,16 @@ def session_config(root, mode, name="", follow_up=None):
             'prefix_padding_ms': 120, 'silence_duration_ms': 650}},
         tools=[{'function_declarations': [{'name': 'mark_follow_up_requested',
             'description': 'Record the call remark as Follow up when the customer asks to be called back. Do not collect scheduling details.'},
+            {'name': 'schedule_follow_up',
+            'description': 'Schedule a callback when the customer voluntarily provides an exact date and time. Do not ask them for scheduling details.',
+            'parameters': {'type': 'OBJECT', 'properties': {
+                'date': {'type': 'STRING', 'description': 'Concrete date as YYYY-MM-DD'},
+                'time': {'type': 'STRING', 'description': 'Concrete time as HH:MM in 24-hour format'},
+                'timezone': {'type': 'STRING', 'description': 'IANA timezone; default Asia/Kolkata'},
+                'reason': {'type': 'STRING'}, 'notes': {'type': 'STRING'}},
+                'required': ['date', 'time']}},
+            {'name': 'voicemail_detected',
+            'description': 'Silently classify voicemail, an answering machine, beep, or automated call screening as not answered.'},
             {'name': 'end_conversation',
             'description': 'End the telephone conversation after the final spoken goodbye.'}]}])
 
@@ -91,6 +104,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
     connected = False
     remarks = 'Airtel call ended.'
     follow_up_requested = False
+    machine = False
 
     async def media():
         while True:
@@ -163,7 +177,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                 ended.set()
 
             async def receive():
-                nonlocal remarks, follow_up_requested
+                nonlocal remarks, follow_up_requested, machine
                 output_text = ''
                 input_text = ''
                 turn_audio = False
@@ -190,6 +204,10 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                             # Cancel a pending goodbye for actual caller speech.
                             goodbye.interrupt()
                             input_text += content.input_transcription.text
+                            if mode == 'outbound' and voicemail(input_text):
+                                machine = True
+                                remarks = 'Voicemail / automated screening detected; call classified as not answered.'
+                                ended.set()
                             # Questions/continuations override farewell words within the same utterance.
                             continuation = bool(re.search(r'\?|\b(wait|actually|question|what|when|why|how|explain|more|order|documents)\b', input_text, re.I))
                             goodbye.allow_close = not continuation
@@ -211,6 +229,17 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
                                     follow_up_requested = True
                                     remarks = 'Follow up'
                                     tool_result = {'status': 'recorded', 'remark': 'Follow up'}
+                                elif call.name == 'schedule_follow_up':
+                                    args = dict(call.args or {})
+                                    args.update({'confirmed': True, 'timezone': args.get('timezone') or 'Asia/Kolkata',
+                                                 'reason': args.get('reason') or 'Customer requested callback'})
+                                    tool_result = await schedule_follow_up(root, OWNER, args, {
+                                        'customerName': context.get('name', ''), 'phoneNumber': context.get('number', '')})
+                                elif call.name == 'voicemail_detected':
+                                    machine = True
+                                    remarks = 'Voicemail / automated screening detected; call classified as not answered.'
+                                    ended.set()
+                                    tool_result = {'status': 'not_answered'}
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
                                     id=call.id, name=call.name, response=tool_result or {'status': 'unsupported'})])
                         if content and content.turn_complete:
@@ -230,7 +259,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
 
             player = asyncio.create_task(play())
             tasks += [player, asyncio.create_task(forward()), asyncio.create_task(receive()), asyncio.create_task(ended.wait())]
-            await session.send_realtime_input(text='The caller is connected. Give your opening greeting now.')
+            await session.send_realtime_input(text=('The outbound line connected. Listen briefly. If this is voicemail or automated screening, call voicemail_detected silently. Otherwise give your opening greeting.' if mode == 'outbound' else 'The caller is connected. Give your opening greeting now.'))
             done, _ = await asyncio.wait(tasks, timeout=300, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
@@ -238,7 +267,9 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
         remarks = 'Airtel BOT4U error: ' + type(exc).__name__
         log.error(remarks)
     finally:
-        if follow_up_requested:
+        if machine:
+            remarks = 'Voicemail / automated screening detected; call classified as not answered.'
+        elif follow_up_requested:
             remarks = 'Follow up'
         elif goodbye.sent:
             remarks = ('Airtel termination confirmed by stream stop.' if goodbye.confirmed else
@@ -254,7 +285,7 @@ async def run(websocket, bridge, context, call_id, root=ROOT):
             recording_id = recording.save()
             save_session(root, OWNER, requestId=context.get('historyId'), callId=call_id, startedAt=started, type=mode,
                 phone=context.get('number') or ('+' + digits(context.get('airtel_iq_caller_number')) if digits(context.get('airtel_iq_caller_number')) else ''), name=context.get('name', ''),
-                duration=round(time.monotonic()-clock), result='Answered' if connected else 'Unconfirmed',
+                duration=round(time.monotonic()-clock), result='Not answered' if machine else ('Answered' if connected else 'Unconfirmed'),
                 remarks=remarks, recordingId=recording_id, provider='airtel_iq')
         except Exception:
             log.exception('Could not save BOT4U Airtel history')

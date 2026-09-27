@@ -9,10 +9,11 @@ function createHistory(root){
  if(!row){row={id:e.id,date:e.startedAt||e.at,type:e.type,source:e.source||'phone',phone:e.phone,name:e.name||'',duration:null,result:'Pending',remarks:''};rows.set(row.id,row)}
  Object.assign(row,{callId:e.callId,duration:e.duration,result:e.result,remarks:e.remarks,recordingId:e.recordingId||null});if(e.name)row.name=e.name;
  }}
- const notes=path.join(folder,'notes');for(const row of rows.values()){try{Object.assign(row,JSON.parse(fs.readFileSync(path.join(notes,row.id+'.json'),'utf8')))}catch{}if(row.followUpAttempt==null&&/^follow\s*up$/i.test(String(row.remarks||'').trim()))row.followUpAttempt=1;if(row.result==='Pending'&&Date.now()-Date.parse(row.date)>360000)row.result='Unconfirmed'}
+ const notes=path.join(folder,'notes');for(const row of rows.values()){try{Object.assign(row,JSON.parse(fs.readFileSync(path.join(notes,row.id+'.json'),'utf8')))}catch{}if(row.result==='Pending'&&Date.now()-Date.parse(row.date)>360000)row.result='Unconfirmed';if(row.followUpAttempt==null&&(/^follow\s*up$/i.test(String(row.remarks||'').trim())||['Not answered','Unconfirmed'].includes(row.result)))row.followUpAttempt=1}
  return [...rows.values()].sort((a,b)=>b.date.localeCompare(a.date));}
  function edit(owner,id,data){if(!/^[\da-f-]{36}$/.test(id)||!list(owner).some(r=>r.id===id))return false;const folder=path.join(dir(owner),'notes');fs.mkdirSync(folder,{recursive:true});const dest=path.join(folder,id+'.json');let prior={};try{prior=JSON.parse(fs.readFileSync(dest,'utf8'))}catch{}const value={...prior};if(Object.hasOwn(data,'remarks'))value.remarks=data.remarks;if(data.result)value.result=data.result;if(Object.hasOwn(data,'followUpAttempt'))value.followUpAttempt=data.followUpAttempt;fs.writeFileSync(dest+'.tmp',JSON.stringify(value));fs.renameSync(dest+'.tmp',dest);return true}
  function recording(owner,id){const row=list(owner).find(r=>r.id===id);if(!row||!/^[-a-f0-9]{36}$/.test(row.recordingId||''))return null;const file=path.join(dir(owner),'recordings',row.recordingId+'.wav');return fs.existsSync(file)?file:null}
- return {add,list,edit,recording};
+ function publicList(owner){return list(owner).map(row=>({...row,result:row.result==='Answered'?'Answered':'Not answered'}))}
+ return {add,list,publicList,edit,recording};
 }
 module.exports={createHistory};

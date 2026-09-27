@@ -26,6 +26,7 @@ from phone_audio import InputNoiseGate
 from phone_signals import voicemail, human_greeting, closing
 from phone_history import save_session
 from phone_recording import CallRecording
+from follow_up_client import schedule_follow_up
 from datetime import datetime, timezone
 
 OWNER = 'huzaifa'
@@ -49,7 +50,7 @@ def prompt(mode='inbound', name=''):
         'If interrupted during goodbye, answer the new question instead of ending. '
         'For outbound calls: briefly listen first. When instructed by the application, greet the customer even if they have not spoken yet. Never hang up solely because no greeting was detected. '
         'If you hear voicemail, an answering machine, a beep, or an automated call-screening request, call voicemail_detected silently. Never leave a message or introduce yourself to a screening system.'
-        ' If the customer asks for a callback or says to call later, do not ask for a date, time, timezone, name, or phone number. Simply acknowledge with a brief phrase such as "Okay, we will follow up," then call mark_follow_up_requested. Do not claim that a specific callback has been scheduled.'
+        ' Callback handling: if the customer asks for a callback without voluntarily giving both an exact date and time, do not ask any scheduling questions. Briefly say "Okay, we will follow up," then call mark_follow_up_requested. If the customer voluntarily gives both a concrete date and time, call schedule_follow_up immediately using Asia/Kolkata unless they state another timezone; do not ask for confirmation or missing details. Only say it was scheduled after the tool succeeds.'
     )
 
 def config(mode='inbound', name=''):
@@ -64,6 +65,12 @@ def config(mode='inbound', name=''):
             'activity_handling': 'START_OF_ACTIVITY_INTERRUPTS'},
         tools=[{'function_declarations': [{'name': 'mark_follow_up_requested',
                 'description': 'Record the call remark as Follow up when the customer asks to be called back. Do not collect scheduling details.'},
+                {'name': 'schedule_follow_up',
+                'description': 'Schedule a callback when the customer voluntarily provides an exact date and time. Do not ask them for scheduling details.',
+                'parameters': {'type': 'OBJECT', 'properties': {
+                    'date': {'type': 'STRING'}, 'time': {'type': 'STRING'},
+                    'timezone': {'type': 'STRING'}, 'reason': {'type': 'STRING'},
+                    'notes': {'type': 'STRING'}}, 'required': ['date', 'time']}},
                 {'name': 'end_conversation',
                 'description': 'Disconnect after delivering your final spoken goodbye.'},
                 {'name': 'voicemail_detected', 'description': 'Silently disconnect a voicemail, answering machine or automated call-screening system. Do not speak.'}]}],
@@ -252,6 +259,13 @@ async def create_session(agent_id, call_id, from_number, to_number, metadata=Non
                                     follow_up_requested = True
                                     remarks = 'Follow up'
                                     tool_result = {'status': 'recorded', 'remark': 'Follow up'}
+                                elif call.name == 'schedule_follow_up':
+                                    args = dict(call.args or {})
+                                    args.update({'confirmed': True, 'timezone': args.get('timezone') or 'Asia/Kolkata',
+                                                 'reason': args.get('reason') or 'Customer requested callback'})
+                                    tool_result = await schedule_follow_up(ROOT, OWNER, args, {
+                                        'customerName': name,
+                                        'phoneNumber': '+' + digits(to_number if mode == 'outbound' else from_number)})
                                 await session.send_tool_response(function_responses=[types.FunctionResponse(
                                     id=call.id, name=call.name, response=tool_result)])
                         if content and content.turn_complete:
