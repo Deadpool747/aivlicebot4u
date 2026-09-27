@@ -11,3 +11,10 @@ test('follow-up attempt persists independently from remarks',()=>{
   history.edit('huzaifa',id,{remarks:'Interested',result:''});row=history.list('huzaifa').find(call=>call.id===id);assert.equal(row.followUpAttempt,2);assert.equal(row.remarks,'Interested');
  }finally{fs.rmSync(root,{recursive:true,force:true})}
 });
+
+test('a Follow up remark automatically enters Attempt 1',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
+ try{const history=createHistory(root),id=history.add('huzaifa',{kind:'request',type:'outbound',phone:'+919876543210',name:'Rahul',result:'Answered',remarks:'Follow up'});
+  assert.equal(history.list('huzaifa').find(call=>call.id===id).followUpAttempt,1);
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
