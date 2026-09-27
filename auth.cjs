@@ -6,6 +6,8 @@ const file=path.join(directory,'account.json'),sessions=new Map();let creating=f
 const usersFile=path.join(directory,'users.json');
 function users(){if(fs.existsSync(usersFile))return JSON.parse(fs.readFileSync(usersFile,'utf8'));return fs.existsSync(file)?[JSON.parse(fs.readFileSync(file,'utf8'))]:[]}
 function saveUsers(records){fs.mkdirSync(directory,{recursive:true});fs.writeFileSync(usersFile+'.tmp',JSON.stringify(records),{mode:0o600});fs.renameSync(usersFile+'.tmp',usersFile)}
+function planExpiry(accountType,startedAt){if(accountType==='enterprise')return null;const value=new Date(startedAt);if(accountType==='scale')value.setUTCFullYear(value.getUTCFullYear()+1);else value.setUTCMonth(value.getUTCMonth()+1);return value.toISOString()}
+function accountPlan(owner){const records=users(),user=records.find(value=>value.username.toLowerCase()===String(owner).toLowerCase());if(!user)return null;let changed=false;if(!['entry','growth','scale','enterprise'].includes(user.accountType)){user.accountType='entry';changed=true}if(!user.planStartedAt){user.planStartedAt=user.createdAt||new Date().toISOString();changed=true}if(user.accountType!=='enterprise'&&!user.planExpiresAt){user.planExpiresAt=planExpiry(user.accountType,user.planStartedAt);changed=true}if(changed)saveUsers(records);return {accountType:user.accountType,startedAt:user.planStartedAt,expiresAt:user.accountType==='enterprise'?null:user.planExpiresAt}}
 const token=req=>(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='))?.slice(cookieName.length+1);
 const session=req=>{const id=token(req),s=sessions.get(id);if(!s||s.expires<Date.now()){sessions.delete(id);return null}return s};
 const json=(res,code,data)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data))};
@@ -24,7 +26,7 @@ if(req.url.endsWith('/setup')||req.url.endsWith('/signup')){
 accountType=String(data.accountType||'entry').toLowerCase();if(!['entry','growth','scale','enterprise'].includes(accountType)){json(res,400,{error:'Choose a valid account type.'});return true}
 if(creating){json(res,409,{error:'Another account is being created. Please try again.'});return true}creating=true;
 try{const records=users();if((req.url.endsWith('/setup')&&records.length)||records.some(u=>u.username.toLowerCase()===username.toLowerCase())){json(res,409,{error:'This username is already taken. Sign in or choose another username.'});return true}
-const salt=crypto.randomBytes(16).toString('hex'),hash=(await scrypt(password,salt,64)).toString('hex');saveUsers([...records,{username,salt,hash,accountType}]);}finally{creating=false}
+const salt=crypto.randomBytes(16).toString('hex'),hash=(await scrypt(password,salt,64)).toString('hex'),createdAt=new Date().toISOString();saveUsers([...records,{username,salt,hash,accountType,createdAt,planStartedAt:createdAt,planExpiresAt:planExpiry(accountType,createdAt)}]);}finally{creating=false}
 }else{
 const user=users().find(u=>u.username.toLowerCase()===username.toLowerCase());const hash=await scrypt(password,user?.salt||'unknown-user-dummy-salt',64);if(!user||!crypto.timingSafeEqual(hash,Buffer.from(user.hash,'hex'))){json(res,401,{error:'Incorrect username or password.'});return true}
 accountType=user.accountType||'entry';
@@ -32,6 +34,6 @@ accountType=user.accountType||'entry';
 
 sessions.delete(token(req));const id=crypto.randomBytes(32).toString('hex');sessions.set(id,{username:username.toLowerCase(),accountType,expires:Date.now()+8*3600000,sockets:new Set()});res.setHeader('Set-Cookie',`${cookieName}=${id}; ${cookieFlags} Max-Age=28800`);json(res,200,{ok:true});return true;
 }
-return {handle,session,userExists:owner=>users().some(u=>u.username.toLowerCase()===owner)};
+return {handle,session,accountPlan,userExists:owner=>users().some(u=>u.username.toLowerCase()===owner)};
 }
 module.exports={createAuth};

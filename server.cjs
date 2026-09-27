@@ -114,6 +114,13 @@ const hasRemarks=data&&Object.hasOwn(data,'remarks'),hasResult=data&&Object.hasO
 if(!data||(!hasRemarks&&!hasResult&&!hasAttempt)||(hasRemarks&&(typeof data.remarks!=='string'||data.remarks.length>2000))||(hasResult&&!['','Answered','Not answered'].includes(data.result))||(hasAttempt&&![0,1,2,3,4].includes(data.followUpAttempt)))return json(res,400,{error:'Invalid remarks, result, or follow-up attempt'});
 return history.edit(owner,data.id,data)?json(res,200,{saved:true}):json(res,404,{error:'Call not found'});
 }
+if(requestUrl.pathname==='/api/account/plan'){
+ if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
+ const account=auth.accountPlan(identity.username);if(!account)return json(res,404,{error:'Account not found'});
+ const definitions={entry:{name:'Entry',billing:'Pay as you go',includedMinutes:null},growth:{name:'Growth',billing:'Monthly',includedMinutes:3000},scale:{name:'Scale',billing:'Yearly',includedMinutes:50000},enterprise:{name:'Enterprise',billing:'Custom agreement',includedMinutes:'unlimited'}},definition=definitions[account.accountType]||definitions.entry;
+ const start=Date.parse(account.startedAt||0),end=account.expiresAt?Date.parse(account.expiresAt):Infinity,totalSeconds=history.list(identity.username).filter(call=>Date.parse(call.date)>=start&&Date.parse(call.date)<end).reduce((sum,call)=>sum+(Number(call.duration)||0),0),usedMinutes=Math.ceil(totalSeconds/60),remainingMinutes=definition.includedMinutes==='unlimited'?'unlimited':definition.includedMinutes==null?null:Math.max(0,definition.includedMinutes-usedMinutes);
+ return json(res,200,{plan:{accountType:account.accountType,name:definition.name,billing:definition.billing,includedMinutes:definition.includedMinutes,usedMinutes,remainingMinutes,startedAt:account.startedAt,expiresAt:account.expiresAt}});
+}
 if(requestUrl.pathname==='/api/phone/campaign'){
 const owner=identity.username;
 if(req.method==='GET'){await campaigns.tick(owner);return json(res,200,{campaign:campaigns.get(owner)})}

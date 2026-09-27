@@ -23,3 +23,12 @@ test('successful signup redirects to a protected dummy barcode page',()=>{
  assert.match(script,/accountType/);
  assert.match(server,/payment-placeholder\.html/);
 });
+
+test('call dashboard displays purchased plan, remaining minutes and expiry',()=>{
+ const html=fs.readFileSync('dist/dashboard.html','utf8'),script=fs.readFileSync('dist/dashboard.js','utf8'),server=fs.readFileSync('server.cjs','utf8');
+ for(const value of ['Purchased plan','Minutes available','Plan expires','id="planName"','id="planMinutes"','id="planExpiry"'])assert.ok(html.includes(value),`missing ${value}`);
+ assert.match(script,/api\/account\/plan/);
+ assert.match(script,/renderPlan/);
+ assert.match(server,/includedMinutes:3000/);
+ assert.match(server,/includedMinutes:50000/);
+});
