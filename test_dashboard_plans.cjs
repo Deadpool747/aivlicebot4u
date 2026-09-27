@@ -10,3 +10,9 @@ test('dashboard sidebar includes the referenced account plans and prices',()=>{
  assert.match(html,/id="accountPlanPanel"[^>]*hidden/);
  assert.match(script,/showAccountPlan/);
 });
+
+test('signup lets a user choose an account type and inspect its plan',()=>{
+ const html=fs.readFileSync('dist/login.html','utf8'),script=fs.readFileSync('dist/login.js','utf8');
+ for(const value of ['id="accountTypeField"','data-signup-plan="entry">Entry','data-signup-plan="growth">Growth','data-signup-plan="scale">Scale','data-signup-plan="enterprise">Enterprise','id="accountPlanPanel"'])assert.ok(html.includes(value),`missing ${value}`);
+ for(const value of ['selectAccountPlan','accountType','₹15,000/month','₹1,50,000/year','Unlimited concurrency'])assert.ok(script.includes(value),`missing ${value}`);
+});
