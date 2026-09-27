@@ -111,7 +111,7 @@ if(!req.headers['content-type']?.startsWith('application/json'))return json(res,
 let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>8000)return json(res,413,{error:'Request too large'})}
 let data;try{data=JSON.parse(text)}catch{return json(res,400,{error:'Invalid JSON'})}
 const hasRemarks=data&&Object.hasOwn(data,'remarks'),hasResult=data&&Object.hasOwn(data,'result'),hasAttempt=data&&Object.hasOwn(data,'followUpAttempt');
-if(!data||(!hasRemarks&&!hasResult&&!hasAttempt)||(hasRemarks&&(typeof data.remarks!=='string'||data.remarks.length>2000))||(hasResult&&!['','Answered','Not answered'].includes(data.result))||(hasAttempt&&![0,1,2,3].includes(data.followUpAttempt)))return json(res,400,{error:'Invalid remarks, result, or follow-up attempt'});
+if(!data||(!hasRemarks&&!hasResult&&!hasAttempt)||(hasRemarks&&(typeof data.remarks!=='string'||data.remarks.length>2000))||(hasResult&&!['','Answered','Not answered'].includes(data.result))||(hasAttempt&&![0,1,2,3,4].includes(data.followUpAttempt)))return json(res,400,{error:'Invalid remarks, result, or follow-up attempt'});
 return history.edit(owner,data.id,data)?json(res,200,{saved:true}):json(res,404,{error:'Call not found'});
 }
 if(requestUrl.pathname==='/api/phone/campaign'){

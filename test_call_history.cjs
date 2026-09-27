@@ -26,7 +26,7 @@ test('not answered and uncertain calls automatically enter Attempt 1',()=>{
  }finally{fs.rmSync(root,{recursive:true,force:true})}
 });
 
-test('repeated unanswered calls move a client through attempts without leaving stale rows',()=>{
+test('repeated unanswered calls move a client through attempts and then junk without stale rows',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
  try{const history=createHistory(root),phone='+919876543210';
   const first=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',remarks:'Voicemail detected'});
@@ -34,6 +34,8 @@ test('repeated unanswered calls move a client through attempts without leaving s
   let rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===first).followUpAttempt,undefined);assert.equal(rows.find(call=>call.id===second).followUpAttempt,2);
   const third=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',remarks:'Voicemail detected'});
   rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===second).followUpAttempt,undefined);assert.equal(rows.find(call=>call.id===third).followUpAttempt,3);
+  const fourth=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',remarks:'No pickup'});
+  rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===third).followUpAttempt,undefined);assert.equal(rows.find(call=>call.id===fourth).followUpAttempt,4);
  }finally{fs.rmSync(root,{recursive:true,force:true})}
 });
 
@@ -44,6 +46,17 @@ test('scheduler attempt count is preserved and an answered call clears the follo
   const second=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',followUpAttempt:2});
   let rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===first).followUpAttempt,undefined);assert.equal(rows.find(call=>call.id===second).followUpAttempt,2);
   history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Answered'});rows=history.list('huzaifa');assert.equal(rows.some(call=>call.followUpAttempt),false);
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
+
+test('three scheduler retries after an initial missed call end in junk',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
+ try{const history=createHistory(root),phone='+919876543210';
+  history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered'});
+  history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',followUpAttempt:1});
+  history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',followUpAttempt:2});
+  const final=history.add('huzaifa',{kind:'request',type:'outbound',phone,result:'Not answered',followUpAttempt:3});
+  const rows=history.list('huzaifa');assert.equal(rows.find(call=>call.id===final).followUpAttempt,4);assert.equal(rows.filter(call=>call.followUpAttempt).length,1);
  }finally{fs.rmSync(root,{recursive:true,force:true})}
 });
 
