@@ -26,6 +26,14 @@ test('not answered and uncertain calls automatically enter Attempt 1',()=>{
  }finally{fs.rmSync(root,{recursive:true,force:true})}
 });
 
+test('a fresh carrier request is hidden until the ring timeout, then enters Attempt 1',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
+ try{const history=createHistory(root),id=history.add('huzaifa',{kind:'request',type:'outbound',phone:'+919876543210',result:'Pending',remarks:'Call submitted'});
+  assert.equal(history.publicList('huzaifa').some(call=>call.id===id),false);
+  const old=Date.now;Date.now=()=>old()+76000;try{const call=history.publicList('huzaifa').find(row=>row.id===id);assert.equal(call.result,'Not answered');assert.equal(call.followUpAttempt,1)}finally{Date.now=old}
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
+
 test('repeated unanswered calls move a client through attempts and then junk without stale rows',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'bot4u-history-'));
  try{const history=createHistory(root),phone='+919876543210';

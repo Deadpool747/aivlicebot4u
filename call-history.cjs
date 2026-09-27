@@ -12,7 +12,9 @@ function createHistory(root){
  const notes=path.join(folder,'notes'),active=new Map();
  for(const row of rows.values()){
   let note={};try{note=JSON.parse(fs.readFileSync(path.join(notes,row.id+'.json'),'utf8'));Object.assign(row,note)}catch{}
-  if(row.result==='Pending'&&Date.now()-Date.parse(row.date)>360000)row.result='Unconfirmed';
+  // Carrier requests ring for at most 60 seconds. Allow a short delivery cushion,
+  // then finalize requests with no session event so missed calls enter follow-up.
+  if(row.result==='Pending'&&Date.now()-Date.parse(row.date)>75000)row.result='Unconfirmed';
   const key=String(row.phone||'').replace(/\D/g,'')||row.id,previous=active.get(key),followUp=/^follow\s*up$/i.test(String(row.remarks||'').trim()),missed=['Not answered','Unconfirmed'].includes(row.result),explicit=[1,2,3,4].includes(Number(row.followUpAttempt));
   if(row.result==='Answered'&&!followUp&&!Object.hasOwn(note,'followUpAttempt')){if(previous)delete previous.followUpAttempt;delete row.followUpAttempt;active.delete(key);continue}
   if(explicit||followUp||missed){const next=Math.min(4,Number(previous?.followUpAttempt||0)+1),attempt=explicit?Math.min(4,Math.max(Number(row.followUpAttempt),next)):next;if(previous&&previous!==row)delete previous.followUpAttempt;row.followUpAttempt=attempt;active.set(key,row)}
@@ -20,7 +22,7 @@ function createHistory(root){
  return [...rows.values()].sort((a,b)=>b.date.localeCompare(a.date));}
  function edit(owner,id,data){if(!/^[\da-f-]{36}$/.test(id)||!list(owner).some(r=>r.id===id))return false;const folder=path.join(dir(owner),'notes');fs.mkdirSync(folder,{recursive:true});const dest=path.join(folder,id+'.json');let prior={};try{prior=JSON.parse(fs.readFileSync(dest,'utf8'))}catch{}const value={...prior};if(Object.hasOwn(data,'remarks'))value.remarks=data.remarks;if(data.result)value.result=data.result;if(Object.hasOwn(data,'followUpAttempt'))value.followUpAttempt=data.followUpAttempt;fs.writeFileSync(dest+'.tmp',JSON.stringify(value));fs.renameSync(dest+'.tmp',dest);return true}
  function recording(owner,id){const row=list(owner).find(r=>r.id===id);if(!row||!/^[-a-f0-9]{36}$/.test(row.recordingId||''))return null;const file=path.join(dir(owner),'recordings',row.recordingId+'.wav');return fs.existsSync(file)?file:null}
- function publicList(owner){return list(owner).map(row=>({...row,result:row.result==='Answered'?'Answered':'Not answered'}))}
+ function publicList(owner){return list(owner).filter(row=>row.result!=='Pending').map(row=>({...row,result:row.result==='Answered'?'Answered':'Not answered'}))}
  return {add,list,publicList,edit,recording};
 }
 module.exports={createHistory};
