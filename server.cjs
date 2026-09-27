@@ -25,7 +25,8 @@ const history=require('./call-history.cjs').createHistory(path.join(__dirname,'.
 const airtelCall=require('./airtel-call.cjs').createAirtelCaller({directory:path.join(__dirname,'.local'),value,history,readScript:(owner,mode)=>scripts.read(owner,mode)});
 const phoneCall=require('./phone-call.cjs').createPhoneCaller({airtelCall,history,directory:path.join(__dirname,'.local'),token:()=>value('PIOPIY_API_TOKEN'),readScript:(owner,mode)=>scripts.read(owner,mode)});
 const carriers=require('./carrier-store.cjs').createCarrierStore(path.join(__dirname,'.local'));
-const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(__dirname,'.local','campaigns'),call:phoneCall,history});
+const {fetchGoogleSheetCsv}=require('./google-sheets.cjs');
+const campaigns=require('./csv-calls.cjs').createCampaigns({directory:path.join(__dirname,'.local','campaigns'),call:phoneCall,history,loadSheet:fetchGoogleSheetCsv});
 const followUps=require('./follow-up-store.cjs').createFollowUpStore(path.join(__dirname,'.local'));
 const {parseFollowUpCsv}=require('./follow-up-import.cjs');
 const followUpScheduler=require('./follow-up-scheduler.cjs').createFollowUpScheduler({store:followUps,call:airtelCall,history});
@@ -127,7 +128,7 @@ if(req.method==='GET'){await campaigns.tick(owner);return json(res,200,{campaign
 if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
 if(!req.headers['content-type']?.startsWith('application/json'))return json(res,415,{error:'JSON required'});
 let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>300000)return json(res,413,{error:'CSV is too large.'})}
-try{const data=JSON.parse(body);const campaign=data.action==='import'?campaigns.importCsv(owner,data.csv):campaigns.action(owner,data.action);return json(res,200,{campaign})}catch(e){return json(res,400,{error:e.message})}
+try{const data=JSON.parse(body);let campaign;if(data.action==='import')campaign=campaigns.importCsv(owner,data.csv);else if(data.action==='save-sheet'){campaign=await campaigns.saveSheet(owner,data.url);await campaigns.tick(owner);campaign=campaigns.get(owner)}else campaign=campaigns.action(owner,data.action);return json(res,200,{campaign})}catch(e){return json(res,400,{error:e.message})}
 }
 if(requestUrl.pathname==='/api/phone/call'){
 if(campaigns.locked(identity.username))return json(res,409,{error:'A CSV calling list is active. Pause it and finish the current call before calling manually.'});
