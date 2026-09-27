@@ -11,7 +11,7 @@ function createHistory(root){
  }}
  const notes=path.join(folder,'notes');for(const row of rows.values()){try{Object.assign(row,JSON.parse(fs.readFileSync(path.join(notes,row.id+'.json'),'utf8')))}catch{}if(row.result==='Pending'&&Date.now()-Date.parse(row.date)>360000)row.result='Unconfirmed'}
  return [...rows.values()].sort((a,b)=>b.date.localeCompare(a.date));}
- function edit(owner,id,data){if(!/^[\da-f-]{36}$/.test(id)||!list(owner).some(r=>r.id===id))return false;const folder=path.join(dir(owner),'notes');fs.mkdirSync(folder,{recursive:true});const dest=path.join(folder,id+'.json');let prior={};try{prior=JSON.parse(fs.readFileSync(dest,'utf8'))}catch{}const value={...prior,remarks:data.remarks};if(data.result)value.result=data.result;fs.writeFileSync(dest+'.tmp',JSON.stringify(value));fs.renameSync(dest+'.tmp',dest);return true}
+ function edit(owner,id,data){if(!/^[\da-f-]{36}$/.test(id)||!list(owner).some(r=>r.id===id))return false;const folder=path.join(dir(owner),'notes');fs.mkdirSync(folder,{recursive:true});const dest=path.join(folder,id+'.json');let prior={};try{prior=JSON.parse(fs.readFileSync(dest,'utf8'))}catch{}const value={...prior};if(Object.hasOwn(data,'remarks'))value.remarks=data.remarks;if(data.result)value.result=data.result;if(Object.hasOwn(data,'followUpAttempt'))value.followUpAttempt=data.followUpAttempt;fs.writeFileSync(dest+'.tmp',JSON.stringify(value));fs.renameSync(dest+'.tmp',dest);return true}
  function recording(owner,id){const row=list(owner).find(r=>r.id===id);if(!row||!/^[-a-f0-9]{36}$/.test(row.recordingId||''))return null;const file=path.join(dir(owner),'recordings',row.recordingId+'.wav');return fs.existsSync(file)?file:null}
  return {add,list,edit,recording};
 }
